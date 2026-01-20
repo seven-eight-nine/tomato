@@ -168,9 +168,10 @@ public sealed class CommandGenerator : IIncrementalGenerator
             var queueClassName = queueType.Name;
             var queueFullName = queueType.ToDisplayString();
 
-            // Priority と PoolInitialCapacity を取得
+            // Priority, PoolInitialCapacity, Signal を取得
             int priority = 0;
             int poolInitialCapacity = 8;
+            bool signal = false;
 
             foreach (var namedArg in attr.NamedArguments)
             {
@@ -182,6 +183,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
                     case "PoolInitialCapacity":
                         poolInitialCapacity = (int)namedArg.Value.Value!;
                         break;
+                    case "Signal":
+                        signal = (bool)namedArg.Value.Value!;
+                        break;
                 }
             }
 
@@ -189,7 +193,8 @@ public sealed class CommandGenerator : IIncrementalGenerator
                 queueFullName,
                 queueClassName,
                 priority,
-                poolInitialCapacity));
+                poolInitialCapacity,
+                signal));
         }
 
         // フィールドリセット情報を解析
@@ -502,6 +507,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}    /// <summary>このキューでの優先度</summary>");
         sb.AppendLine($"{indent}    int Priority {{ get; }}");
         sb.AppendLine();
+        sb.AppendLine($"{indent}    /// <summary>シグナルコマンドかどうか（キューに1つしか入らない）</summary>");
+        sb.AppendLine($"{indent}    bool IsSignal {{ get; }}");
+        sb.AppendLine();
 
         foreach (var method in info.Methods)
         {
@@ -566,6 +574,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}private long _sequenceCounter = 0;");
         sb.AppendLine($"{indent2}private bool _isExecuting = false;");
         sb.AppendLine();
+        sb.AppendLine($"{indent2}// シグナルコマンド追跡（同一タイプは1つしかキューに入らない）");
+        sb.AppendLine($"{indent2}private readonly HashSet<Type> _signalTypes = new();");
+        sb.AppendLine();
         sb.AppendLine($"{indent2}// IWaveProcessable: Enqueue時のコールバック");
         sb.AppendLine($"{indent2}public Action<IWaveProcessable>? OnEnqueue {{ get; set; }}");
         sb.AppendLine();
@@ -580,8 +591,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// </summary>");
         sb.AppendLine($"{indent2}/// <param name=\"initializer\">コマンドの初期化処理</param>");
         sb.AppendLine($"{indent2}/// <param name=\"timing\">実行タイミング（デフォルト: NextWave）</param>");
+        sb.AppendLine($"{indent2}/// <returns>エンキューが成功したかどうか（Signalコマンドで既に同タイプがある場合はfalse）</returns>");
         sb.AppendLine($"{indent2}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine($"{indent2}public void Enqueue<TCommand>(Action<TCommand> initializer, EnqueueTiming timing = EnqueueTiming.NextWave)");
+        sb.AppendLine($"{indent2}public bool Enqueue<TCommand>(Action<TCommand> initializer, EnqueueTiming timing = EnqueueTiming.NextWave)");
         sb.AppendLine($"{indent3}where TCommand : class, {info.InterfaceName}, ICommandPoolable<TCommand>, new()");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}// プールから取得");
@@ -596,6 +608,17 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent3}// キューに追加");
         sb.AppendLine($"{indent3}lock (_pendingLock)");
         sb.AppendLine($"{indent3}{{");
+        sb.AppendLine($"{indent4}// シグナルコマンドの場合、既に同タイプがあれば無視");
+        sb.AppendLine($"{indent4}if (command.IsSignal)");
+        sb.AppendLine($"{indent4}{{");
+        sb.AppendLine($"{indent4}    if (!_signalTypes.Add(typeof(TCommand)))");
+        sb.AppendLine($"{indent4}    {{");
+        sb.AppendLine($"{indent4}        // 既に同タイプのシグナルコマンドがある→プールに返却して終了");
+        sb.AppendLine($"{indent4}        CommandPool<TCommand>.Return(command);");
+        sb.AppendLine($"{indent4}        return false;");
+        sb.AppendLine($"{indent4}    }}");
+        sb.AppendLine($"{indent4}}}");
+        sb.AppendLine();
         sb.AppendLine($"{indent4}long seq = _sequenceCounter++;");
         sb.AppendLine($"{indent4}var entry = new QueueEntry(");
         sb.AppendLine($"{indent4}    command,");
@@ -616,6 +639,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"{indent3}// WaveProcessorに通知");
         sb.AppendLine($"{indent3}OnEnqueue?.Invoke(this);");
+        sb.AppendLine($"{indent3}return true;");
         sb.AppendLine($"{indent2}}}");
         sb.AppendLine();
         sb.AppendLine($"{indent2}#endregion");
@@ -660,6 +684,13 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent4}_currentQueue[i].ReturnAction(_currentQueue[i].Command);");
         sb.AppendLine($"{indent3}}}");
         sb.AppendLine($"{indent3}_currentQueue.Clear();");
+        sb.AppendLine();
+        sb.AppendLine($"{indent3}// シグナル追跡をクリア（次のEnqueueでシグナルコマンドを受け付けるため）");
+        sb.AppendLine($"{indent3}lock (_pendingLock)");
+        sb.AppendLine($"{indent3}{{");
+        sb.AppendLine($"{indent4}_signalTypes.Clear();");
+        sb.AppendLine($"{indent3}}}");
+        sb.AppendLine();
         sb.AppendLine($"{indent3}_isExecuting = false;");
         sb.AppendLine($"{indent2}}}");
         sb.AppendLine();
@@ -720,6 +751,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent4}    _nextFrameQueue[i].ReturnAction(_nextFrameQueue[i].Command);");
         sb.AppendLine($"{indent4}}}");
         sb.AppendLine($"{indent4}_nextFrameQueue.Clear();");
+        sb.AppendLine();
+        sb.AppendLine($"{indent4}// シグナル追跡をクリア");
+        sb.AppendLine($"{indent4}_signalTypes.Clear();");
         sb.AppendLine($"{indent3}}}");
         sb.AppendLine($"{indent2}}}");
         sb.AppendLine();
@@ -744,6 +778,9 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent4}    _nextFrameQueue[i].ReturnAction(_nextFrameQueue[i].Command);");
         sb.AppendLine($"{indent4}}}");
         sb.AppendLine($"{indent4}_nextFrameQueue.Clear();");
+        sb.AppendLine();
+        sb.AppendLine($"{indent4}// シグナル追跡をクリア");
+        sb.AppendLine($"{indent4}_signalTypes.Clear();");
         sb.AppendLine($"{indent3}}}");
         sb.AppendLine();
         sb.AppendLine($"{indent3}// 現在のキューもクリア（実行中でも強制）");
@@ -952,6 +989,41 @@ public sealed class CommandGenerator : IIncrementalGenerator
             sb.AppendLine($"{indent2}{{");
             sb.AppendLine($"{indent3}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"{indent3}get => PriorityFor{reg.QueueClassName};");
+            sb.AppendLine($"{indent2}}}");
+            sb.AppendLine();
+        }
+        sb.AppendLine($"{indent2}#endregion");
+        sb.AppendLine();
+
+        // シグナルプロパティ（インターフェース明示的実装）
+        sb.AppendLine($"{indent2}#region Queue IsSignal（インターフェース実装）");
+        sb.AppendLine();
+
+        // 複数キュー対応：IsSignalFor{QueueClassName} プロパティを生成
+        foreach (var reg in info.QueueRegistrations)
+        {
+            sb.AppendLine($"{indent2}/// <summary>{reg.QueueClassName} でシグナルコマンドかどうか</summary>");
+            sb.AppendLine($"{indent2}public bool IsSignalFor{reg.QueueClassName}");
+            sb.AppendLine($"{indent2}{{");
+            sb.AppendLine($"{indent3}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"{indent3}get => {(reg.Signal ? "true" : "false")};");
+            sb.AppendLine($"{indent2}}}");
+            sb.AppendLine();
+        }
+
+        // インターフェース明示的実装（IsSignalFor{QueueClassName}を参照）
+        foreach (var reg in info.QueueRegistrations)
+        {
+            // 同じ名前空間の場合はインターフェース名のみ、異なる場合は完全修飾名
+            var queueNs = GetNamespace(reg.QueueFullyQualifiedName);
+            var interfaceName = queueNs == info.Namespace
+                ? reg.InterfaceName
+                : $"{queueNs}.{reg.InterfaceName}";
+
+            sb.AppendLine($"{indent2}bool {interfaceName}.IsSignal");
+            sb.AppendLine($"{indent2}{{");
+            sb.AppendLine($"{indent3}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"{indent3}get => IsSignalFor{reg.QueueClassName};");
             sb.AppendLine($"{indent2}}}");
             sb.AppendLine();
         }

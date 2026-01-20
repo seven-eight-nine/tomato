@@ -130,4 +130,43 @@ public sealed class CommandAttribute<TQueue> : Attribute
     /// </example>
     /// </summary>
     public int PoolInitialCapacity { get; set; } = 8;
+
+    /// <summary>
+    /// シグナルコマンドとして扱うかどうか。
+    /// デフォルトはfalseです。
+    ///
+    /// <para>
+    /// trueの場合、このコマンドはキューに1つしか存在できません。
+    /// 既に同じ型のシグナルコマンドがキューにある場合、新しいEnqueueは無視されます。
+    /// </para>
+    ///
+    /// <para>主な用途:</para>
+    /// <list type="bullet">
+    ///   <item><description>イベントを複数受け取った時に、調停処理を1回だけ実行したい場合</description></item>
+    ///   <item><description>重複する処理リクエストを抑制したい場合</description></item>
+    /// </list>
+    ///
+    /// <remarks>
+    /// キューがクリアされると、再びシグナルコマンドをエンキューできるようになります。
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// [Command&lt;GameCommandQueue&gt;(Signal = true)]
+    /// public partial class ReconcileCommand
+    /// {
+    ///     public void Execute()
+    ///     {
+    ///         // 複数のイベントを集計・調停する処理
+    ///     }
+    /// }
+    ///
+    /// // 複数回Enqueueしても、キューには1つしか入らない
+    /// queue.Enqueue&lt;ReconcileCommand&gt;(_ => { });
+    /// queue.Enqueue&lt;ReconcileCommand&gt;(_ => { }); // 無視される
+    /// queue.Enqueue&lt;ReconcileCommand&gt;(_ => { }); // 無視される
+    /// </code>
+    /// </example>
+    /// </summary>
+    public bool Signal { get; set; } = false;
 }
