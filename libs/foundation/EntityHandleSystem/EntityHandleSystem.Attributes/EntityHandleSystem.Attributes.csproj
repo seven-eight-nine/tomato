@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>Tomato.EntityHandleSystem</RootNamespace>
+    <AssemblyName>EntityHandleSystem.Attributes</AssemblyName>
+    <Description>Attributes and base classes for EntityHandleSystem Source Generator</Description>
+  </PropertyGroup>
+
+</Project>

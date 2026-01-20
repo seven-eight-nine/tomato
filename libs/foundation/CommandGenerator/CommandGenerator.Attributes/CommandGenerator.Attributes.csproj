@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Tomato.CommandGenerator</RootNamespace>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
+  </ItemGroup>
+</Project>
