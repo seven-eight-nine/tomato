@@ -1,0 +1,137 @@
+trigger:
+  tags:
+    include:
+      - v*
+      - init*
+
+pr: none
+
+pool:
+  name: Default
+
+variables:
+  - group: GitHubSecrets
+  - name: TAG_NAME
+    value: $[replace(variables['Build.SourceBranch'], 'refs/tags/', '')]
+
+steps:
+- checkout: self
+  fetchDepth: 0
+
+- script: |
+    set -e
+    
+    git config user.email "noreply@example.com"
+    git config user.name "Pipeline"
+    
+    # git-filter-repo をインストール（pip のパスを明示）
+    pip install git-filter-repo --break-system-packages || pip install git-filter-repo
+    export PATH="$HOME/.local/bin:$PATH"
+    
+    # GitHub リモートを設定（既存なら削除して再追加）
+    git remote remove github 2>/dev/null || true
+    git remote add github https://$(GITHUB_PAT)@github.com/seven-eight-nine/tomato.git
+    
+    # init タグかどうかを判定
+    IS_INIT=false
+    if [[ "$(TAG_NAME)" == init* ]]; then
+      IS_INIT=true
+      echo "🔥 Init tag detected: $(TAG_NAME)"
+      echo "   GitHub repository will be completely reset!"
+    fi
+    
+    # タグが既に存在するかチェック（init以外の場合）
+    if [ "$IS_INIT" = false ]; then
+      if git ls-remote --tags github | grep -q "refs/tags/$(TAG_NAME)$"; then
+        echo "Tag $(TAG_NAME) already exists on GitHub, skipping"
+        exit 0
+      fi
+    fi
+    
+    # 既存のブランチを削除
+    git branch -D github-main 2>/dev/null || true
+    
+    # GitHub の main を取得（initの場合はスキップ）
+    if [ "$IS_INIT" = false ]; then
+      git fetch github main:github-main 2>/dev/null || echo "No existing main on GitHub"
+    fi
+    
+    # 作業用ブランチ作成
+    if [ "$IS_INIT" = true ]; then
+      # init: 完全に新規作成（GitHub側の履歴を破棄）
+      echo "Creating fresh orphan branch..."
+      git checkout --orphan github-main
+      git reset --hard
+      git checkout $(Build.SourceVersion) -- .
+      
+    elif git rev-parse github-main >/dev/null 2>&1; then
+      # GitHub に main が存在する場合
+      git checkout github-main
+      
+      # .github フォルダを退避（リリースノート等を保護）
+      if [ -d ".github" ]; then
+        cp -r .github /tmp/.github-backup
+      fi
+      
+      # 全ファイル削除
+      find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+      
+      # Azure DevOps のファイルをコピー
+      git checkout $(Build.SourceVersion) -- .
+      
+      # .github フォルダを復元
+      if [ -d "/tmp/.github-backup" ]; then
+        rm -rf .github
+        cp -r /tmp/.github-backup .github
+      fi
+    else
+      # GitHub に main がない場合（初回）
+      git checkout --orphan github-main
+      git reset --hard
+      git checkout $(Build.SourceVersion) -- .
+    fi
+    
+    # Azure Pipeline 関連ファイルを除外（checkout の後で削除）
+    rm -f azure-pipelines.yml
+    rm -rf .azure-pipelines
+    
+    # コミット
+    git add -A
+    git commit -m "Release $(TAG_NAME)" || echo "No changes to commit"
+    
+    # リリース日時を取得
+    RELEASE_DATE=$(date +%s)
+    
+    # コミッター情報を匿名化（名前・メール・時刻）
+    git filter-repo --force \
+      --email-callback 'return b"noreply@example.com"' \
+      --name-callback 'return b"Pipeline"' \
+      --commit-callback "
+        commit.author_date = b'${RELEASE_DATE} +0000'
+        commit.committer_date = b'${RELEASE_DATE} +0000'
+      "
+    
+    # リモートを再追加（filter-repo で消えるため）
+    git remote remove github 2>/dev/null || true
+    git remote add github https://$(GITHUB_PAT)@github.com/seven-eight-nine/tomato.git
+    
+    # 既存のタグを削除して再作成
+    git tag -d $(TAG_NAME) 2>/dev/null || true
+    git tag -a $(TAG_NAME) -m "Release $(TAG_NAME)"
+    
+    # プッシュ（履歴書き換えのため force）
+    git push github github-main:main --force
+    git push github $(TAG_NAME) --force
+    
+    # init の場合、古いタグを削除
+    if [ "$IS_INIT" = true ]; then
+      echo "Cleaning up old tags on GitHub..."
+      git ls-remote --tags github | awk '{print $2}' | sed 's/\^{}$//' | sort -u | grep -v "^refs/tags/$(TAG_NAME)$" | while read tag; do
+        tag_name=${tag#refs/tags/}
+        echo "Deleting tag: $tag_name"
+        git push github --delete "refs/tags/$tag_name" 2>/dev/null || true
+      done
+    fi
+    
+    echo "✅ Successfully pushed to GitHub"
+  displayName: Push to GitHub with tag

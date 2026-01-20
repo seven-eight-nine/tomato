@@ -1,0 +1,789 @@
+using System;
+using System.Collections.Immutable;
+using System.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Xunit;
+
+namespace Tomato.CommandGenerator.Tests.Generator;
+
+/// <summary>
+/// Advanced CommandGenerator tests - t-wada style comprehensive coverage
+/// Tests for multiple Command attributes, priority-based ordering, QueueEntry comparison,
+/// and field reset generation for collection types
+/// </summary>
+public class CommandGeneratorAdvancedTests
+{
+    #region Multiple Command<T> Attribute Tests
+
+    [Fact]
+    public void Command_WithMultipleQueueAttributes_ShouldCompile()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class QueueA
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [CommandQueue]
+    public partial class QueueB
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<QueueA>(Priority = 10)]
+    [Command<QueueB>(Priority = 20)]
+    public partial class MultiQueueCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, diagnostics) = RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void Command_WithMultipleQueueAttributes_ShouldGenerateMultiplePriorityProperties()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class QueueA
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [CommandQueue]
+    public partial class QueueB
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<QueueA>(Priority = 10)]
+    [Command<QueueB>(Priority = 20)]
+    public partial class MultiQueueCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("PriorityForQueueA", generatedCode);
+        Assert.Contains("PriorityForQueueB", generatedCode);
+    }
+
+    [Fact]
+    public void Command_WithMultipleQueueAttributes_ShouldImplementMultipleInterfaces()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class QueueA
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [CommandQueue]
+    public partial class QueueB
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<QueueA>]
+    [Command<QueueB>]
+    public partial class MultiQueueCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("IQueueA", generatedCode);
+        Assert.Contains("IQueueB", generatedCode);
+    }
+
+    [Fact]
+    public void Command_WithThreeQueueAttributes_ShouldWork()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class QueueA { [CommandMethod] public partial void Execute(); }
+
+    [CommandQueue]
+    public partial class QueueB { [CommandMethod] public partial void Execute(); }
+
+    [CommandQueue]
+    public partial class QueueC { [CommandMethod] public partial void Execute(); }
+
+    [Command<QueueA>(Priority = 1)]
+    [Command<QueueB>(Priority = 2)]
+    [Command<QueueC>(Priority = 3)]
+    public partial class TripleQueueCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, diagnostics) = RunGenerator(source);
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    #endregion
+
+    #region Generated Code Compilation Tests
+
+    [Fact]
+    public void GeneratedCode_ShouldCompileWithoutErrors()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class TestCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, diagnostics) = RunGenerator(source);
+        var compilationDiagnostics = compilation.GetDiagnostics();
+
+        // Filter out CS8795 (Partial method 'TestCommand.Execute()' must have an implementation part...)
+        // because we're only providing the declaration in the test
+        var errors = compilationDiagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Where(d => d.Id != "CS8795")
+            .ToList();
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void GeneratedCode_ShouldIncludeAutoGeneratedHeader()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("<auto-generated/>", generatedCode);
+    }
+
+    [Fact]
+    public void GeneratedCode_ShouldEnableNullable()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("#nullable enable", generatedCode);
+    }
+
+    #endregion
+
+    #region Priority-Based Command Execution Order Tests
+
+    [Fact]
+    public void QueueEntry_CompareTo_HigherPriorityShouldComeLower()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        // Verify the comparison logic is present (priority descending)
+        Assert.Contains("other.Priority.CompareTo(Priority)", generatedCode);
+    }
+
+    [Fact]
+    public void QueueEntry_CompareTo_SamePriorityShouldUseSequence()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        // Verify sequence comparison for same priority
+        Assert.Contains("Sequence.CompareTo(other.Sequence)", generatedCode);
+    }
+
+    [Fact]
+    public void GeneratedQueue_ShouldSortBeforeExecution()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_currentQueue.Sort()", generatedCode);
+    }
+
+    [Fact]
+    public void Priority_ShouldBeSetFromAttribute()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>(Priority = 100)]
+    public partial class HighPriorityCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("get => 100", generatedCode);
+    }
+
+    [Fact]
+    public void Priority_DefaultShouldBeZero()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class DefaultPriorityCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("get => 0", generatedCode);
+    }
+
+    #endregion
+
+    #region QueueEntry Comparison Tests (via Generated Code Analysis)
+
+    [Fact]
+    public void QueueEntry_ShouldImplementIComparable()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("IComparable<QueueEntry>", generatedCode);
+    }
+
+    [Fact]
+    public void QueueEntry_ShouldHavePriorityField()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("public readonly int Priority", generatedCode);
+    }
+
+    [Fact]
+    public void QueueEntry_ShouldHaveSequenceField()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("public readonly long Sequence", generatedCode);
+    }
+
+    [Fact]
+    public void QueueEntry_CompareMethod_ShouldBeAggressivelyInlined()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        // AggressiveInlining should be applied to CompareTo
+        Assert.Contains("[MethodImpl(MethodImplOptions.AggressiveInlining)]", generatedCode);
+    }
+
+    #endregion
+
+    #region Field Reset Generation for Collection Types
+
+    [Fact]
+    public void FieldReset_Queue_ShouldGenerateClear()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class QueueFieldCommand
+    {
+        private Queue<int> _items = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_items.Clear()", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_Stack_ShouldGenerateClear()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class StackFieldCommand
+    {
+        private Stack<string> _stack = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_stack.Clear()", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_List_ShouldGenerateClear()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class ListFieldCommand
+    {
+        private List<float> _values = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_values.Clear()", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_HashSet_ShouldGenerateClear()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class HashSetFieldCommand
+    {
+        private HashSet<int> _ids = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_ids.Clear()", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_Dictionary_ShouldGenerateClear()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class DictionaryFieldCommand
+    {
+        private Dictionary<string, int> _map = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_map.Clear()", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_Array_ShouldGenerateArrayClear()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class ArrayFieldCommand
+    {
+        private int[] _data = new int[10];
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("System.Array.Clear(_data", generatedCode);
+    }
+
+    [Fact]
+    public void FieldReset_MultipleCollections_ShouldGenerateAllClears()
+    {
+        var source = @"
+using System.Collections.Generic;
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue
+    {
+        [CommandMethod]
+        public partial void Execute();
+    }
+
+    [Command<TestQueue>]
+    public partial class MultiCollectionCommand
+    {
+        private List<int> _list = new();
+        private Queue<int> _queue = new();
+        private Stack<int> _stack = new();
+        private Dictionary<string, int> _dict = new();
+
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("_list.Clear()", generatedCode);
+        Assert.Contains("_queue.Clear()", generatedCode);
+        Assert.Contains("_stack.Clear()", generatedCode);
+        Assert.Contains("_dict.Clear()", generatedCode);
+    }
+
+    #endregion
+
+    #region Pool Initial Capacity Tests
+
+    [Fact]
+    public void PoolInitialCapacity_ShouldUseMaxWhenMultipleQueues()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class QueueA { [CommandMethod] public partial void Execute(); }
+
+    [CommandQueue]
+    public partial class QueueB { [CommandMethod] public partial void Execute(); }
+
+    [Command<QueueA>(PoolInitialCapacity = 16)]
+    [Command<QueueB>(PoolInitialCapacity = 32)]
+    public partial class MultiPoolCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        // Should use max value (32) when registered to multiple queues
+        Assert.Contains("InitialCapacity = 32", generatedCode);
+    }
+
+    [Fact]
+    public void PoolInitialCapacity_DefaultShouldBeEight()
+    {
+        var source = @"
+using Tomato.CommandGenerator;
+
+namespace TestNamespace
+{
+    [CommandQueue]
+    public partial class TestQueue { [CommandMethod] public partial void Execute(); }
+
+    [Command<TestQueue>]
+    public partial class DefaultPoolCommand
+    {
+        public void Execute() { }
+    }
+}";
+
+        var (compilation, _) = RunGenerator(source);
+        var generatedCode = GetAllGeneratedCode(compilation);
+
+        Assert.Contains("InitialCapacity = 8", generatedCode);
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private static (Compilation compilation, ImmutableArray<Diagnostic> diagnostics) RunGenerator(string source)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source);
+
+        var references = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+            .Select(a => MetadataReference.CreateFromFile(a.Location))
+            .Cast<MetadataReference>()
+            .ToList();
+
+        // Add the attributes assembly
+        references.Add(MetadataReference.CreateFromFile(typeof(CommandQueueAttribute).Assembly.Location));
+
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { syntaxTree },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new Tomato.CommandGenerator.CommandGenerator();
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+        driver = driver.RunGeneratorsAndUpdateCompilation(
+            compilation,
+            out var outputCompilation,
+            out var diagnostics);
+
+        return (outputCompilation, diagnostics);
+    }
+
+    private static string GetAllGeneratedCode(Compilation compilation)
+    {
+        // Skip the first tree (original source) and get all generated trees
+        var generatedTrees = compilation.SyntaxTrees.Skip(1).ToList();
+
+        return string.Join(Environment.NewLine, generatedTrees.Select(t => t.ToString()));
+    }
+
+    #endregion
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Tomato.ReconciliationSystem</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../foundation/EntityHandleSystem/EntityHandleSystem.Attributes/EntityHandleSystem.Attributes.csproj" />
+    <ProjectReference Include="../../../foundation/CommandGenerator/CommandGenerator.Core/CommandGenerator.Core.csproj" />
+    <ProjectReference Include="../../CollisionSystem/CollisionSystem.Core/CollisionSystem.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>Tomato.SystemPipeline</RootNamespace>
+    <AssemblyName>SystemPipeline.Attributes</AssemblyName>
+    <Description>Attributes for SystemPipeline Source Generator</Description>
+  </PropertyGroup>
+
+</Project>
