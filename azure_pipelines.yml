@@ -18,6 +18,7 @@ steps:
 - checkout: self
   fetchDepth: 0
 
+
 - script: |
     set -e
     
@@ -68,22 +69,11 @@ steps:
       # GitHub に main が存在する場合
       git checkout github-main
       
-      # .github フォルダを退避（リリースノート等を保護）
-      if [ -d ".github" ]; then
-        cp -r .github /tmp/.github-backup
-      fi
-      
       # 全ファイル削除
       find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
       
       # Azure DevOps のファイルをコピー
       git checkout $(Build.SourceVersion) -- .
-      
-      # .github フォルダを復元
-      if [ -d "/tmp/.github-backup" ]; then
-        rm -rf .github
-        cp -r /tmp/.github-backup .github
-      fi
     else
       # GitHub に main がない場合（初回）
       git checkout --orphan github-main
@@ -91,9 +81,12 @@ steps:
       git checkout $(Build.SourceVersion) -- .
     fi
     
-    # Azure Pipeline 関連ファイルを除外（checkout の後で削除）
-    rm -f azure-pipelines.yml
-    rm -rf .azure-pipelines
+    # Azure Pipeline 関連ファイルを除外
+    rm -rf .azure-pipelines azure-pipelines.yml
+    
+    echo "=== Files to be committed ==="
+    ls -la
+    echo "=== End of file list ==="
     
     # コミット
     git add -A

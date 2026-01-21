@@ -1,0 +1,153 @@
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Tomato.CombatSystem;
+
+/// <summary>
+/// ヒット履歴を管理し、多段ヒットを制御する。
+///
+/// (HitGroup, Target) のペアごとにヒット回数と最終ヒット時刻を記録する。
+/// CombatManager.AttackTo が CanHit で判定し、成功時に RecordHit で記録する。
+///
+/// <example>
+/// 多段ヒット攻撃の例（0.2秒間隔で最大5回ヒット）:
+/// <code>
+/// // AttackInfo側
+/// info.IntervalTime = 0.2f;
+/// info.HittableCount = 5;
+///
+/// // 毎フレーム
+/// receiver.GetHitHistory().Update(deltaTime);
+/// </code>
+/// </example>
+///
+/// <example>
+/// 1回だけヒットする攻撃:
+/// <code>
+/// info.HittableCount = 1;  // IntervalTime不要
+/// </code>
+/// </example>
+/// </summary>
+public class HitHistory
+{
+    private readonly Dictionary<HitHistoryKey, HitHistoryEntry> _history = new();
+    private readonly float _autoCleanupInterval;
+    private float _currentTime;
+
+    /// <param name="autoCleanupInterval">
+    /// この秒数より古い履歴を Update 時に自動削除する。デフォルト10秒。
+    /// </param>
+    public HitHistory(float autoCleanupInterval = 10f)
+    {
+        _autoCleanupInterval = autoCleanupInterval;
+    }
+
+    /// <summary>
+    /// 内部時刻。Update で加算される。
+    /// IntervalTime の経過判定に使う。
+    /// </summary>
+    public float CurrentTime => _currentTime;
+
+    /// <summary>
+    /// 内部時刻を進め、古い履歴を削除する。
+    ///
+    /// IntervalTime を使う攻撃がある場合は毎フレーム呼ぶ。
+    /// 呼ばないと内部時刻が進まず、IntervalTime 経過後の再ヒットが発生しない。
+    /// </summary>
+    public void Update(float deltaTime)
+    {
+        _currentTime += deltaTime;
+        CleanupExpired();
+    }
+
+    /// <summary>
+    /// ヒット可能か判定する。
+    ///
+    /// 判定ロジック:
+    /// 1. 履歴がない → true
+    /// 2. hittableCount > 0 で、既に hittableCount 回ヒット済み → false
+    /// 3. intervalTime > 0 で、前回ヒットから intervalTime 秒経っていない → false
+    /// 4. それ以外 → true
+    /// </summary>
+    /// <param name="hitGroup">攻撃のHitGroup。同じ値を持つ攻撃は履歴を共有する。</param>
+    /// <param name="target">攻撃対象</param>
+    /// <param name="intervalTime">再ヒット間隔（秒）。0以下だとチェックしない。</param>
+    /// <param name="hittableCount">最大ヒット数。0だと無制限。</param>
+    public bool CanHit(int hitGroup, IDamageReceiver target, float intervalTime, int hittableCount)
+    {
+        var key = new HitHistoryKey(hitGroup, target);
+
+        if (!_history.TryGetValue(key, out var entry))
+            return true;
+
+        if (hittableCount > 0 && entry.HitCount >= hittableCount)
+            return false;
+
+        if (intervalTime > 0 && (_currentTime - entry.LastHitTime) < intervalTime)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// ヒットを記録する。
+    /// CombatManager.AttackTo が成功時に自動で呼ぶ。
+    /// </summary>
+    public void RecordHit(int hitGroup, IDamageReceiver target)
+    {
+        var key = new HitHistoryKey(hitGroup, target);
+
+        if (_history.TryGetValue(key, out var entry))
+        {
+            entry.HitCount++;
+            entry.LastHitTime = _currentTime;
+            _history[key] = entry;
+        }
+        else
+        {
+            _history[key] = new HitHistoryEntry
+            {
+                HitCount = 1,
+                LastHitTime = _currentTime
+            };
+        }
+    }
+
+    /// <summary>
+    /// 指定 HitGroup の履歴をすべて削除する。
+    /// 攻撃終了時に呼ぶと、次回同じ HitGroup で再度ヒットできる。
+    /// </summary>
+    public void ClearHitGroup(int hitGroup)
+    {
+        var keysToRemove = _history.Keys
+            .Where(k => k.HitGroup == hitGroup)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+            _history.Remove(key);
+    }
+
+    /// <summary>全履歴を削除する。</summary>
+    public void Clear() => _history.Clear();
+
+    /// <summary>現在の履歴エントリ数。</summary>
+    public int Count => _history.Count;
+
+    /// <summary>指定の (HitGroup, Target) ペアのヒット回数を取得する。</summary>
+    public int GetHitCount(int hitGroup, IDamageReceiver target)
+    {
+        var key = new HitHistoryKey(hitGroup, target);
+        return _history.TryGetValue(key, out var entry) ? entry.HitCount : 0;
+    }
+
+    private void CleanupExpired()
+    {
+        var keysToRemove = _history
+            .Where(kv => (_currentTime - kv.Value.LastHitTime) > _autoCleanupInterval)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+            _history.Remove(key);
+    }
+}
