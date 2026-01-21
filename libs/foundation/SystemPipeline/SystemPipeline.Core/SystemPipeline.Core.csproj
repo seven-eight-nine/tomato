@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>Tomato.SystemPipeline</RootNamespace>
+    <AssemblyName>SystemPipeline.Core</AssemblyName>
+    <Description>Runtime components for SystemPipeline</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SystemPipeline.Attributes\SystemPipeline.Attributes.csproj" />
+    <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" />
+  </ItemGroup>
+
+</Project>
