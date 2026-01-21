@@ -19,8 +19,8 @@ public abstract class ReconciliationRule
     /// <param name="pushoutA">Aの押し出しベクトル（出力）</param>
     /// <param name="pushoutB">Bの押し出しベクトル（出力）</param>
     public abstract void ComputePushout(
-        VoidHandle entityA, EntityType typeA,
-        VoidHandle entityB, EntityType typeB,
+        AnyHandle entityA, EntityType typeA,
+        AnyHandle entityB, EntityType typeB,
         in CollisionContact contact,
         out Vector3 pushoutA,
         out Vector3 pushoutB);

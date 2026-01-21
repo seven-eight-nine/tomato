@@ -47,7 +47,7 @@ public static class SystemExecutor
         }
     }
 
-    private static IReadOnlyList<VoidHandle> GetFilteredEntities(
+    private static IReadOnlyList<AnyHandle> GetFilteredEntities(
         ISystem system,
         IEntityRegistry registry,
         in SystemContext context)
@@ -68,7 +68,7 @@ public static class SystemExecutor
 
         // キャッシュがなければ直接フィルタリング
         var allEntities = registry.GetAllEntities();
-        var result = new List<VoidHandle>();
+        var result = new List<AnyHandle>();
         foreach (var handle in query.Filter(registry, allEntities))
         {
             result.Add(handle);
@@ -91,7 +91,7 @@ public static class SystemExecutor
         in SystemContext context)
     {
         var entities = GetFilteredEntities(system, registry, in context);
-        var orderedEntities = new List<VoidHandle>(entities.Count);
+        var orderedEntities = new List<AnyHandle>(entities.Count);
         system.OrderEntities(entities, orderedEntities);
         system.ProcessSerial(registry, orderedEntities, in context);
     }

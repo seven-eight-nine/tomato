@@ -21,11 +21,11 @@ public sealed class CompositeQuery : IEntityQuery
     }
 
     /// <inheritdoc/>
-    public IEnumerable<VoidHandle> Filter(
+    public IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities)
+        IEnumerable<AnyHandle> entities)
     {
-        IEnumerable<VoidHandle> result = entities;
+        IEnumerable<AnyHandle> result = entities;
 
         foreach (var query in _queries)
         {

@@ -10,21 +10,21 @@ namespace Tomato.SystemPipeline.Query;
 /// <typeparam name="TComponent">フィルタリング対象のコンポーネント型</typeparam>
 public sealed class HasComponentQuery<TComponent> : IEntityQuery
 {
-    private readonly Func<VoidHandle, bool> _hasComponentCheck;
+    private readonly Func<AnyHandle, bool> _hasComponentCheck;
 
     /// <summary>
     /// HasComponentQueryを作成します。
     /// </summary>
     /// <param name="hasComponentCheck">エンティティがコンポーネントを持っているかチェックする関数</param>
-    public HasComponentQuery(Func<VoidHandle, bool> hasComponentCheck)
+    public HasComponentQuery(Func<AnyHandle, bool> hasComponentCheck)
     {
         _hasComponentCheck = hasComponentCheck ?? throw new ArgumentNullException(nameof(hasComponentCheck));
     }
 
     /// <inheritdoc/>
-    public IEnumerable<VoidHandle> Filter(
+    public IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities)
+        IEnumerable<AnyHandle> entities)
     {
         foreach (var entity in entities)
         {

@@ -7,7 +7,8 @@
 ```
 libs/
 ├── foundation/              # 基盤システム（他の多くが依存）
-│   ├── EntityHandleSystem/  # 型安全なEntityハンドル（Source Generator）
+│   ├── HandleSystem/        # 汎用ハンドルパターン（Source Generator）
+│   ├── EntityHandleSystem/  # Entity専用ハンドル（HandleSystem依存）
 │   ├── CommandGenerator/    # メッセージハンドラ生成（Source Generator）
 │   └── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
 │
@@ -32,8 +33,9 @@ libs/
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
-| **EntityHandleSystem** | 型安全なエンティティハンドルとArena管理、Query、EntityManagerによるスナップショット/復元（Source Generator） | 299 |
-| **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 246 |
+| **HandleSystem** | 汎用ハンドルパターン（IHandle, IArena, ArenaBase）、エンティティ以外にも適用可能（Source Generator） | 25 |
+| **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
+| **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 53 |
 
 ### systems/ - 個別機能システム
@@ -56,7 +58,7 @@ libs/
 |---------|------|---------|
 | **EntitySystem** | 6フェーズゲームループを実現する最上位統合システム | 57 |
 
-**合計: 1,332 テスト**
+**合計: 1,357+ テスト**
 
 ## 主要な使用例
 
@@ -77,7 +79,7 @@ public partial class Player
 public partial class GameCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 // 使用（各Entityが独自のキューを持つ）
@@ -95,7 +97,7 @@ public class MovementSystem : IParallelSystem
     public bool IsEnabled { get; set; } = true;
     public IEntityQuery Query => ActiveEntityQuery.Instance;
 
-    public void ProcessEntity(VoidHandle handle, in SystemContext context)
+    public void ProcessEntity(AnyHandle handle, in SystemContext context)
     {
         // 並列処理
     }
@@ -165,8 +167,16 @@ dotnet test libs/orchestration/{SystemName}/{SystemName}.Tests/
 ## 依存関係
 
 ```
-EntityHandleSystem.Attributes (基盤)
-├── VoidHandle / IEntityHandle
+HandleSystem.Core (最基盤)
+├── IHandle / IArena / ArenaBase
+├── RefAction<T>
+└── [Handleable] / [HandleableMethod]
+
+EntityHandleSystem.Attributes (HandleSystem依存)
+├── IEntityHandle : IHandle
+├── IEntityArena : IArena
+├── EntityArenaBase : ArenaBase
+├── AnyHandle / [Entity] / [EntityMethod]
 ├── EntityManager（スナップショット/復元）
 ├── QueryExecutor / EntityQuery
 └── IQueryableArena / ISnapshotableArena
@@ -191,7 +201,7 @@ CommandGenerator.Core
 
 ## 開発ガイドライン
 
-1. **型安全**: エンティティはVoidHandle/EntityHandleを使用
+1. **型安全**: エンティティはAnyHandle/EntityHandleを使用
 2. **TDD**: 新機能はテストから書く
 3. **Source Generator**: 反復的なコードは自動生成
 4. **パフォーマンス**: ゲームループ内はアロケーションを避ける

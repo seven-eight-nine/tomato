@@ -42,7 +42,7 @@ namespace Tomato.EntityHandleSystem;
 /// var handle = arena.Create();
 /// handle.Position_TrySetPosition(1f, 2f, 3f);
 ///
-/// // VoidHandle 経由での横串操作
+/// // AnyHandle 経由での横串操作
 /// voidHandle.TryExecute&lt;PositionComponent&gt;((ref PositionComponent p) =&gt;
 /// {
 ///     p.Y -= 9.8f * deltaTime; // 重力適用

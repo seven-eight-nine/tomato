@@ -118,8 +118,8 @@ foreach (var result in results)
 [Command<GameCommandQueue>(Priority = 50)]
 public partial class CollisionCommand
 {
-    public VoidHandle Target;
-    public VoidHandle Source;
+    public AnyHandle Target;
+    public AnyHandle Source;
 
     public void Execute()
     {

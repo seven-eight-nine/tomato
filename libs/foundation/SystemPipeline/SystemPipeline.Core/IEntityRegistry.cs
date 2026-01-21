@@ -12,13 +12,13 @@ public interface IEntityRegistry
     /// <summary>
     /// すべてのアクティブなエンティティを取得します。
     /// </summary>
-    /// <returns>VoidHandleのコレクション</returns>
-    IReadOnlyList<VoidHandle> GetAllEntities();
+    /// <returns>AnyHandleのコレクション</returns>
+    IReadOnlyList<AnyHandle> GetAllEntities();
 
     /// <summary>
     /// 指定した型のエンティティを取得します。
     /// </summary>
     /// <typeparam name="TArena">Arena型</typeparam>
-    /// <returns>VoidHandleのコレクション</returns>
-    IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class;
+    /// <returns>AnyHandleのコレクション</returns>
+    IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class;
 }

@@ -133,13 +133,13 @@ namespace Tomato.EntityHandleSystem.Tests.Integration
         }
 
         [Fact]
-        public void VoidHandle_TryExecute_WorksWithComponent()
+        public void AnyHandle_TryExecute_WorksWithComponent()
         {
             var arena = new MovableEntityArena();
             var handle = arena.Create();
             handle.PositionComponent_TrySetPosition(5.0f, 5.0f, 5.0f);
 
-            VoidHandle voidHandle = handle.ToVoidHandle();
+            AnyHandle voidHandle = handle.ToAnyHandle();
 
             float capturedX = 0;
             bool result = voidHandle.TryExecute<PositionComponent>((ref PositionComponent pos) =>
@@ -158,11 +158,11 @@ namespace Tomato.EntityHandleSystem.Tests.Integration
         }
 
         [Fact]
-        public void VoidHandle_TryExecute_ReturnsFalse_WhenEntityDestroyed()
+        public void AnyHandle_TryExecute_ReturnsFalse_WhenEntityDestroyed()
         {
             var arena = new MovableEntityArena();
             var handle = arena.Create();
-            VoidHandle voidHandle = handle.ToVoidHandle();
+            AnyHandle voidHandle = handle.ToAnyHandle();
             handle.Dispose();
 
             bool result = voidHandle.TryExecute<PositionComponent>((ref PositionComponent pos) =>
@@ -174,11 +174,11 @@ namespace Tomato.EntityHandleSystem.Tests.Integration
         }
 
         [Fact]
-        public void VoidHandle_TryExecute_ReturnsFalse_WhenArenaDoesNotHaveComponent()
+        public void AnyHandle_TryExecute_ReturnsFalse_WhenArenaDoesNotHaveComponent()
         {
             var arena = new StaticEntityArena();
             var handle = arena.Create();
-            VoidHandle voidHandle = handle.ToVoidHandle();
+            AnyHandle voidHandle = handle.ToAnyHandle();
 
             // StaticEntity does not have VelocityComponent
             bool result = voidHandle.TryExecute<VelocityComponent>((ref VelocityComponent vel) =>
@@ -313,7 +313,7 @@ namespace Tomato.EntityHandleSystem.Tests.Integration
         }
 
         [Fact]
-        public void CrossEntityType_VoidHandle_TryExecute()
+        public void CrossEntityType_AnyHandle_TryExecute()
         {
             var movableArena = new MovableEntityArena();
             var staticArena = new StaticEntityArena();
@@ -324,10 +324,10 @@ namespace Tomato.EntityHandleSystem.Tests.Integration
             movableHandle.PositionComponent_TrySetPosition(1.0f, 2.0f, 3.0f);
             staticHandle.PositionComponent_TrySetPosition(10.0f, 20.0f, 30.0f);
 
-            VoidHandle[] voidHandles = new[]
+            AnyHandle[] voidHandles = new[]
             {
-                movableHandle.ToVoidHandle(),
-                staticHandle.ToVoidHandle()
+                movableHandle.ToAnyHandle(),
+                staticHandle.ToAnyHandle()
             };
 
             // Process all entities with PositionComponent (cross-entity-type)

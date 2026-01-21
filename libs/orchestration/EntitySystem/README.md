@@ -54,7 +54,7 @@ Entity単位のコンテキスト管理。
 // EntityContext の構成
 public sealed class EntityContext<TCategory>
 {
-    public VoidHandle Handle { get; }
+    public AnyHandle Handle { get; }
     public ActionStateMachine<TCategory> ActionStateMachine { get; }
     public List<CollisionVolume> CollisionVolumes { get; }
     public IActionJudgment<TCategory, InputState, GameState>[] Judgments { get; set; }
@@ -248,7 +248,7 @@ public class MyEntityInitializer : IEntityInitializer<ActionCategory>
 
 ```
 EntitySystem.Core
-├── EntityHandleSystem.Attributes  (VoidHandle)
+├── EntityHandleSystem.Attributes  (AnyHandle)
 ├── CommandGenerator.Attributes    (WaveProcessor, IWaveProcessable)
 ├── CommandGenerator.Core          (MessageHandlerQueue)
 ├── SystemPipeline.Core            (Pipeline, SystemGroup, ISystem)

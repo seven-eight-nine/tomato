@@ -7,15 +7,15 @@ namespace Tomato.EntityHandleSystem;
 /// </summary>
 public sealed class QueryResult
 {
-    private readonly List<VoidHandle> _handles;
+    private readonly List<AnyHandle> _handles;
 
-    public QueryResult(List<VoidHandle> handles)
+    public QueryResult(List<AnyHandle> handles)
     {
         _handles = handles;
     }
 
     /// <summary>結果のハンドル一覧</summary>
-    public IReadOnlyList<VoidHandle> Handles => _handles;
+    public IReadOnlyList<AnyHandle> Handles => _handles;
 
     /// <summary>結果の件数</summary>
     public int Count => _handles.Count;
@@ -24,8 +24,8 @@ public sealed class QueryResult
     public bool IsEmpty => _handles.Count == 0;
 
     /// <summary>最初の要素を取得（存在しない場合null）</summary>
-    public VoidHandle? FirstOrNull()
+    public AnyHandle? FirstOrNull()
     {
-        return _handles.Count > 0 ? _handles[0] : (VoidHandle?)null;
+        return _handles.Count > 0 ? _handles[0] : (AnyHandle?)null;
     }
 }

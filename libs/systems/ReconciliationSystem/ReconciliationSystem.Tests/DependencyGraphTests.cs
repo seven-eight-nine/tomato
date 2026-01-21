@@ -196,7 +196,7 @@ public class DependencyGraphTests
 
     private class MockArena : IEntityArena
     {
-        public VoidHandle CreateHandle(int index) => new VoidHandle(this, index, 0);
+        public AnyHandle CreateHandle(int index) => new AnyHandle(this, index, 0);
         public bool IsValid(int index, int generation) => true;
     }
 

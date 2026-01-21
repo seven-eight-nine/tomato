@@ -13,7 +13,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
     private readonly float _cellSize;
     private readonly float _invCellSize;
     private readonly Dictionary<long, List<SpatialEntry>> _cells = new();
-    private readonly Dictionary<VoidHandle, (long CellKey, int EntryIndex)> _handleToCell = new();
+    private readonly Dictionary<AnyHandle, (long CellKey, int EntryIndex)> _handleToCell = new();
 
     /// <summary>セルサイズ</summary>
     public float CellSize => _cellSize;
@@ -34,7 +34,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
     }
 
     /// <summary>Entityの位置を更新（存在しなければ追加）</summary>
-    public void Update(VoidHandle handle, Vector3 position, float radius = 0f)
+    public void Update(AnyHandle handle, Vector3 position, float radius = 0f)
     {
         var newCellKey = GetCellKey(position);
 
@@ -60,7 +60,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
     }
 
     /// <summary>Entityを削除</summary>
-    public bool Remove(VoidHandle handle)
+    public bool Remove(AnyHandle handle)
     {
         if (!_handleToCell.TryGetValue(handle, out var existing))
             return false;
@@ -70,7 +70,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
     }
 
     /// <summary>球範囲内のEntityを検索</summary>
-    public void QuerySphere(Vector3 center, float radius, List<VoidHandle> results)
+    public void QuerySphere(Vector3 center, float radius, List<AnyHandle> results)
     {
         var minCell = GetCellCoords(new Vector3(center.X - radius, center.Y - radius, center.Z - radius));
         var maxCell = GetCellCoords(new Vector3(center.X + radius, center.Y + radius, center.Z + radius));
@@ -106,7 +106,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
     }
 
     /// <summary>AABB範囲内のEntityを検索</summary>
-    public void QueryAABB(AABB bounds, List<VoidHandle> results)
+    public void QueryAABB(AABB bounds, List<AnyHandle> results)
     {
         var minCell = GetCellCoords(bounds.Min);
         var maxCell = GetCellCoords(bounds.Max);
@@ -146,13 +146,13 @@ public sealed class SpatialHashGrid : ISpatialIndex
     }
 
     /// <summary>最も近いEntityを検索</summary>
-    public bool QueryNearest(Vector3 point, float maxDistance, out VoidHandle nearest, out float distance)
+    public bool QueryNearest(Vector3 point, float maxDistance, out AnyHandle nearest, out float distance)
     {
         nearest = default;
         distance = float.MaxValue;
         bool found = false;
 
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         QuerySphere(point, maxDistance, results);
 
         foreach (var handle in results)
@@ -221,7 +221,7 @@ public sealed class SpatialHashGrid : ISpatialIndex
         _handleToCell[entry.Handle] = (cellKey, index);
     }
 
-    private void RemoveFromCell(long cellKey, int index, VoidHandle handle)
+    private void RemoveFromCell(long cellKey, int index, AnyHandle handle)
     {
         var cell = _cells[cellKey];
 

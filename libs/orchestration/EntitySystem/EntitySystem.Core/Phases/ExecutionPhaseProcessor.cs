@@ -42,7 +42,7 @@ public sealed class ExecutionSystem<TCategory> : ISerialSystem
     /// <inheritdoc/>
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         foreach (var handle in entities)

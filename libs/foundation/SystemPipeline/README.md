@@ -37,7 +37,7 @@ public class ReconciliationSystem : ISerialSystem
 
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         foreach (var handle in entities)
@@ -53,7 +53,7 @@ public class DecisionSystem : IParallelSystem
     public bool IsEnabled { get; set; } = true;
     public IEntityQuery Query => ActiveEntityQuery.Instance;  // アクティブエンティティのみ
 
-    public void ProcessEntity(VoidHandle handle, in SystemContext context)
+    public void ProcessEntity(AnyHandle handle, in SystemContext context)
     {
         // 各エンティティを並列に処理（スレッドセーフに実装）
     }
@@ -70,7 +70,7 @@ using CommandGenerator;
 public partial class GameCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 // Commandの定義
@@ -79,7 +79,7 @@ public partial class DamageCommand
 {
     public int Amount;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         // ダメージ処理
     }
@@ -172,7 +172,7 @@ public interface ISerialSystem : ISystem
 {
     void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context);
 }
 ```
@@ -186,7 +186,7 @@ public interface ISerialSystem : ISystem
 ```csharp
 public interface IParallelSystem : ISystem
 {
-    void ProcessEntity(VoidHandle handle, in SystemContext context);
+    void ProcessEntity(AnyHandle handle, in SystemContext context);
 }
 ```
 
@@ -218,7 +218,7 @@ public class PrioritySystem : IOrderedSerialSystem
 {
     public bool IsEnabled { get; set; } = true;
 
-    public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+    public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
     {
         // 優先度順にソート
         var sorted = input.OrderByDescending(h => GetPriority(h));
@@ -227,7 +227,7 @@ public class PrioritySystem : IOrderedSerialSystem
 
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         // 順序付けられたエンティティを処理
@@ -294,7 +294,7 @@ public class GameMessageHandlerRegistry : IMessageHandlerRegistry
 {
     private readonly Dictionary<Type, object> _handlers = new();
 
-    public void RegisterHandler<TMessage>(Action<VoidHandle, TMessage, SystemContext> handler)
+    public void RegisterHandler<TMessage>(Action<AnyHandle, TMessage, SystemContext> handler)
         where TMessage : struct
     {
         _handlers[typeof(TMessage)] = handler;
@@ -305,12 +305,12 @@ public class GameMessageHandlerRegistry : IMessageHandlerRegistry
         return _handlers.ContainsKey(typeof(TMessage));
     }
 
-    public void Handle<TMessage>(VoidHandle handle, in TMessage message, in SystemContext context)
+    public void Handle<TMessage>(AnyHandle handle, in TMessage message, in SystemContext context)
         where TMessage : struct
     {
         if (_handlers.TryGetValue(typeof(TMessage), out var handler))
         {
-            ((Action<VoidHandle, TMessage, SystemContext>)handler)(handle, message, context);
+            ((Action<AnyHandle, TMessage, SystemContext>)handler)(handle, message, context);
         }
     }
 }

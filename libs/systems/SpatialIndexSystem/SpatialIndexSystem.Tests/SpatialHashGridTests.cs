@@ -152,7 +152,7 @@ public class SpatialHashGridTests
     public void QuerySphere_EmptyGrid_ShouldReturnEmpty()
     {
         var grid = new SpatialHashGrid();
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
 
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
@@ -166,7 +166,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(5, 0, 0));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         Assert.Single(results);
@@ -179,7 +179,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(15, 0, 0));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         Assert.Empty(results);
@@ -192,7 +192,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(10, 0, 0));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         Assert.Single(results);
@@ -207,7 +207,7 @@ public class SpatialHashGridTests
         grid.Update(CreateHandle(2), new Vector3(5, 0, 0));
         grid.Update(CreateHandle(3), new Vector3(100, 0, 0)); // Out of range
 
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         Assert.Equal(2, results.Count);
@@ -221,7 +221,7 @@ public class SpatialHashGridTests
 
         // Entity at 15 with radius 6 should be within range 10 from origin (15 - 6 = 9 < 10)
         grid.Update(handle, new Vector3(15, 0, 0), 6f);
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         Assert.Single(results);
@@ -235,7 +235,7 @@ public class SpatialHashGridTests
     public void QueryAABB_EmptyGrid_ShouldReturnEmpty()
     {
         var grid = new SpatialHashGrid();
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         var bounds = new AABB(new Vector3(-5, -5, -5), new Vector3(5, 5, 5));
 
         grid.QueryAABB(bounds, results);
@@ -250,7 +250,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(0, 0, 0));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         var bounds = new AABB(new Vector3(-5, -5, -5), new Vector3(5, 5, 5));
 
         grid.QueryAABB(bounds, results);
@@ -265,7 +265,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(20, 20, 20));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         var bounds = new AABB(new Vector3(-5, -5, -5), new Vector3(5, 5, 5));
 
         grid.QueryAABB(bounds, results);
@@ -280,7 +280,7 @@ public class SpatialHashGridTests
         var handle = CreateHandle(1);
 
         grid.Update(handle, new Vector3(5, 5, 5));
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         var bounds = new AABB(new Vector3(-5, -5, -5), new Vector3(5, 5, 5));
 
         grid.QueryAABB(bounds, results);
@@ -296,7 +296,7 @@ public class SpatialHashGridTests
 
         // Entity at 8 with radius 4 has bounding box 4-12, which overlaps with bounds 0-5
         grid.Update(handle, new Vector3(8, 0, 0), 4f);
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         var bounds = new AABB(new Vector3(-5, -5, -5), new Vector3(5, 5, 5));
 
         grid.QueryAABB(bounds, results);
@@ -409,7 +409,7 @@ public class SpatialHashGridTests
         grid.Update(CreateHandle(5), new Vector3(25, 0, 0));  // Cell 2
 
         // Query spanning multiple cells
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 20f, results);
 
         // Should get entities at -15, -5, 5, 15
@@ -431,7 +431,7 @@ public class SpatialHashGridTests
         Assert.Equal(1, grid.Count);
         Assert.Equal(1, grid.CellCount);
 
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(100, 100, 100), 1f, results);
         Assert.Single(results);
     }
@@ -448,7 +448,7 @@ public class SpatialHashGridTests
         // Entity in 3D space
         grid.Update(CreateHandle(1), new Vector3(5, 5, 5));
 
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         // Distance = sqrt(5^2 + 5^2 + 5^2) = sqrt(75) ≈ 8.66 < 10
@@ -463,7 +463,7 @@ public class SpatialHashGridTests
         // Entity in 3D space
         grid.Update(CreateHandle(1), new Vector3(7, 7, 7));
 
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         grid.QuerySphere(new Vector3(0, 0, 0), 10f, results);
 
         // Distance = sqrt(7^2 + 7^2 + 7^2) = sqrt(147) ≈ 12.12 > 10
@@ -474,9 +474,9 @@ public class SpatialHashGridTests
 
     #region Helper Methods
 
-    private static VoidHandle CreateHandle(int id)
+    private static AnyHandle CreateHandle(int id)
     {
-        return new VoidHandle(new TestArena(id), id, 1);
+        return new AnyHandle(new TestArena(id), id, 1);
     }
 
     private class TestArena : IEntityArena

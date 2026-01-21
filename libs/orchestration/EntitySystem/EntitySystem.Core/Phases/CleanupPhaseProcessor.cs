@@ -37,7 +37,7 @@ public sealed class CleanupSystem<TCategory> : ISerialSystem
     /// <inheritdoc/>
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         // 1. 削除マーク済みEntityを取得
@@ -62,6 +62,6 @@ public interface IEntityDespawner
     /// <summary>
     /// Entityを削除する。
     /// </summary>
-    /// <param name="handle">EntityのVoidHandle</param>
-    void Despawn(VoidHandle handle);
+    /// <param name="handle">EntityのAnyHandle</param>
+    void Despawn(AnyHandle handle);
 }

@@ -11,10 +11,10 @@ public interface IEntityTransformAccessor
     /// <summary>
     /// 指定Entityの位置を取得する。
     /// </summary>
-    Vector3 GetPosition(VoidHandle handle);
+    Vector3 GetPosition(AnyHandle handle);
 
     /// <summary>
     /// 指定Entityの位置を設定する。
     /// </summary>
-    void SetPosition(VoidHandle handle, Vector3 position);
+    void SetPosition(AnyHandle handle, Vector3 position);
 }

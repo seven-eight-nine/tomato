@@ -18,7 +18,7 @@ public sealed class SpawnBridge<TCategory> : ISpawnCompletionHandler
     private readonly EntityContextRegistry<TCategory> _registry;
     private readonly IEntitySpawner _arena;
     private readonly IEntityInitializer<TCategory> _initializer;
-    private readonly Dictionary<string, VoidHandle> _characterIdToHandle;
+    private readonly Dictionary<string, AnyHandle> _characterIdToHandle;
 
     /// <summary>
     /// SpawnBridgeを生成する。
@@ -31,7 +31,7 @@ public sealed class SpawnBridge<TCategory> : ISpawnCompletionHandler
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _arena = arena ?? throw new ArgumentNullException(nameof(arena));
         _initializer = initializer ?? throw new ArgumentNullException(nameof(initializer));
-        _characterIdToHandle = new Dictionary<string, VoidHandle>();
+        _characterIdToHandle = new Dictionary<string, AnyHandle>();
     }
 
     /// <summary>
@@ -59,15 +59,15 @@ public sealed class SpawnBridge<TCategory> : ISpawnCompletionHandler
     }
 
     /// <summary>
-    /// キャラクターIDからVoidHandleを取得する。
+    /// キャラクターIDからAnyHandleを取得する。
     /// </summary>
-    public VoidHandle? GetHandle(string characterId)
+    public AnyHandle? GetHandle(string characterId)
     {
         return _characterIdToHandle.TryGetValue(characterId, out var handle) ? handle : null;
     }
 
     /// <summary>
-    /// VoidHandleからEntityContextを取得する。
+    /// AnyHandleからEntityContextを取得する。
     /// </summary>
     public EntityContext<TCategory>? GetContext(string characterId)
     {

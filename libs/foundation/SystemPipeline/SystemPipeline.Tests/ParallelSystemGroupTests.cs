@@ -21,7 +21,7 @@ namespace Tomato.SystemPipeline.Tests
             public IEntityQuery Query => null;
             public ConcurrentBag<int> ThreadIds { get; } = new ConcurrentBag<int>();
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 Thread.Sleep(10);
                 ThreadIds.Add(Thread.CurrentThread.ManagedThreadId);
@@ -35,7 +35,7 @@ namespace Tomato.SystemPipeline.Tests
             public int ExecutionCount { get; private set; }
             private readonly object _lock = new object();
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 lock (_lock)
                 {
@@ -57,7 +57,7 @@ namespace Tomato.SystemPipeline.Tests
                 _executionOrder = executionOrder;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 _executionOrder.Add(Name);
             }
@@ -65,19 +65,19 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            private readonly List<VoidHandle> _entities = new List<VoidHandle>();
+            private readonly List<AnyHandle> _entities = new List<AnyHandle>();
 
-            public void AddEntity(VoidHandle handle)
+            public void AddEntity(AnyHandle handle)
             {
                 _entities.Add(handle);
             }
 
-            public IReadOnlyList<VoidHandle> GetAllEntities()
+            public IReadOnlyList<AnyHandle> GetAllEntities()
             {
                 return _entities;
             }
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class
             {
                 return _entities;
             }
@@ -240,7 +240,7 @@ namespace Tomato.SystemPipeline.Tests
                 _executionOrder = executionOrder;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 lock (_lock)
                 {
@@ -251,8 +251,8 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            public IReadOnlyList<VoidHandle> GetAllEntities() => new List<VoidHandle>();
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class => new List<VoidHandle>();
+            public IReadOnlyList<AnyHandle> GetAllEntities() => new List<AnyHandle>();
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class => new List<AnyHandle>();
         }
 
         [Fact]

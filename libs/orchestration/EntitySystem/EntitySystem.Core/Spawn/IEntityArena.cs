@@ -10,13 +10,13 @@ public interface IEntitySpawner
     /// <summary>
     /// 新しいEntityをSpawnする。
     /// </summary>
-    /// <returns>SpawnされたEntityのVoidHandle</returns>
-    VoidHandle Spawn();
+    /// <returns>SpawnされたEntityのAnyHandle</returns>
+    AnyHandle Spawn();
 
     /// <summary>
     /// EntityをDespawnする。
     /// </summary>
-    /// <param name="handle">DespawnするEntityのVoidHandle</param>
+    /// <param name="handle">DespawnするEntityのAnyHandle</param>
     /// <returns>Despawn成功時true</returns>
-    bool Despawn(VoidHandle handle);
+    bool Despawn(AnyHandle handle);
 }

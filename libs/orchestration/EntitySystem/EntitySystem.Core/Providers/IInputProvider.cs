@@ -11,7 +11,7 @@ public interface IInputProvider
     /// <summary>
     /// EntityのInputStateを取得する。
     /// </summary>
-    /// <param name="handle">EntityのVoidHandle</param>
+    /// <param name="handle">EntityのAnyHandle</param>
     /// <returns>InputState</returns>
-    InputState GetInputState(VoidHandle handle);
+    InputState GetInputState(AnyHandle handle);
 }

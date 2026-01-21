@@ -18,16 +18,16 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            private readonly List<VoidHandle> _entities = new List<VoidHandle>();
+            private readonly List<AnyHandle> _entities = new List<AnyHandle>();
 
-            public void AddEntity(VoidHandle handle)
+            public void AddEntity(AnyHandle handle)
             {
                 _entities.Add(handle);
             }
 
-            public IReadOnlyList<VoidHandle> GetAllEntities() => _entities;
+            public IReadOnlyList<AnyHandle> GetAllEntities() => _entities;
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class => _entities;
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class => _entities;
         }
 
         private class CountingSerialSystem : ISerialSystem
@@ -37,7 +37,7 @@ namespace Tomato.SystemPipeline.Tests
             public int ExecutionCount { get; private set; }
             public int EntitiesProcessed { get; private set; }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 ExecutionCount++;
                 EntitiesProcessed = entities.Count;
@@ -51,7 +51,7 @@ namespace Tomato.SystemPipeline.Tests
             public int ProcessedCount { get; private set; }
             private readonly object _lock = new object();
 
-            public void ProcessEntity(VoidHandle handle, in SystemContext context)
+            public void ProcessEntity(AnyHandle handle, in SystemContext context)
             {
                 lock (_lock)
                 {
@@ -65,7 +65,7 @@ namespace Tomato.SystemPipeline.Tests
             public bool IsEnabled { get; set; } = true;
             public IEntityQuery Query => null;
             public List<int> ProcessedIndices { get; } = new List<int>();
-            public Func<IReadOnlyList<VoidHandle>, List<VoidHandle>, List<VoidHandle>> OrderFunc { get; set; }
+            public Func<IReadOnlyList<AnyHandle>, List<AnyHandle>, List<AnyHandle>> OrderFunc { get; set; }
 
             public OrderedTestSystem()
             {
@@ -80,12 +80,12 @@ namespace Tomato.SystemPipeline.Tests
                 };
             }
 
-            public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+            public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
             {
                 OrderFunc(input, output);
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 foreach (var entity in entities)
                 {
@@ -104,7 +104,7 @@ namespace Tomato.SystemPipeline.Tests
             var registry = new TestEntityRegistry();
             for (int i = 0; i < 5; i++)
             {
-                registry.AddEntity(new VoidHandle(new MockArena(), i, 0));
+                registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -122,7 +122,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new CountingSerialSystem { IsEnabled = false };
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
             var context = new SystemContext(0.016f, 0, 0, default);
 
             // Act
@@ -140,7 +140,7 @@ namespace Tomato.SystemPipeline.Tests
             var registry = new TestEntityRegistry();
             for (int i = 0; i < 100; i++)
             {
-                registry.AddEntity(new VoidHandle(new MockArena(), i, 0));
+                registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -170,9 +170,9 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new OrderedTestSystem();
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 1, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 2, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
             var context = new SystemContext(0.016f, 0, 0, default);
 
             // Act
@@ -211,7 +211,7 @@ namespace Tomato.SystemPipeline.Tests
             var registry = new TestEntityRegistry();
             for (int i = 0; i < 1000; i++)
             {
-                registry.AddEntity(new VoidHandle(new MockArena(), i, 0));
+                registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
             var context = new SystemContext(0.016f, 0, 0, cts.Token);
 
@@ -237,7 +237,7 @@ namespace Tomato.SystemPipeline.Tests
                 _cts = cts;
             }
 
-            public void ProcessEntity(VoidHandle handle, in SystemContext context)
+            public void ProcessEntity(AnyHandle handle, in SystemContext context)
             {
                 if (context.CancellationToken.IsCancellationRequested) return;
 
@@ -254,7 +254,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new ContextCapturingSystem();
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
             var context = new SystemContext(0.033f, 1.5f, 42, default);
 
             // Act
@@ -274,7 +274,7 @@ namespace Tomato.SystemPipeline.Tests
             public float CapturedTotalTime { get; private set; }
             public int CapturedFrameCount { get; private set; }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 CapturedDeltaTime = context.DeltaTime;
                 CapturedTotalTime = context.TotalTime;

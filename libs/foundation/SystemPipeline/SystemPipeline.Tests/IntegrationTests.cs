@@ -49,22 +49,22 @@ namespace Tomato.SystemPipeline.Tests
         private class GameEntityRegistry : IEntityRegistry
         {
             private readonly GameEntityArena _arena = new GameEntityArena();
-            private readonly List<VoidHandle> _handles = new List<VoidHandle>();
+            private readonly List<AnyHandle> _handles = new List<AnyHandle>();
 
             public GameEntity AddEntity(int id, float health = 100f)
             {
                 var entity = new GameEntity { Id = id, Health = health };
                 _arena.AddEntity(entity);
-                var handle = new VoidHandle(_arena, _handles.Count, 0);
+                var handle = new AnyHandle(_arena, _handles.Count, 0);
                 _handles.Add(handle);
                 return entity;
             }
 
-            public GameEntity GetEntity(VoidHandle handle) => _arena.GetEntity(handle.Index);
+            public GameEntity GetEntity(AnyHandle handle) => _arena.GetEntity(handle.Index);
 
-            public IReadOnlyList<VoidHandle> GetAllEntities() => _handles;
+            public IReadOnlyList<AnyHandle> GetAllEntities() => _handles;
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class => _handles;
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class => _handles;
         }
 
         private class MovementSystem : IParallelSystem
@@ -78,7 +78,7 @@ namespace Tomato.SystemPipeline.Tests
                 _registry = registry;
             }
 
-            public void ProcessEntity(VoidHandle handle, in SystemContext context)
+            public void ProcessEntity(AnyHandle handle, in SystemContext context)
             {
                 var entity = _registry.GetEntity(handle);
                 if (entity == null || !entity.IsAlive) return;
@@ -100,7 +100,7 @@ namespace Tomato.SystemPipeline.Tests
                 _registry = registry;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 while (DamageQueue.Count > 0)
                 {
@@ -135,7 +135,7 @@ namespace Tomato.SystemPipeline.Tests
                 _registry = registry;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 foreach (var handle in entities)
                 {
@@ -273,7 +273,7 @@ namespace Tomato.SystemPipeline.Tests
                 _executionOrder = executionOrder;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 _executionOrder.Add(_name);
             }
@@ -378,7 +378,7 @@ namespace Tomato.SystemPipeline.Tests
             public IEntityQuery Query => null;
             public List<int> FrameCounts { get; } = new List<int>();
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 FrameCounts.Add(context.FrameCount);
             }

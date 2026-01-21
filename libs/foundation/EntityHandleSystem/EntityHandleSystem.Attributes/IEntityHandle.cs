@@ -2,13 +2,8 @@ namespace Tomato.EntityHandleSystem;
 
 /// <summary>
 /// エンティティハンドルの共通インターフェース。
-/// EntityContainerで使用するために必要な最小限のインターフェースを定義します。
+/// IHandleを継承し、エンティティ固有の機能を追加できます。
 /// </summary>
-public interface IEntityHandle
+public interface IEntityHandle : Tomato.HandleSystem.IHandle
 {
-    /// <summary>
-    /// ハンドルが有効かどうかを返します。
-    /// 参照先のエンティティが存在し、世代番号が一致する場合にtrueを返します。
-    /// </summary>
-    bool IsValid { get; }
 }

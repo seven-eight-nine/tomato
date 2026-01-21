@@ -17,7 +17,7 @@ public interface ISerialSystem : ISystem
     /// <param name="context">実行コンテキスト</param>
     void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context);
 }
 
@@ -32,5 +32,5 @@ public interface IOrderedSerialSystem : ISerialSystem
     /// </summary>
     /// <param name="input">入力エンティティ</param>
     /// <param name="output">順序付けされた出力エンティティ</param>
-    void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output);
+    void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output);
 }

@@ -7,7 +7,7 @@ namespace Tomato.EntityHandleSystem;
 /// </summary>
 public sealed class AliveFilter : IQueryFilter
 {
-    public bool Matches(VoidHandle handle, IQueryableArena arena, int index)
+    public bool Matches(AnyHandle handle, IQueryableArena arena, int index)
     {
         return handle.IsValid;
     }
@@ -25,7 +25,7 @@ public sealed class TypeFilter : IQueryFilter
         _arenaType = arenaType;
     }
 
-    public bool Matches(VoidHandle handle, IQueryableArena arena, int index)
+    public bool Matches(AnyHandle handle, IQueryableArena arena, int index)
     {
         return arena.ArenaType == _arenaType || _arenaType.IsAssignableFrom(arena.ArenaType);
     }
@@ -36,14 +36,14 @@ public sealed class TypeFilter : IQueryFilter
 /// </summary>
 public sealed class PredicateFilter : IQueryFilter
 {
-    private readonly Func<VoidHandle, IQueryableArena, int, bool> _predicate;
+    private readonly Func<AnyHandle, IQueryableArena, int, bool> _predicate;
 
-    public PredicateFilter(Func<VoidHandle, IQueryableArena, int, bool> predicate)
+    public PredicateFilter(Func<AnyHandle, IQueryableArena, int, bool> predicate)
     {
         _predicate = predicate;
     }
 
-    public bool Matches(VoidHandle handle, IQueryableArena arena, int index)
+    public bool Matches(AnyHandle handle, IQueryableArena arena, int index)
     {
         return _predicate(handle, arena, index);
     }

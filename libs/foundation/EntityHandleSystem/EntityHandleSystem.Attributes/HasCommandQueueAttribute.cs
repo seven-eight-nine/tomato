@@ -20,7 +20,7 @@ namespace Tomato.EntityHandleSystem;
 /// public partial class GameCommandQueue
 /// {
 ///     [CommandMethod]
-///     public partial void ExecuteCommand(VoidHandle handle);
+///     public partial void ExecuteCommand(AnyHandle handle);
 /// }
 ///
 /// // EntityにCommandQueueを関連付け

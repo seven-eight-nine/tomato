@@ -59,9 +59,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, true));
-            arena.AddEntity(new MockVoidHandle(3, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, true));
+            arena.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena);
 
@@ -74,9 +74,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, false)); // invalid
-            arena.AddEntity(new MockVoidHandle(3, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, false)); // invalid
+            arena.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena);
 
@@ -91,8 +91,8 @@ namespace Tomato.EntityHandleSystem.Tests.Query
             var arena1 = new MockQueryableArena { Name = "Arena1" };
             var arena2 = new MockQueryableArena2 { Name = "Arena2" };
 
-            arena1.AddEntity(new MockVoidHandle(1, true));
-            arena2.AddEntity(new MockVoidHandle(2, true));
+            arena1.AddEntity(new MockAnyHandle(1, true));
+            arena2.AddEntity(new MockAnyHandle(2, true));
 
             executor.Register(arena1);
             executor.Register(arena2);
@@ -106,9 +106,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, true));
-            arena.AddEntity(new MockVoidHandle(3, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, true));
+            arena.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena);
 
@@ -125,9 +125,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, false));
-            arena.AddEntity(new MockVoidHandle(3, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, false));
+            arena.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena);
 
@@ -144,8 +144,8 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, true));
 
             executor.Register(arena);
 
@@ -158,7 +158,7 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
 
             executor.Register(arena);
 
@@ -179,9 +179,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
-            arena.AddEntity(new MockVoidHandle(2, true));
-            arena.AddEntity(new MockVoidHandle(3, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(2, true));
+            arena.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena);
 
@@ -193,7 +193,7 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
 
             executor.Register(arena);
 
@@ -214,9 +214,9 @@ namespace Tomato.EntityHandleSystem.Tests.Query
             var arena1 = new MockQueryableArena();
             var arena2 = new MockQueryableArena();
 
-            arena1.AddEntity(new MockVoidHandle(1, true));
-            arena1.AddEntity(new MockVoidHandle(2, true));
-            arena2.AddEntity(new MockVoidHandle(3, true));
+            arena1.AddEntity(new MockAnyHandle(1, true));
+            arena1.AddEntity(new MockAnyHandle(2, true));
+            arena2.AddEntity(new MockAnyHandle(3, true));
 
             executor.Register(arena1);
             executor.Register(arena2);
@@ -238,7 +238,7 @@ namespace Tomato.EntityHandleSystem.Tests.Query
         {
             var executor = new QueryExecutor();
             var arena = new MockQueryableArena();
-            arena.AddEntity(new MockVoidHandle(1, true));
+            arena.AddEntity(new MockAnyHandle(1, true));
             executor.Register(arena);
 
             var result = executor.Query().Execute();
@@ -247,12 +247,12 @@ namespace Tomato.EntityHandleSystem.Tests.Query
 
         #region Mock Classes
 
-        private class MockVoidHandle
+        private class MockAnyHandle
         {
             public int Id { get; }
             public bool Valid { get; }
 
-            public MockVoidHandle(int id, bool valid)
+            public MockAnyHandle(int id, bool valid)
             {
                 Id = id;
                 Valid = valid;
@@ -261,24 +261,24 @@ namespace Tomato.EntityHandleSystem.Tests.Query
 
         private class MockQueryableArena : IQueryableArena
         {
-            private readonly List<MockVoidHandle> _entities = new List<MockVoidHandle>();
+            private readonly List<MockAnyHandle> _entities = new List<MockAnyHandle>();
 
             public string Name { get; set; } = "MockArena";
             public Type ArenaType => typeof(MockQueryableArena);
             public object Arena => this;
             public int ActiveCount => _entities.Count(e => e.Valid);
 
-            public void AddEntity(MockVoidHandle entity)
+            public void AddEntity(MockAnyHandle entity)
             {
                 _entities.Add(entity);
             }
 
-            public IEnumerable<(VoidHandle Handle, int Index)> EnumerateActive()
+            public IEnumerable<(AnyHandle Handle, int Index)> EnumerateActive()
             {
                 for (int i = 0; i < _entities.Count; i++)
                 {
-                    var mockHandle = new TestVoidHandle(_entities[i].Valid);
-                    yield return (mockHandle.ToVoidHandle(), i);
+                    var mockHandle = new TestAnyHandle(_entities[i].Valid);
+                    yield return (mockHandle.ToAnyHandle(), i);
                 }
             }
 
@@ -290,24 +290,24 @@ namespace Tomato.EntityHandleSystem.Tests.Query
 
         private class MockQueryableArena2 : IQueryableArena
         {
-            private readonly List<MockVoidHandle> _entities = new List<MockVoidHandle>();
+            private readonly List<MockAnyHandle> _entities = new List<MockAnyHandle>();
 
             public string Name { get; set; } = "MockArena2";
             public Type ArenaType => typeof(MockQueryableArena2);
             public object Arena => this;
             public int ActiveCount => _entities.Count(e => e.Valid);
 
-            public void AddEntity(MockVoidHandle entity)
+            public void AddEntity(MockAnyHandle entity)
             {
                 _entities.Add(entity);
             }
 
-            public IEnumerable<(VoidHandle Handle, int Index)> EnumerateActive()
+            public IEnumerable<(AnyHandle Handle, int Index)> EnumerateActive()
             {
                 for (int i = 0; i < _entities.Count; i++)
                 {
-                    var mockHandle = new TestVoidHandle(_entities[i].Valid);
-                    yield return (mockHandle.ToVoidHandle(), i);
+                    var mockHandle = new TestAnyHandle(_entities[i].Valid);
+                    yield return (mockHandle.ToAnyHandle(), i);
                 }
             }
 
@@ -317,20 +317,20 @@ namespace Tomato.EntityHandleSystem.Tests.Query
             }
         }
 
-        private class TestVoidHandle : IEntityArena
+        private class TestAnyHandle : IEntityArena
         {
             private readonly bool _valid;
 
-            public TestVoidHandle(bool valid)
+            public TestAnyHandle(bool valid)
             {
                 _valid = valid;
             }
 
             public bool IsValid(int index, int generation) => _valid;
 
-            public VoidHandle ToVoidHandle()
+            public AnyHandle ToAnyHandle()
             {
-                return new VoidHandle(this, 0, 1);
+                return new AnyHandle(this, 0, 1);
             }
         }
 

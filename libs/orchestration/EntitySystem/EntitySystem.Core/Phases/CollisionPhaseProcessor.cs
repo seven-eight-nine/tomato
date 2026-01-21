@@ -51,7 +51,7 @@ public sealed class CollisionSystem<TCategory> : ISerialSystem
     /// <inheritdoc/>
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         // 1. 前フレームのボリュームをクリア

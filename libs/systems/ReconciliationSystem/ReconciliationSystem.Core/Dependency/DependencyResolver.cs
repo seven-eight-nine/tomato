@@ -11,23 +11,23 @@ namespace Tomato.ReconciliationSystem;
 public sealed class DependencyResolver
 {
     private readonly DependencyGraph _graph;
-    private readonly List<VoidHandle> _sortedOrder;
-    private readonly HashSet<VoidHandle> _visited;
-    private readonly HashSet<VoidHandle> _inStack;
+    private readonly List<AnyHandle> _sortedOrder;
+    private readonly HashSet<AnyHandle> _visited;
+    private readonly HashSet<AnyHandle> _inStack;
 
     public DependencyResolver(DependencyGraph graph)
     {
         _graph = graph;
-        _sortedOrder = new List<VoidHandle>();
-        _visited = new HashSet<VoidHandle>();
-        _inStack = new HashSet<VoidHandle>();
+        _sortedOrder = new List<AnyHandle>();
+        _visited = new HashSet<AnyHandle>();
+        _inStack = new HashSet<AnyHandle>();
     }
 
     /// <summary>
     /// トポロジカルソート順を計算する。
     /// </summary>
     /// <returns>処理順序。循環検出時はnull。</returns>
-    public IReadOnlyList<VoidHandle>? ComputeOrder(IEnumerable<VoidHandle> entities)
+    public IReadOnlyList<AnyHandle>? ComputeOrder(IEnumerable<AnyHandle> entities)
     {
         _sortedOrder.Clear();
         _visited.Clear();
@@ -49,7 +49,7 @@ public sealed class DependencyResolver
         return _sortedOrder;
     }
 
-    private bool Visit(VoidHandle entity)
+    private bool Visit(AnyHandle entity)
     {
         if (_inStack.Contains(entity))
         {

@@ -25,20 +25,20 @@ public class MockArena : EHSIEntityArena, IEntitySpawner
 {
     private readonly HashSet<(int index, int generation)> _validHandles = new();
     private int _nextIndex = 0;
-    public List<VoidHandle> SpawnedHandles { get; } = new();
-    public List<VoidHandle> DespawnedHandles { get; } = new();
+    public List<AnyHandle> SpawnedHandles { get; } = new();
+    public List<AnyHandle> DespawnedHandles { get; } = new();
 
-    public VoidHandle Spawn()
+    public AnyHandle Spawn()
     {
         var index = _nextIndex++;
         var generation = 1;
         _validHandles.Add((index, generation));
-        var handle = new VoidHandle(this, index, generation);
+        var handle = new AnyHandle(this, index, generation);
         SpawnedHandles.Add(handle);
         return handle;
     }
 
-    public bool Despawn(VoidHandle handle)
+    public bool Despawn(AnyHandle handle)
     {
         var key = (handle.Index, handle.Generation);
         if (_validHandles.Contains(key))

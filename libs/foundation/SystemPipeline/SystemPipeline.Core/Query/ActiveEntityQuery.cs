@@ -17,9 +17,9 @@ public sealed class ActiveEntityQuery : IEntityQuery
     private ActiveEntityQuery() { }
 
     /// <inheritdoc/>
-    public IEnumerable<VoidHandle> Filter(
+    public IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities)
+        IEnumerable<AnyHandle> entities)
     {
         foreach (var entity in entities)
         {

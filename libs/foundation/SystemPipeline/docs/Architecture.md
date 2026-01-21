@@ -35,7 +35,7 @@ SystemPipelineは、ゲームループにおけるフェーズ処理を抽象化
 
 ### 2. 型パラメータなし
 
-汎用的なECSスタイルを採用。`VoidHandle`を通じてエンティティにアクセス：
+汎用的なECSスタイルを採用。`AnyHandle`を通じてエンティティにアクセス：
 
 ```csharp
 // 型安全なアクセスはArenaを通じて行う
@@ -188,7 +188,7 @@ var group = new SerialSystemGroup(
                                                └────▶ Registry
                                                          │
                                                          ▼
-                                                    VoidHandle[]
+                                                    AnyHandle[]
 ```
 
 ## Source Generator
@@ -253,7 +253,7 @@ var group = new SerialSystemGroup(
 ### メモリ効率
 
 - `SystemContext`は構造体（スタック割り当て）
-- `VoidHandle`は構造体（ボクシング回避）
+- `AnyHandle`は構造体（ボクシング回避）
 - `MessageQueue`は`List<object>`で動的拡張
 
 ### キャンセル処理
@@ -268,9 +268,9 @@ var group = new SerialSystemGroup(
 ```csharp
 public class GameEntityRegistry : IEntityRegistry
 {
-    private readonly Dictionary<Type, List<VoidHandle>> _byType;
+    private readonly Dictionary<Type, List<AnyHandle>> _byType;
 
-    public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>()
+    public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>()
         where TArena : class
     {
         return _byType[typeof(TArena)];
@@ -285,7 +285,7 @@ public class TypedHandlerRegistry : IMessageHandlerRegistry
 {
     private readonly Dictionary<Type, Delegate> _handlers;
 
-    public void Register<T>(Action<VoidHandle, T, SystemContext> handler)
+    public void Register<T>(Action<AnyHandle, T, SystemContext> handler)
         where T : struct
     {
         _handlers[typeof(T)] = handler;
@@ -301,9 +301,9 @@ public class DistanceQuery : IEntityQuery
     private readonly Vector3 _center;
     private readonly float _radius;
 
-    public IEnumerable<VoidHandle> Filter(
+    public IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities)
+        IEnumerable<AnyHandle> entities)
     {
         return entities.Where(e => GetDistance(e, _center) <= _radius);
     }

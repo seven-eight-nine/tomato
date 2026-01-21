@@ -245,7 +245,7 @@ public class CollisionDetectorTests
 
     #region Helper Methods
 
-    private static CollisionVolume CreateHitbox(VoidHandle owner, Vector3 position)
+    private static CollisionVolume CreateHitbox(AnyHandle owner, Vector3 position)
     {
         return new CollisionVolume(
             owner: owner,
@@ -260,7 +260,7 @@ public class CollisionDetectorTests
 
     private class MockArena : IEntityArena
     {
-        public VoidHandle CreateHandle(int index) => new VoidHandle(this, index, 0);
+        public AnyHandle CreateHandle(int index) => new AnyHandle(this, index, 0);
         public bool IsValid(int index, int generation) => true;
     }
 

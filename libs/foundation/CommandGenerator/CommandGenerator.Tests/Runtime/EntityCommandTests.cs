@@ -8,7 +8,7 @@ namespace Tomato.CommandGenerator.Tests;
 
 /// <summary>
 /// Entity単位のコマンド実行テスト。
-/// VoidHandle引数付きのCommandQueueとCommandの動作確認。
+/// AnyHandle引数付きのCommandQueueとCommandの動作確認。
 /// </summary>
 public class EntityCommandTests
 {
@@ -20,7 +20,7 @@ public class EntityCommandTests
         // Arrange
         var queue = new EntityCommandQueue();
         var handle = _arena.CreateHandle(1);
-        var receivedHandle = default(VoidHandle);
+        var receivedHandle = default(AnyHandle);
         var receivedX = 0;
         var receivedY = 0;
 
@@ -78,7 +78,7 @@ public class EntityCommandTests
 
     private class TestArena : IEntityArena
     {
-        public VoidHandle CreateHandle(int index) => new VoidHandle(this, index, 0);
+        public AnyHandle CreateHandle(int index) => new AnyHandle(this, index, 0);
         public bool IsValid(int index, int generation) => true;
     }
 
@@ -87,13 +87,13 @@ public class EntityCommandTests
 
 /// <summary>
 /// Entity単位で実行されるコマンドキュー。
-/// ExecuteCommand(VoidHandle)でEntityごとにコマンドを実行する。
+/// ExecuteCommand(AnyHandle)でEntityごとにコマンドを実行する。
 /// </summary>
 [CommandQueue]
 public partial class EntityCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 /// <summary>
@@ -104,9 +104,9 @@ public partial class MoveEntityCommand
 {
     public int X;
     public int Y;
-    public Action<VoidHandle, int, int>? OnExecute;
+    public Action<AnyHandle, int, int>? OnExecute;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         OnExecute?.Invoke(handle, X, Y);
     }
@@ -118,9 +118,9 @@ public partial class MoveEntityCommand
 [Command<EntityCommandQueue>(Priority = 100)]
 public partial class HighPriorityEntityCommand
 {
-    public Action<VoidHandle>? OnExecute;
+    public Action<AnyHandle>? OnExecute;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         OnExecute?.Invoke(handle);
     }
@@ -132,9 +132,9 @@ public partial class HighPriorityEntityCommand
 [Command<EntityCommandQueue>(Priority = -10)]
 public partial class LowPriorityEntityCommand
 {
-    public Action<VoidHandle>? OnExecute;
+    public Action<AnyHandle>? OnExecute;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         OnExecute?.Invoke(handle);
     }

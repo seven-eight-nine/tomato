@@ -15,7 +15,7 @@ public interface IQueryableArena
     object Arena { get; }
 
     /// <summary>有効なEntityを列挙</summary>
-    IEnumerable<(VoidHandle Handle, int Index)> EnumerateActive();
+    IEnumerable<(AnyHandle Handle, int Index)> EnumerateActive();
 
     /// <summary>指定インデックスのEntityが有効か確認</summary>
     bool IsActive(int index);
