@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Tomato.CommandGenerator</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CommandGenerator.Attributes\CommandGenerator.Attributes.csproj" />
+    <ProjectReference Include="..\CommandGenerator.Generator\CommandGenerator.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
+    <ProjectReference Include="..\..\SystemPipeline\SystemPipeline.Core\SystemPipeline.Core.csproj" />
+  </ItemGroup>
+</Project>
