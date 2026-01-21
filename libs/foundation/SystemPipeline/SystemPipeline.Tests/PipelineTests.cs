@@ -41,7 +41,7 @@ namespace Tomato.SystemPipeline.Tests
         {
             // Arrange
             var system = new TestSerialSystem();
-            var group = new SystemGroup(system);
+            var group = new SerialSystemGroup(system);
             var registry = new TestEntityRegistry();
             var pipeline = new Pipeline(registry);
 
@@ -60,7 +60,7 @@ namespace Tomato.SystemPipeline.Tests
         {
             // Arrange
             var system = new TestSerialSystem();
-            var group = new SystemGroup(system);
+            var group = new SerialSystemGroup(system);
             var registry = new TestEntityRegistry();
             var pipeline = new Pipeline(registry);
 
@@ -80,7 +80,7 @@ namespace Tomato.SystemPipeline.Tests
         {
             // Arrange
             var system = new TestSerialSystem();
-            var group = new SystemGroup(system);
+            var group = new SerialSystemGroup(system);
             var registry = new TestEntityRegistry();
             var pipeline = new Pipeline(registry);
 
@@ -98,7 +98,7 @@ namespace Tomato.SystemPipeline.Tests
         {
             // Arrange
             var system = new TestSerialSystem();
-            var group = new SystemGroup(system);
+            var group = new SerialSystemGroup(system);
             var registry = new TestEntityRegistry();
             var pipeline = new Pipeline(registry);
 
@@ -123,8 +123,8 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var updateSystem = new TestSerialSystem();
             var lateUpdateSystem = new TestSerialSystem();
-            var updateGroup = new SystemGroup(updateSystem);
-            var lateUpdateGroup = new SystemGroup(lateUpdateSystem);
+            var updateGroup = new SerialSystemGroup(updateSystem);
+            var lateUpdateGroup = new SerialSystemGroup(lateUpdateSystem);
             var registry = new TestEntityRegistry();
             var pipeline = new Pipeline(registry);
 

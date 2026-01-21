@@ -10,7 +10,7 @@ public interface ISystem
 {
     /// <summary>
     /// システムが有効かどうかを取得または設定します。
-    /// falseの場合、SystemGroupはこのシステムをスキップします。
+    /// falseの場合、実行グループはこのシステムをスキップします。
     /// </summary>
     bool IsEnabled { get; set; }
 

@@ -7,7 +7,8 @@ ECS (Entity Component System) スタイルのシステムパイプラインフ�
 - **3種類の処理パターン**: Serial（直列）、Parallel（並列）、MessageQueue（Wave処理）
 - **Source Generator対応**: `[CommandQueue]`属性でシステム実装を自動生成
 - **EntityHandleSystem連携**: `[HasCommandQueue(typeof(T))]`属性でエンティティにキューを追加
-- **シンプルなAPI**: SystemGroupを配列で定義し、Pipelineで実行
+- **シンプルなAPI**: SerialSystemGroup/ParallelSystemGroupで構造を定義し、Pipelineで実行
+- **並列実行対応**: 直列/並列グループを入れ子にして組み合わせ可能
 - **型安全**: コンパイル時の型チェックによる安全なキューアクセス
 
 ## インストール
@@ -111,17 +112,31 @@ var execution = new ExecutionSystem();
 var reconciliation = new ReconciliationSystem();
 var cleanup = new CleanupSystem();
 
-// グループを配列で定義（実行順序は配列順）
-var updateGroup = new SystemGroup(
+// SerialSystemGroupで直列実行グループを定義（実行順序は配列順）
+var updateGroup = new SerialSystemGroup(
     collision,
     messageSystem,
     decision,
     execution
 );
 
-var lateUpdateGroup = new SystemGroup(
+var lateUpdateGroup = new SerialSystemGroup(
     reconciliation,
     cleanup
+);
+
+// ParallelSystemGroupで並列実行も可能
+var parallelGroup = new ParallelSystemGroup(
+    new AIDecisionSystem(),
+    new AnimationSystem(),
+    new AudioSystem()
+);
+
+// グループは入れ子にできる
+var mainLoop = new SerialSystemGroup(
+    new InputSystem(),
+    parallelGroup,  // 並列実行
+    new PhysicsSystem()
 );
 
 // パイプライン作成
@@ -314,7 +329,10 @@ SystemPipeline/
 │   ├── IMessageQueueSystem.cs
 │   ├── SystemContext.cs         # QueryCache含む
 │   ├── SystemExecutor.cs
-│   ├── SystemGroup.cs
+│   ├── IExecutable.cs           # 実行可能要素インターフェース
+│   ├── ISystemGroup.cs          # グループインターフェース
+│   ├── SerialSystemGroup.cs     # 直列実行グループ
+│   ├── ParallelSystemGroup.cs   # 並列実行グループ
 │   ├── Pipeline.cs
 │   ├── IEntityRegistry.cs
 │   ├── IHasQueue.cs
@@ -336,30 +354,36 @@ SystemPipeline/
 public class GameBootstrap : MonoBehaviour
 {
     private Pipeline _pipeline;
-    private SystemGroup _updateGroup;
-    private SystemGroup _fixedUpdateGroup;
-    private SystemGroup _lateUpdateGroup;
+    private ISystemGroup _updateGroup;
+    private ISystemGroup _fixedUpdateGroup;
+    private ISystemGroup _lateUpdateGroup;
 
     void Awake()
     {
         var registry = new GameEntityRegistry();
         var handlerRegistry = new GameMessageHandlerRegistry();
 
-        // システムを構築
-        _updateGroup = new SystemGroup(
+        // 並列実行可能なシステムをグループ化
+        var parallelAI = new ParallelSystemGroup(
+            new AIDecisionSystem(),
+            new AnimationSystem()
+        );
+
+        // SerialSystemGroup で直列実行（順序が重要な処理）
+        _updateGroup = new SerialSystemGroup(
             new InputSystem(),
             new UpdateBeginQueueSystem(handlerRegistry),
-            new AIDecisionSystem(),
+            parallelAI,  // 入れ子で並列実行
             new MovementSystem()
         );
 
-        _fixedUpdateGroup = new SystemGroup(
+        _fixedUpdateGroup = new SerialSystemGroup(
             new PhysicsSystem(),
             new CollisionSystem(),
             new DamageQueueSystem(handlerRegistry)
         );
 
-        _lateUpdateGroup = new SystemGroup(
+        _lateUpdateGroup = new SerialSystemGroup(
             new ReconciliationSystem(),
             new CleanupSystem()
         );

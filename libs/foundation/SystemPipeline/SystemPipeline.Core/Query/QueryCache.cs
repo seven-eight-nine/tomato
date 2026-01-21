@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Tomato.EntityHandleSystem;
 
@@ -6,15 +7,17 @@ namespace Tomato.SystemPipeline.Query;
 /// <summary>
 /// クエリ結果をフレーム内でキャッシュするクラス。
 /// 同じフレーム内で同じクエリが実行された場合、キャッシュから結果を返します。
+/// スレッドセーフです。
 /// </summary>
 public sealed class QueryCache
 {
-    private readonly Dictionary<IEntityQuery, IReadOnlyList<VoidHandle>> _cache;
-    private int _lastFrameCount;
+    private readonly ConcurrentDictionary<IEntityQuery, IReadOnlyList<VoidHandle>> _cache;
+    private volatile int _lastFrameCount;
+    private readonly object _frameLock = new();
 
     public QueryCache()
     {
-        _cache = new Dictionary<IEntityQuery, IReadOnlyList<VoidHandle>>();
+        _cache = new ConcurrentDictionary<IEntityQuery, IReadOnlyList<VoidHandle>>();
         _lastFrameCount = -1;
     }
 
@@ -33,17 +36,23 @@ public sealed class QueryCache
         // フレームが変わったらキャッシュをクリア
         if (frameCount != _lastFrameCount)
         {
-            _cache.Clear();
-            _lastFrameCount = frameCount;
+            lock (_frameLock)
+            {
+                // ダブルチェック
+                if (frameCount != _lastFrameCount)
+                {
+                    _cache.Clear();
+                    _lastFrameCount = frameCount;
+                }
+            }
         }
 
-        // キャッシュにあれば返す
-        if (_cache.TryGetValue(query, out var cached))
-        {
-            return cached;
-        }
+        // キャッシュにあれば返す、なければ実行してキャッシュ
+        return _cache.GetOrAdd(query, q => ExecuteQuery(q, registry));
+    }
 
-        // クエリを実行してキャッシュ
+    private static IReadOnlyList<VoidHandle> ExecuteQuery(IEntityQuery query, IEntityRegistry registry)
+    {
         var allEntities = registry.GetAllEntities();
         var result = new List<VoidHandle>();
 
@@ -52,7 +61,6 @@ public sealed class QueryCache
             result.Add(handle);
         }
 
-        _cache[query] = result;
         return result;
     }
 
@@ -61,7 +69,10 @@ public sealed class QueryCache
     /// </summary>
     public void Clear()
     {
-        _cache.Clear();
-        _lastFrameCount = -1;
+        lock (_frameLock)
+        {
+            _cache.Clear();
+            _lastFrameCount = -1;
+        }
     }
 }

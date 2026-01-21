@@ -5,31 +5,36 @@ namespace Tomato.SystemPipeline;
 
 /// <summary>
 /// システムパイプラインの管理クラス。
-/// SystemGroupインスタンスを直接指定して実行します。
+/// ISystemGroupインスタンスを直接指定して実行します。
 ///
 /// <example>
-/// 使用例（Unity連携イメージ）:
+/// 使用例:
 /// <code>
 /// public class GameBootstrap : MonoBehaviour
 /// {
 ///     private Pipeline _pipeline;
-///     private SystemGroup _updateGroup;
-///     private SystemGroup _lateUpdateGroup;
+///     private ISystemGroup _updateGroup;
+///     private ISystemGroup _lateUpdateGroup;
 ///
 ///     void Awake()
 ///     {
 ///         var registry = new GameEntityRegistry();
 ///
-///         // システムを作成
-///         var collision = new CollisionSystem();
-///         var message = new UpdateBeginQueueSystem(handlerRegistry);
-///         var decision = new DecisionSystem();
+///         // 直列グループ
+///         _updateGroup = new SerialSystemGroup(
+///             new InputSystem(),
+///             new ParallelSystemGroup(  // 並列グループを入れ子
+///                 new AISystem(),
+///                 new AnimationSystem()
+///             ),
+///             new PhysicsSystem()
+///         );
 ///
-///         // グループを配列で定義
-///         _updateGroup = new SystemGroup(collision, message, decision);
-///         _lateUpdateGroup = new SystemGroup(reconciliation, cleanup);
+///         _lateUpdateGroup = new SerialSystemGroup(
+///             new ReconciliationSystem(),
+///             new CleanupSystem()
+///         );
 ///
-///         // パイプライン作成
 ///         _pipeline = new Pipeline(registry);
 ///     }
 ///
@@ -69,11 +74,11 @@ public sealed class Pipeline
     }
 
     /// <summary>
-    /// SystemGroupを実行します。
+    /// ISystemGroupを実行します。
     /// </summary>
     /// <param name="group">実行するグループ</param>
     /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
-    public void Execute(SystemGroup group, float deltaTime)
+    public void Execute(ISystemGroup group, float deltaTime)
     {
         _totalTime += deltaTime;
         _frameCount++;

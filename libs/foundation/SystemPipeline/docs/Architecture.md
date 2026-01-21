@@ -44,15 +44,32 @@ var player = playerArena.TryGet(handle);
 
 ### 3. 手動配列定義
 
-SystemGroupは配列で明示的に定義。実行順序が明確：
+SerialSystemGroup/ParallelSystemGroupは配列で明示的に定義。実行順序が明確：
 
 ```csharp
-var group = new SystemGroup(
+// 直列実行: collision → damage → movement の順
+var serialGroup = new SerialSystemGroup(
     collision,    // 1番目に実行
     damage,       // 2番目に実行
     movement      // 3番目に実行
 );
+
+// 並列実行: 同時に実行される可能性あり
+var parallelGroup = new ParallelSystemGroup(
+    aiSystem,
+    animSystem,
+    audioSystem
+);
+
+// 入れ子で組み合わせ可能
+var mainLoop = new SerialSystemGroup(
+    inputSystem,
+    parallelGroup,  // ここで並列実行
+    physicsSystem
+);
 ```
+
+マルチスレッドのタイムライン管理は、結局のところ2次元レイアウトと同じ問題になる。SerialSystemGroupが時間軸方向（横）、ParallelSystemGroupがスレッド方向（縦）を担当し、入れ子にすることで複雑な並行処理も宣言的に書ける。
 
 ### 4. Before/Afterフックなし
 
@@ -60,7 +77,7 @@ var group = new SystemGroup(
 
 ```csharp
 // フック代わりに専用システムを追加
-var group = new SystemGroup(
+var group = new SerialSystemGroup(
     prePhysicsSystem,    // "Before" の代わり
     physicsSystem,
     postPhysicsSystem    // "After" の代わり
@@ -154,14 +171,24 @@ var group = new SystemGroup(
   IOrderedSerialSystem
 
 
-  SystemGroup ─────────────────────▶ ISystem[]
-       │
-       └────execute────▶ SystemExecutor
-                              │
-                              └────▶ Registry
-                                        │
-                                        ▼
-                                   VoidHandle[]
+                  IExecutable
+                       │
+        ┌──────────────┴──────────────┐
+        │                              │
+        ▼                              ▼
+     ISystem                    ISystemGroup
+                                      │
+                        ┌─────────────┴─────────────┐
+                        │                           │
+                        ▼                           ▼
+               SerialSystemGroup           ParallelSystemGroup
+                        │                           │
+                        └────execute────▶ SystemExecutor
+                                               │
+                                               └────▶ Registry
+                                                         │
+                                                         ▼
+                                                    VoidHandle[]
 ```
 
 ## Source Generator
@@ -291,14 +318,34 @@ public class DistanceQuery : IEntityQuery
 public class GameManager : MonoBehaviour
 {
     private Pipeline _pipeline;
-    private SystemGroup _update, _fixedUpdate, _lateUpdate;
+    private ISystemGroup _update, _fixedUpdate, _lateUpdate;
 
     void Awake()
     {
         _pipeline = new Pipeline(CreateRegistry());
-        _update = CreateUpdateSystems();
-        _fixedUpdate = CreateFixedUpdateSystems();
-        _lateUpdate = CreateLateUpdateSystems();
+
+        // 並列実行可能な処理をグループ化
+        var parallelAI = new ParallelSystemGroup(
+            new AIDecisionSystem(),
+            new AnimationSystem()
+        );
+
+        // 直列実行グループに入れ子で組み込む
+        _update = new SerialSystemGroup(
+            new InputSystem(),
+            parallelAI,
+            new MovementSystem()
+        );
+
+        _fixedUpdate = new SerialSystemGroup(
+            new PhysicsSystem(),
+            new CollisionSystem()
+        );
+
+        _lateUpdate = new SerialSystemGroup(
+            new ReconciliationSystem(),
+            new CleanupSystem()
+        );
     }
 
     void Update() => _pipeline.Execute(_update, Time.deltaTime);
