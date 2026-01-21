@@ -76,7 +76,7 @@ namespace Tomato.SystemPipeline.Tests
             var system2 = new TestSerialSystem(2, processedOrder);
             var system3 = new TestSerialSystem(3, processedOrder);
 
-            var group = new SystemGroup(system1, system2, system3);
+            var group = new SerialSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -96,7 +96,7 @@ namespace Tomato.SystemPipeline.Tests
             var system2 = new TestSerialSystem(2, processedOrder) { IsEnabled = false };
             var system3 = new TestSerialSystem(3, processedOrder);
 
-            var group = new SystemGroup(system1, system2, system3);
+            var group = new SerialSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -113,7 +113,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var processedOrder = new List<int>();
             var system1 = new TestSerialSystem(1, processedOrder);
-            var group = new SystemGroup(system1) { IsEnabled = false };
+            var group = new SerialSystemGroup(system1) { IsEnabled = false };
             var registry = new TestEntityRegistry();
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -129,7 +129,7 @@ namespace Tomato.SystemPipeline.Tests
         {
             // Arrange
             var system = new TestParallelSystem();
-            var group = new SystemGroup(system);
+            var group = new SerialSystemGroup(system);
             var registry = new TestEntityRegistry();
             var arena = new MockArena();
 
@@ -155,7 +155,7 @@ namespace Tomato.SystemPipeline.Tests
             var processedOrder = new List<int>();
             var system1 = new TestSerialSystem(1, processedOrder);
             var system2 = new TestSerialSystem(2, processedOrder);
-            var group = new SystemGroup(system1);
+            var group = new SerialSystemGroup(system1);
 
             // Act
             group.Add(system2);
@@ -176,7 +176,7 @@ namespace Tomato.SystemPipeline.Tests
             var system1 = new TestSerialSystem(1, processedOrder);
             var system2 = new TestSerialSystem(2, processedOrder);
             var system3 = new TestSerialSystem(3, processedOrder);
-            var group = new SystemGroup(system1, system3);
+            var group = new SerialSystemGroup(system1, system3);
 
             // Act
             group.Insert(1, system2);
@@ -196,7 +196,7 @@ namespace Tomato.SystemPipeline.Tests
             var processedOrder = new List<int>();
             var system1 = new TestSerialSystem(1, processedOrder);
             var system2 = new TestSerialSystem(2, processedOrder);
-            var group = new SystemGroup(system1, system2);
+            var group = new SerialSystemGroup(system1, system2);
 
             // Act
             bool removed = group.Remove(system1);

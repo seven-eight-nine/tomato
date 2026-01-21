@@ -211,41 +211,151 @@ public readonly struct SystemContext
 
 ---
 
-### SystemGroup
+### IExecutable
 
-システムのグループクラス。
+実行可能な要素（システムまたはグループ）の共通インターフェース。
 
 ```csharp
-public sealed class SystemGroup
+public interface IExecutable
+{
+    bool IsEnabled { get; set; }
+    void Execute(IEntityRegistry registry, in SystemContext context);
+}
+```
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `IsEnabled` | `bool` | 有効/無効 |
+
+| メソッド | 説明 |
+|---------|------|
+| `Execute` | 実行する |
+
+---
+
+### ISystemGroup
+
+システムグループのインターフェース。
+
+```csharp
+public interface ISystemGroup : IExecutable
+{
+    int Count { get; }
+    IExecutable this[int index] { get; }
+    IEnumerable<IExecutable> Items { get; }
+    void Add(IExecutable item);
+    void Insert(int index, IExecutable item);
+    bool Remove(IExecutable item);
+}
+```
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `Count` | `int` | 要素数 |
+| `Items` | `IEnumerable<IExecutable>` | 全要素 |
+
+| メソッド | 説明 |
+|---------|------|
+| `Add` | 要素を末尾に追加 |
+| `Insert` | 指定位置に要素を挿入 |
+| `Remove` | 要素を削除 |
+
+---
+
+### SerialSystemGroup
+
+直列実行グループクラス。追加された順序でシステムを1つずつ実行します。
+
+```csharp
+public sealed class SerialSystemGroup : ISystemGroup
 {
     public bool IsEnabled { get; set; }
     public int Count { get; }
+    public IExecutable this[int index] { get; }
+    public IEnumerable<IExecutable> Items { get; }
 
-    public SystemGroup(params ISystem[] systems);
+    public SerialSystemGroup();
+    public SerialSystemGroup(params IExecutable[] items);
+    public SerialSystemGroup(params ISystem[] systems);
 
     public void Execute(IEntityRegistry registry, in SystemContext context);
+    public void Add(IExecutable item);
     public void Add(ISystem system);
+    public void Insert(int index, IExecutable item);
     public void Insert(int index, ISystem system);
+    public bool Remove(IExecutable item);
     public bool Remove(ISystem system);
-    public ISystem this[int index] { get; }
 }
 ```
 
 | コンストラクタ | 説明 |
 |---------------|------|
-| `SystemGroup(params ISystem[])` | システム配列でグループを作成 |
+| `SerialSystemGroup()` | 空のグループを作成 |
+| `SerialSystemGroup(params IExecutable[])` | 実行可能要素でグループを作成 |
+| `SerialSystemGroup(params ISystem[])` | システム配列でグループを作成 |
 
-| プロパティ | 型 | 説明 |
-|-----------|-----|------|
-| `IsEnabled` | `bool` | グループの有効/無効 |
-| `Count` | `int` | システム数 |
+**使用例:**
 
-| メソッド | 説明 |
-|---------|------|
-| `Execute` | グループ内の全システムを順番に実行 |
-| `Add` | システムを末尾に追加 |
-| `Insert` | 指定位置にシステムを挿入 |
-| `Remove` | システムを削除 |
+```csharp
+var group = new SerialSystemGroup(
+    new InputSystem(),
+    new PhysicsSystem(),
+    new RenderSystem()
+);
+// InputSystem → PhysicsSystem → RenderSystem の順で実行
+```
+
+---
+
+### ParallelSystemGroup
+
+並列実行グループクラス。追加されたシステムを並列に実行します。
+
+```csharp
+public sealed class ParallelSystemGroup : ISystemGroup
+{
+    public bool IsEnabled { get; set; }
+    public int Count { get; }
+    public IExecutable this[int index] { get; }
+    public IEnumerable<IExecutable> Items { get; }
+
+    public ParallelSystemGroup();
+    public ParallelSystemGroup(params IExecutable[] items);
+    public ParallelSystemGroup(params ISystem[] systems);
+
+    public void Execute(IEntityRegistry registry, in SystemContext context);
+    public void Add(IExecutable item);
+    public void Add(ISystem system);
+    public void Insert(int index, IExecutable item);
+    public void Insert(int index, ISystem system);
+    public bool Remove(IExecutable item);
+    public bool Remove(ISystem system);
+}
+```
+
+**注意事項:**
+- グループ内の全要素が同時に実行される可能性がある
+- グループ内の要素間でデータ依存関係がないことを保証する必要がある
+- 依存関係のある処理は SerialSystemGroup に分ける
+
+**使用例:**
+
+```csharp
+// AI, Animation, Audio は互いに独立しているので並列実行可能
+var parallelGroup = new ParallelSystemGroup(
+    new AISystem(),
+    new AnimationSystem(),
+    new AudioSystem()
+);
+
+// グループは入れ子にできる
+var mainLoop = new SerialSystemGroup(
+    new InputSystem(),
+    parallelGroup,       // ここで並列実行
+    new PhysicsSystem(),
+    new RenderSystem()
+);
+```
 
 ---
 
@@ -261,7 +371,7 @@ public sealed class Pipeline
 
     public Pipeline(IEntityRegistry registry);
 
-    public void Execute(SystemGroup group, float deltaTime);
+    public void Execute(ISystemGroup group, float deltaTime);
     public void Reset();
     public void Cancel();
 }
@@ -278,7 +388,7 @@ public sealed class Pipeline
 
 | メソッド | 説明 |
 |---------|------|
-| `Execute` | SystemGroupを実行 |
+| `Execute` | ISystemGroupを実行 |
 | `Reset` | 時間とフレームカウントをリセット |
 | `Cancel` | 実行中の処理をキャンセル |
 

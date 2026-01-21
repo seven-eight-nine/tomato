@@ -166,8 +166,8 @@ namespace Tomato.SystemPipeline.Tests
             var damageSystem = new DamageSystem(registry);
             var cleanupSystem = new CleanupSystem(registry);
 
-            var updateGroup = new SystemGroup(movementSystem, damageSystem);
-            var lateUpdateGroup = new SystemGroup(cleanupSystem);
+            var updateGroup = new SerialSystemGroup(movementSystem, damageSystem);
+            var lateUpdateGroup = new SerialSystemGroup(cleanupSystem);
 
             var pipeline = new Pipeline(registry);
 
@@ -192,8 +192,8 @@ namespace Tomato.SystemPipeline.Tests
             var damageSystem = new DamageSystem(registry);
             var cleanupSystem = new CleanupSystem(registry);
 
-            var updateGroup = new SystemGroup(damageSystem);
-            var lateUpdateGroup = new SystemGroup(cleanupSystem);
+            var updateGroup = new SerialSystemGroup(damageSystem);
+            var lateUpdateGroup = new SerialSystemGroup(cleanupSystem);
 
             var pipeline = new Pipeline(registry);
 
@@ -218,7 +218,7 @@ namespace Tomato.SystemPipeline.Tests
             entity.VelocityX = 100f;
 
             var movementSystem = new MovementSystem(registry);
-            var group = new SystemGroup(movementSystem);
+            var group = new SerialSystemGroup(movementSystem);
             var pipeline = new Pipeline(registry);
 
             // Act - Simulate 10 frames at 60fps
@@ -247,8 +247,8 @@ namespace Tomato.SystemPipeline.Tests
             var system3 = new TrackingSystem("LateUpdate1", executionOrder);
             var system4 = new TrackingSystem("LateUpdate2", executionOrder);
 
-            var updateGroup = new SystemGroup(system1, system2);
-            var lateUpdateGroup = new SystemGroup(system3, system4);
+            var updateGroup = new SerialSystemGroup(system1, system2);
+            var lateUpdateGroup = new SerialSystemGroup(system3, system4);
 
             var pipeline = new Pipeline(registry);
 
@@ -288,7 +288,7 @@ namespace Tomato.SystemPipeline.Tests
             entity.VelocityX = 100f;
 
             var movementSystem = new MovementSystem(registry);
-            var group = new SystemGroup(movementSystem);
+            var group = new SerialSystemGroup(movementSystem);
             var pipeline = new Pipeline(registry);
 
             // Act - Frame 1: enabled
@@ -330,7 +330,7 @@ namespace Tomato.SystemPipeline.Tests
             var damageSystem = new DamageSystem(registry); // Serial
             var cleanupSystem = new CleanupSystem(registry); // Serial
 
-            var group = new SystemGroup(movementSystem, damageSystem, cleanupSystem);
+            var group = new SerialSystemGroup(movementSystem, damageSystem, cleanupSystem);
             var pipeline = new Pipeline(registry);
 
             // Act
@@ -352,7 +352,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(1, 100f);
 
             var trackingSystem = new FrameTrackingSystem();
-            var group = new SystemGroup(trackingSystem);
+            var group = new SerialSystemGroup(trackingSystem);
             var pipeline = new Pipeline(registry);
 
             // Act
