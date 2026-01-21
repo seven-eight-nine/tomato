@@ -75,12 +75,18 @@ internal sealed class CommandQueueRegistration
     /// </summary>
     public int PoolInitialCapacity { get; }
 
-    public CommandQueueRegistration(string queueFullyQualifiedName, string queueClassName, int priority, int poolInitialCapacity)
+    /// <summary>
+    /// シグナルコマンドかどうか（キューに1つしか入らない）
+    /// </summary>
+    public bool Signal { get; }
+
+    public CommandQueueRegistration(string queueFullyQualifiedName, string queueClassName, int priority, int poolInitialCapacity, bool signal)
     {
         QueueFullyQualifiedName = queueFullyQualifiedName;
         QueueClassName = queueClassName;
         Priority = priority;
         PoolInitialCapacity = poolInitialCapacity;
+        Signal = signal;
     }
 }
 

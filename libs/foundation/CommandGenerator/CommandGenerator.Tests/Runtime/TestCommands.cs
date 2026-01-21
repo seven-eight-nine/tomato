@@ -61,3 +61,33 @@ public partial class TestDamageCommand
         OnExecute?.Invoke(Target, Amount);
     }
 }
+
+/// <summary>
+/// シグナルコマンド（Signal = true）
+/// キューに1つしか入らない
+/// </summary>
+[Command<MessageHandlerQueue>(Signal = true)]
+public partial class SignalCommand
+{
+    public Action? OnExecute;
+
+    public void Execute()
+    {
+        OnExecute?.Invoke();
+    }
+}
+
+/// <summary>
+/// シグナルコマンド（Signal = true, Priority = 100）
+/// 優先度付きシグナル
+/// </summary>
+[Command<MessageHandlerQueue>(Signal = true, Priority = 100)]
+public partial class HighPrioritySignalCommand
+{
+    public Action? OnExecute;
+
+    public void Execute()
+    {
+        OnExecute?.Invoke();
+    }
+}

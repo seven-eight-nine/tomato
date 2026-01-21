@@ -182,6 +182,41 @@ replayQueue.Replay();  // 1回目
 replayQueue.Replay();  // 同じコマンドを再実行
 ```
 
+### シグナルコマンド
+
+シグナルコマンドは、キューに1つしか存在できないコマンドです。複数回Enqueueしても、最初の1つだけがキューに入り、2回目以降は無視されます。
+
+```csharp
+// シグナルコマンドの定義
+[Command<GameCommandQueue>(Signal = true)]
+public partial class ReconcileCommand
+{
+    public void Execute()
+    {
+        // イベントを集計・調停する処理
+        // このコマンドは1回だけ実行される
+    }
+}
+
+// 使用例
+var queue = new GameCommandQueue();
+
+// 複数回Enqueueしても1つしかキューに入らない
+queue.Enqueue<ReconcileCommand>(_ => { }); // true（成功）
+queue.Enqueue<ReconcileCommand>(_ => { }); // false（無視）
+queue.Enqueue<ReconcileCommand>(_ => { }); // false（無視）
+
+queue.Execute(); // ReconcileCommandは1回だけ実行される
+
+// 実行後はクリアされるので、再度Enqueue可能
+queue.Enqueue<ReconcileCommand>(_ => { }); // true（成功）
+```
+
+シグナルコマンドの主な用途：
+- **イベント調停**: 複数のイベントを受け取った時に、まとめて1回だけ処理したい場合
+- **重複抑制**: 同じ処理リクエストが短時間に複数来た時に、1回だけ実行したい場合
+- **状態同期**: フレーム終了時に1回だけ状態を同期したい場合
+
 ## 応用例
 
 ### Undo/Redo システム
@@ -286,6 +321,7 @@ void OnReceivePacket(byte[] data)
 |-----------|------|-----------|
 | `Priority` | 実行優先度（大きいほど先に実行） | 0 |
 | `PoolInitialCapacity` | オブジェクトプールの初期容量 | 8 |
+| `Signal` | シグナルコマンド（キューに1つしか入らない） | false |
 
 ### CommandMethod属性
 
@@ -297,8 +333,10 @@ void OnReceivePacket(byte[] data)
 
 | メソッド | 説明 |
 |---------|------|
-| `Queue.Enqueue<T>(Action<T>)` | コマンドをキューに追加 |
+| `Queue.Enqueue<T>(Action<T>)` | コマンドをキューに追加。戻り値はbool（Signalコマンドが重複した場合false） |
 | `Queue.Execute()` | キューのコマンドを実行 |
+| `Queue.Clear()` | Pending/NextFrameキューをクリア |
+| `Queue.ForceClear()` | 全キューを強制クリア |
 
 ## ベストプラクティス
 
