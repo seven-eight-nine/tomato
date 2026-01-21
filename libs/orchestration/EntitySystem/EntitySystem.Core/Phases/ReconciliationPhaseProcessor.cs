@@ -37,7 +37,7 @@ public sealed class ReconciliationSystem : IOrderedSerialSystem
     }
 
     /// <inheritdoc/>
-    public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+    public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
     {
         // 依存順を計算（トポロジカルソート）
         var result = _dependencyResolver.ResolveDependencies(input, output);
@@ -52,7 +52,7 @@ public sealed class ReconciliationSystem : IOrderedSerialSystem
     /// <inheritdoc/>
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         // 依存順に位置調停
@@ -75,8 +75,8 @@ public interface IDependencyResolver
     /// <param name="sortedResult">ソート結果の出力先</param>
     /// <returns>解決結果</returns>
     DependencyResolutionResult ResolveDependencies(
-        IReadOnlyList<VoidHandle> entities,
-        List<VoidHandle> sortedResult);
+        IReadOnlyList<AnyHandle> entities,
+        List<AnyHandle> sortedResult);
 }
 
 /// <summary>
@@ -99,6 +99,6 @@ public interface IPositionReconciler
     /// <summary>
     /// Entityの位置を調停する。
     /// </summary>
-    /// <param name="handle">EntityのVoidHandle</param>
-    void Reconcile(VoidHandle handle);
+    /// <param name="handle">EntityのAnyHandle</param>
+    void Reconcile(AnyHandle handle);
 }

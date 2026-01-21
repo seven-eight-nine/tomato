@@ -69,7 +69,7 @@ void Update()
 ```csharp
 var entityCooldowns = new EntityCooldownManager();
 
-void EntityUseSkill(VoidHandle entity, string skillId)
+void EntityUseSkill(AnyHandle entity, string skillId)
 {
     if (entityCooldowns.IsOnCooldown(entity, skillId))
     {
@@ -81,7 +81,7 @@ void EntityUseSkill(VoidHandle entity, string skillId)
 }
 
 // Entity削除時
-void OnEntityRemoved(VoidHandle entity)
+void OnEntityRemoved(AnyHandle entity)
 {
     entityCooldowns.OnEntityRemoved(entity);
 }
@@ -113,13 +113,13 @@ void OnEntityRemoved(VoidHandle entity)
 
 | メソッド | 説明 |
 |---------|------|
-| `StartCooldown(VoidHandle entity, string actionId, int durationFrames)` | Entity別クールダウン開始 |
-| `IsOnCooldown(VoidHandle entity, string actionId)` | クールダウン中か確認 |
-| `OnEntityRemoved(VoidHandle entity)` | Entity削除時のクリーンアップ |
+| `StartCooldown(AnyHandle entity, string actionId, int durationFrames)` | Entity別クールダウン開始 |
+| `IsOnCooldown(AnyHandle entity, string actionId)` | クールダウン中か確認 |
+| `OnEntityRemoved(AnyHandle entity)` | Entity削除時のクリーンアップ |
 
 ## 依存関係
 
-- EntityHandleSystem.Attributes (VoidHandle - EntityCooldownManagerのみ)
+- EntityHandleSystem.Attributes (AnyHandle - EntityCooldownManagerのみ)
 
 ## テスト
 

@@ -4,79 +4,79 @@ using Xunit;
 namespace Tomato.EntityHandleSystem.Tests.Runtime;
 
 /// <summary>
-/// VoidHandle tests - TDD t-wada style
+/// AnyHandle tests - TDD t-wada style
 /// </summary>
-public class VoidHandleTests
+public class AnyHandleTests
 {
     [Fact]
-    public void VoidHandle_Default_ShouldBeInvalid()
+    public void AnyHandle_Default_ShouldBeInvalid()
     {
-        var handle = default(VoidHandle);
+        var handle = default(AnyHandle);
 
         Assert.False(handle.IsValid);
     }
 
     [Fact]
-    public void VoidHandle_Invalid_ShouldBeInvalid()
+    public void AnyHandle_Invalid_ShouldBeInvalid()
     {
-        var handle = VoidHandle.Invalid;
+        var handle = AnyHandle.Invalid;
 
         Assert.False(handle.IsValid);
     }
 
     [Fact]
-    public void VoidHandle_WithValidArena_ShouldBeValid()
+    public void AnyHandle_WithValidArena_ShouldBeValid()
     {
         var arena = new MockArena();
         arena.SetValid(0, 1, true);
-        var handle = new VoidHandle(arena, 0, 1);
+        var handle = new AnyHandle(arena, 0, 1);
 
         Assert.True(handle.IsValid);
     }
 
     [Fact]
-    public void VoidHandle_WithInvalidGeneration_ShouldBeInvalid()
+    public void AnyHandle_WithInvalidGeneration_ShouldBeInvalid()
     {
         var arena = new MockArena();
         arena.SetValid(0, 1, true);
-        var handle = new VoidHandle(arena, 0, 2); // Wrong generation
+        var handle = new AnyHandle(arena, 0, 2); // Wrong generation
 
         Assert.False(handle.IsValid);
     }
 
     [Fact]
-    public void VoidHandle_Equality_SameValues_ShouldBeEqual()
+    public void AnyHandle_Equality_SameValues_ShouldBeEqual()
     {
         var arena = new MockArena();
-        var handle1 = new VoidHandle(arena, 5, 10);
-        var handle2 = new VoidHandle(arena, 5, 10);
+        var handle1 = new AnyHandle(arena, 5, 10);
+        var handle2 = new AnyHandle(arena, 5, 10);
 
         Assert.Equal(handle1, handle2);
         Assert.True(handle1 == handle2);
     }
 
     [Fact]
-    public void VoidHandle_Equality_DifferentIndex_ShouldNotBeEqual()
+    public void AnyHandle_Equality_DifferentIndex_ShouldNotBeEqual()
     {
         var arena = new MockArena();
-        var handle1 = new VoidHandle(arena, 5, 10);
-        var handle2 = new VoidHandle(arena, 6, 10);
+        var handle1 = new AnyHandle(arena, 5, 10);
+        var handle2 = new AnyHandle(arena, 6, 10);
 
         Assert.NotEqual(handle1, handle2);
         Assert.True(handle1 != handle2);
     }
 
     [Fact]
-    public void EntityContainer_WithVoidHandle_ShouldWork()
+    public void EntityContainer_WithAnyHandle_ShouldWork()
     {
         var arena1 = new MockArena();
         var arena2 = new MockArena();
         arena1.SetValid(0, 1, true);
         arena2.SetValid(0, 1, true);
 
-        var container = new EntityContainer<VoidHandle>();
-        container.Add(new VoidHandle(arena1, 0, 1));
-        container.Add(new VoidHandle(arena2, 0, 1));
+        var container = new EntityContainer<AnyHandle>();
+        container.Add(new AnyHandle(arena1, 0, 1));
+        container.Add(new AnyHandle(arena2, 0, 1));
 
         var count = 0;
         var iterator = container.GetIterator();
@@ -89,16 +89,16 @@ public class VoidHandleTests
     }
 
     [Fact]
-    public void EntityContainer_WithVoidHandle_ShouldSkipInvalid()
+    public void EntityContainer_WithAnyHandle_ShouldSkipInvalid()
     {
         var arena1 = new MockArena();
         var arena2 = new MockArena();
         arena1.SetValid(0, 1, true);
         arena2.SetValid(0, 1, false); // Invalid
 
-        var container = new EntityContainer<VoidHandle>();
-        container.Add(new VoidHandle(arena1, 0, 1));
-        container.Add(new VoidHandle(arena2, 0, 1));
+        var container = new EntityContainer<AnyHandle>();
+        container.Add(new AnyHandle(arena1, 0, 1));
+        container.Add(new AnyHandle(arena2, 0, 1));
 
         var count = 0;
         var iterator = container.GetIterator();
@@ -111,11 +111,11 @@ public class VoidHandleTests
     }
 
     [Fact]
-    public void VoidHandle_TryAs_WithCorrectType_ShouldSucceed()
+    public void AnyHandle_TryAs_WithCorrectType_ShouldSucceed()
     {
         var arena = new MockArena();
         arena.SetValid(5, 3, true);
-        var voidHandle = new VoidHandle(arena, 5, 3);
+        var voidHandle = new AnyHandle(arena, 5, 3);
 
         var result = voidHandle.TryAs<MockArena>(out var typedArena);
 
@@ -124,10 +124,10 @@ public class VoidHandleTests
     }
 
     [Fact]
-    public void VoidHandle_TryAs_WithWrongType_ShouldFail()
+    public void AnyHandle_TryAs_WithWrongType_ShouldFail()
     {
         var arena = new MockArena();
-        var voidHandle = new VoidHandle(arena, 5, 3);
+        var voidHandle = new AnyHandle(arena, 5, 3);
 
         var result = voidHandle.TryAs<OtherMockArena>(out var typedArena);
 
@@ -136,9 +136,9 @@ public class VoidHandleTests
     }
 
     [Fact]
-    public void VoidHandle_TryAs_WithNull_ShouldFail()
+    public void AnyHandle_TryAs_WithNull_ShouldFail()
     {
-        var voidHandle = VoidHandle.Invalid;
+        var voidHandle = AnyHandle.Invalid;
 
         var result = voidHandle.TryAs<MockArena>(out var typedArena);
 

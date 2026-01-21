@@ -1,4 +1,5 @@
 using System;
+using Tomato.HandleSystem;
 
 namespace Tomato.EntityHandleSystem;
 
@@ -8,10 +9,10 @@ namespace Tomato.EntityHandleSystem;
 ///
 /// <example>
 /// <code>
-/// var mixedContainer = new EntityContainer&lt;VoidHandle&gt;();
-/// mixedContainer.Add(bossHandle.ToVoidHandle());
-/// mixedContainer.Add(enemyHandle.ToVoidHandle());
-/// mixedContainer.Add(playerHandle.ToVoidHandle());
+/// var mixedContainer = new EntityContainer&lt;AnyHandle&gt;();
+/// mixedContainer.Add(bossHandle.ToAnyHandle());
+/// mixedContainer.Add(enemyHandle.ToAnyHandle());
+/// mixedContainer.Add(playerHandle.ToAnyHandle());
 ///
 /// var iterator = mixedContainer.GetIterator();
 /// while (iterator.MoveNext())
@@ -25,20 +26,20 @@ namespace Tomato.EntityHandleSystem;
 /// </code>
 /// </example>
 /// </summary>
-public readonly struct VoidHandle : IEntityHandle, IEquatable<VoidHandle>
+public readonly struct AnyHandle : IEntityHandle, IEquatable<AnyHandle>
 {
     private readonly IEntityArena _arena;
     private readonly int _index;
     private readonly int _generation;
 
     /// <summary>
-    /// VoidHandleを作成します。
-    /// 通常はEntityHandle.ToVoidHandle()を使用してください。
+    /// AnyHandleを作成します。
+    /// 通常はEntityHandle.ToAnyHandle()を使用してください。
     /// </summary>
     /// <param name="arena">Arenaへの参照</param>
     /// <param name="index">エンティティのインデックス</param>
     /// <param name="generation">世代番号</param>
-    public VoidHandle(IEntityArena arena, int index, int generation)
+    public AnyHandle(IEntityArena arena, int index, int generation)
     {
         _arena = arena;
         _index = index;
@@ -51,9 +52,9 @@ public readonly struct VoidHandle : IEntityHandle, IEquatable<VoidHandle>
     public bool IsValid => _arena != null && _arena.IsValid(_index, _generation);
 
     /// <summary>
-    /// 無効なVoidHandleを返します。
+    /// 無効なAnyHandleを返します。
     /// </summary>
-    public static VoidHandle Invalid => default;
+    public static AnyHandle Invalid => default;
 
     /// <summary>
     /// エンティティのインデックスを取得します。
@@ -108,7 +109,7 @@ public readonly struct VoidHandle : IEntityHandle, IEquatable<VoidHandle>
         return false;
     }
 
-    public bool Equals(VoidHandle other)
+    public bool Equals(AnyHandle other)
     {
         return ReferenceEquals(_arena, other._arena)
             && _index == other._index
@@ -117,7 +118,7 @@ public readonly struct VoidHandle : IEntityHandle, IEquatable<VoidHandle>
 
     public override bool Equals(object obj)
     {
-        return obj is VoidHandle other && Equals(other);
+        return obj is AnyHandle other && Equals(other);
     }
 
     public override int GetHashCode()
@@ -132,6 +133,6 @@ public readonly struct VoidHandle : IEntityHandle, IEquatable<VoidHandle>
         }
     }
 
-    public static bool operator ==(VoidHandle left, VoidHandle right) => left.Equals(right);
-    public static bool operator !=(VoidHandle left, VoidHandle right) => !left.Equals(right);
+    public static bool operator ==(AnyHandle left, AnyHandle right) => left.Equals(right);
+    public static bool operator !=(AnyHandle left, AnyHandle right) => !left.Equals(right);
 }

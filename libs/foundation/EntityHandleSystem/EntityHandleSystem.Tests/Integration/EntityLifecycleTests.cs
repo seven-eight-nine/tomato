@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Tomato.HandleSystem;
 using Xunit;
 
 namespace Tomato.EntityHandleSystem.Tests.Integration;

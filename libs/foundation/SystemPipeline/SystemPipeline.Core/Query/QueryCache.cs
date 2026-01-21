@@ -11,13 +11,13 @@ namespace Tomato.SystemPipeline.Query;
 /// </summary>
 public sealed class QueryCache
 {
-    private readonly ConcurrentDictionary<IEntityQuery, IReadOnlyList<VoidHandle>> _cache;
+    private readonly ConcurrentDictionary<IEntityQuery, IReadOnlyList<AnyHandle>> _cache;
     private volatile int _lastFrameCount;
     private readonly object _frameLock = new();
 
     public QueryCache()
     {
-        _cache = new ConcurrentDictionary<IEntityQuery, IReadOnlyList<VoidHandle>>();
+        _cache = new ConcurrentDictionary<IEntityQuery, IReadOnlyList<AnyHandle>>();
         _lastFrameCount = -1;
     }
 
@@ -28,7 +28,7 @@ public sealed class QueryCache
     /// <param name="registry">エンティティレジストリ</param>
     /// <param name="frameCount">現在のフレーム番号</param>
     /// <returns>クエリ結果のエンティティリスト</returns>
-    public IReadOnlyList<VoidHandle> GetOrExecute(
+    public IReadOnlyList<AnyHandle> GetOrExecute(
         IEntityQuery query,
         IEntityRegistry registry,
         int frameCount)
@@ -51,10 +51,10 @@ public sealed class QueryCache
         return _cache.GetOrAdd(query, q => ExecuteQuery(q, registry));
     }
 
-    private static IReadOnlyList<VoidHandle> ExecuteQuery(IEntityQuery query, IEntityRegistry registry)
+    private static IReadOnlyList<AnyHandle> ExecuteQuery(IEntityQuery query, IEntityRegistry registry)
     {
         var allEntities = registry.GetAllEntities();
-        var result = new List<VoidHandle>();
+        var result = new List<AnyHandle>();
 
         foreach (var handle in query.Filter(registry, allEntities))
         {

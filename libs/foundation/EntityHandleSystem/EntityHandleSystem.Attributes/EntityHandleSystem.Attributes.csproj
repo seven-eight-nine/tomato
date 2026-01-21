@@ -11,4 +11,8 @@
     <Description>Attributes and base classes for EntityHandleSystem Source Generator</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\HandleSystem\HandleSystem.Core\HandleSystem.Core.csproj" />
+  </ItemGroup>
+
 </Project>

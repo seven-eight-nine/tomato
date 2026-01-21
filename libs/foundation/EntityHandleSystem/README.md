@@ -26,7 +26,7 @@ EntityHandleSystemは、ゲームエンジンでよく使われる「エンテ�
 - **オブジェクトプーリング** - メモリ効率の向上
 - **スレッドセーフ** - ロックによる安全な並行アクセス
 - **コンポーネントシステム** - SoA パターンでコンポーネントを管理
-- **VoidHandle** - 型消去されたハンドルで横串操作が可能
+- **AnyHandle** - 型消去されたハンドルで横串操作が可能
 
 ## クイックスタート
 
@@ -294,7 +294,7 @@ if (handle.PositionComponent_TryGetDistanceSquared(out float distance))
 handle.VelocityComponent_TryApplyToPosition(1.0f);  // deltaTime = 1.0
 ```
 
-### VoidHandle による横串操作
+### AnyHandle による横串操作
 
 異なるエンティティ型に対して、共通のコンポーネントを操作できます。
 
@@ -305,11 +305,11 @@ var staticArena = new StaticEntityArena();
 var movableHandle = movableArena.Create();
 var staticHandle = staticArena.Create();
 
-// VoidHandle に変換
-VoidHandle[] handles = new[]
+// AnyHandle に変換
+AnyHandle[] handles = new[]
 {
-    movableHandle.ToVoidHandle(),
-    staticHandle.ToVoidHandle()
+    movableHandle.ToAnyHandle(),
+    staticHandle.ToAnyHandle()
 };
 
 // 異なるエンティティ型でも PositionComponent があれば処理可能
@@ -343,7 +343,7 @@ handle.TryExecute<PositionComponent>((ref PositionComponent pos) =>
 | 操作 | Boxing | 計算量 |
 |------|--------|--------|
 | コンポーネントアクセス | なし | O(1) |
-| VoidHandle.TryExecute | なし | O(1) |
+| AnyHandle.TryExecute | なし | O(1) |
 | TypedHandle.TryExecute | なし | O(1) |
 
 - **Boxing なし**: Arena はクラス、コンポーネントは ref で返される
@@ -364,7 +364,7 @@ using CommandGenerator;
 public partial class GameCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 // Commandの定義
@@ -373,7 +373,7 @@ public partial class DamageCommand
 {
     public int Amount;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         // ダメージ処理
     }
@@ -563,7 +563,7 @@ void KillEnemy(EnemyHandle handle)
 | `Handle.TryGet(out T)` | エンティティを安全に取得 |
 | `Handle.Try{Method}(...)` | エンティティメソッドを安全に呼び出し |
 | `Handle.Dispose()` | エンティティを削除 |
-| `Handle.ToVoidHandle()` | 型消去されたハンドルに変換 |
+| `Handle.ToAnyHandle()` | 型消去されたハンドルに変換 |
 
 ### 生成されるメソッド（コンポーネント）
 
@@ -571,7 +571,7 @@ void KillEnemy(EnemyHandle handle)
 |---------|------|
 | `Handle.{Component}_Try{Method}(...)` | コンポーネントメソッドを安全に呼び出し |
 | `Handle.TryExecute<T>(RefAction<T>)` | ラムダでコンポーネントを操作 |
-| `VoidHandle.TryExecute<T>(RefAction<T>)` | 型消去ハンドルでコンポーネントを操作 |
+| `AnyHandle.TryExecute<T>(RefAction<T>)` | 型消去ハンドルでコンポーネントを操作 |
 
 ### 生成されるプロパティ（CommandQueue）
 

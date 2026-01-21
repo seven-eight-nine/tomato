@@ -8,14 +8,14 @@ namespace Tomato.SchedulerSystem;
 /// </summary>
 public sealed class EntityCooldownManager
 {
-    private readonly Dictionary<VoidHandle, Dictionary<string, int>> _cooldowns = new();
+    private readonly Dictionary<AnyHandle, Dictionary<string, int>> _cooldowns = new();
     private int _currentFrame;
 
     /// <summary>現在のフレーム番号</summary>
     public int CurrentFrame => _currentFrame;
 
     /// <summary>クールダウンを開始</summary>
-    public void StartCooldown(VoidHandle entity, string actionId, int durationFrames)
+    public void StartCooldown(AnyHandle entity, string actionId, int durationFrames)
     {
         if (!_cooldowns.TryGetValue(entity, out var entityCooldowns))
         {
@@ -27,7 +27,7 @@ public sealed class EntityCooldownManager
     }
 
     /// <summary>クールダウン中か確認</summary>
-    public bool IsOnCooldown(VoidHandle entity, string actionId)
+    public bool IsOnCooldown(AnyHandle entity, string actionId)
     {
         if (!_cooldowns.TryGetValue(entity, out var entityCooldowns))
         {
@@ -39,7 +39,7 @@ public sealed class EntityCooldownManager
     }
 
     /// <summary>残りフレーム数を取得</summary>
-    public int GetRemainingFrames(VoidHandle entity, string actionId)
+    public int GetRemainingFrames(AnyHandle entity, string actionId)
     {
         if (!_cooldowns.TryGetValue(entity, out var entityCooldowns))
         {
@@ -56,7 +56,7 @@ public sealed class EntityCooldownManager
     }
 
     /// <summary>指定アクションのクールダウンをリセット</summary>
-    public void Reset(VoidHandle entity, string actionId)
+    public void Reset(AnyHandle entity, string actionId)
     {
         if (_cooldowns.TryGetValue(entity, out var entityCooldowns))
         {
@@ -65,7 +65,7 @@ public sealed class EntityCooldownManager
     }
 
     /// <summary>Entity削除時にクリーンアップ</summary>
-    public void OnEntityRemoved(VoidHandle entity)
+    public void OnEntityRemoved(AnyHandle entity)
     {
         _cooldowns.Remove(entity);
     }
@@ -85,7 +85,7 @@ public sealed class EntityCooldownManager
     /// <summary>無効なEntityのクールダウンを削除</summary>
     public void CleanupInvalidEntities()
     {
-        var invalidEntities = new List<VoidHandle>();
+        var invalidEntities = new List<AnyHandle>();
 
         foreach (var entity in _cooldowns.Keys)
         {

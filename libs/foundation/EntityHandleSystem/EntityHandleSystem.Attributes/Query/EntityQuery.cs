@@ -38,7 +38,7 @@ public sealed class EntityQuery
     }
 
     /// <summary>任意の条件でフィルタ</summary>
-    public EntityQuery Where(Func<VoidHandle, IQueryableArena, int, bool> predicate)
+    public EntityQuery Where(Func<AnyHandle, IQueryableArena, int, bool> predicate)
     {
         _filters.Add(new PredicateFilter(predicate));
         return this;
@@ -58,13 +58,13 @@ public sealed class EntityQuery
     }
 
     /// <summary>クエリを実行し、列挙</summary>
-    public IEnumerable<VoidHandle> Enumerate()
+    public IEnumerable<AnyHandle> Enumerate()
     {
         return Execute().Handles;
     }
 
     /// <summary>最初の1件を取得</summary>
-    public VoidHandle? First()
+    public AnyHandle? First()
     {
         return Execute().FirstOrNull();
     }

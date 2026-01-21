@@ -108,57 +108,57 @@ public class EntityGenerator : ISourceGenerator
                     }
                 }
 
-                // Collect EntityComponent attributes
+                // Collect components and command queues
                 List<ComponentInfo> components = new List<ComponentInfo>();
+                List<CommandQueueInfo> commandQueues = new List<CommandQueueInfo>();
 
+                // Collect EntityComponent attributes
                 if (entityComponentAttributeSymbol != null)
-                {
-                    foreach (AttributeData componentAttribute in classSymbol.GetAttributes())
                     {
-                        if (SymbolEqualityComparer.Default.Equals(componentAttribute.AttributeClass, entityComponentAttributeSymbol))
+                        foreach (AttributeData componentAttribute in classSymbol.GetAttributes())
                         {
-                            // Get the component type from the constructor argument
-                            if (componentAttribute.ConstructorArguments.Length > 0 &&
-                                componentAttribute.ConstructorArguments[0].Value is INamedTypeSymbol componentType)
+                            if (SymbolEqualityComparer.Default.Equals(componentAttribute.AttributeClass, entityComponentAttributeSymbol))
                             {
-                                // Collect EntityMethod methods from the component type
-                                List<EntityMethodInfo> componentMethods = new List<EntityMethodInfo>();
-
-                                if (entityMethodAttributeSymbol != null)
+                                // Get the component type from the constructor argument
+                                if (componentAttribute.ConstructorArguments.Length > 0 &&
+                                    componentAttribute.ConstructorArguments[0].Value is INamedTypeSymbol componentType)
                                 {
-                                    foreach (ISymbol member in componentType.GetMembers())
+                                    // Collect EntityMethod methods from the component type
+                                    List<EntityMethodInfo> componentMethods = new List<EntityMethodInfo>();
+
+                                    if (entityMethodAttributeSymbol != null)
                                     {
-                                        if (member is IMethodSymbol methodSymbol && methodSymbol.MethodKind == MethodKind.Ordinary && !methodSymbol.IsStatic)
+                                        foreach (ISymbol member in componentType.GetMembers())
                                         {
-                                            AttributeData methodAttribute = methodSymbol.GetAttributes()
-                                                .FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, entityMethodAttributeSymbol));
-
-                                            if (methodAttribute != null)
+                                            if (member is IMethodSymbol methodSymbol && methodSymbol.MethodKind == MethodKind.Ordinary && !methodSymbol.IsStatic)
                                             {
-                                                bool unsafeFlag = false;
-                                                foreach (KeyValuePair<string, TypedConstant> namedArg in methodAttribute.NamedArguments)
-                                                {
-                                                    if (namedArg.Key == "Unsafe" && namedArg.Value.Value is bool u)
-                                                    {
-                                                        unsafeFlag = u;
-                                                    }
-                                                }
+                                                AttributeData methodAttribute = methodSymbol.GetAttributes()
+                                                    .FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, entityMethodAttributeSymbol));
 
-                                                componentMethods.Add(new EntityMethodInfo(methodSymbol, unsafeFlag));
+                                                if (methodAttribute != null)
+                                                {
+                                                    bool unsafeFlag = false;
+                                                    foreach (KeyValuePair<string, TypedConstant> namedArg in methodAttribute.NamedArguments)
+                                                    {
+                                                        if (namedArg.Key == "Unsafe" && namedArg.Value.Value is bool u)
+                                                        {
+                                                            unsafeFlag = u;
+                                                        }
+                                                    }
+
+                                                    componentMethods.Add(new EntityMethodInfo(methodSymbol, unsafeFlag));
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                components.Add(new ComponentInfo(componentType, componentMethods));
+                                    components.Add(new ComponentInfo(componentType, componentMethods));
+                                }
                             }
                         }
                     }
-                }
 
                 // Collect HasCommandQueue attributes
-                List<CommandQueueInfo> commandQueues = new List<CommandQueueInfo>();
-
                 if (hasCommandQueueAttributeSymbol != null)
                 {
                     foreach (AttributeData attr in classSymbol.GetAttributes())
@@ -294,10 +294,10 @@ public class EntityGenerator : ISourceGenerator
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
 
-            // ToVoidHandle method
-            sb.AppendLine($"{indent}    public Tomato.EntityHandleSystem.VoidHandle ToVoidHandle()");
+            // ToAnyHandle method
+            sb.AppendLine($"{indent}    public Tomato.EntityHandleSystem.AnyHandle ToAnyHandle()");
             sb.AppendLine($"{indent}    {{");
-            sb.AppendLine($"{indent}        return new Tomato.EntityHandleSystem.VoidHandle(_arena, _index, _generation);");
+            sb.AppendLine($"{indent}        return new Tomato.EntityHandleSystem.AnyHandle(_arena, _index, _generation);");
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
 
@@ -765,7 +765,7 @@ public class EntityGenerator : ISourceGenerator
             string arenaName,
             string indent)
         {
-            sb.AppendLine($"{indent}    public bool TryExecute<TComponent>(Tomato.EntityHandleSystem.RefAction<TComponent> action)");
+            sb.AppendLine($"{indent}    public bool TryExecute<TComponent>(Tomato.HandleSystem.RefAction<TComponent> action)");
             sb.AppendLine($"{indent}    {{");
             sb.AppendLine($"{indent}        if (_arena is Tomato.EntityHandleSystem.IComponentArena<TComponent> componentArena)");
             sb.AppendLine($"{indent}        {{");
@@ -837,8 +837,8 @@ public class EntityGenerator : ISourceGenerator
             // Full constructor with RefAction
             sb.AppendLine($"{indent}    public {arenaName}(");
             sb.AppendLine($"{indent}        int initialCapacity,");
-            sb.AppendLine($"{indent}        Tomato.EntityHandleSystem.RefAction<{typeName}> onSpawn,");
-            sb.AppendLine($"{indent}        Tomato.EntityHandleSystem.RefAction<{typeName}> onDespawn)");
+            sb.AppendLine($"{indent}        Tomato.HandleSystem.RefAction<{typeName}> onSpawn,");
+            sb.AppendLine($"{indent}        Tomato.HandleSystem.RefAction<{typeName}> onDespawn)");
             sb.AppendLine($"{indent}        : base(initialCapacity, onSpawn, onDespawn)");
             sb.AppendLine($"{indent}    {{");
 
@@ -896,8 +896,8 @@ public class EntityGenerator : ISourceGenerator
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
 
-            // IEntityArena.IsValid method (for VoidHandle)
-            sb.AppendLine($"{indent}    bool Tomato.EntityHandleSystem.IEntityArena.IsValid(int index, int generation)");
+            // IArena.IsValid method (for AnyHandle - IEntityArena inherits from IArena)
+            sb.AppendLine($"{indent}    bool Tomato.HandleSystem.IArena.IsValid(int index, int generation)");
             sb.AppendLine($"{indent}    {{");
             sb.AppendLine($"{indent}        lock (_lock)");
             sb.AppendLine($"{indent}        {{");
@@ -906,8 +906,8 @@ public class EntityGenerator : ISourceGenerator
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
 
-            // AsHandle method (convert VoidHandle back to typed handle)
-            sb.AppendLine($"{indent}    public {handleName} AsHandle(Tomato.EntityHandleSystem.VoidHandle voidHandle)");
+            // AsHandle method (convert AnyHandle back to typed handle)
+            sb.AppendLine($"{indent}    public {handleName} AsHandle(Tomato.EntityHandleSystem.AnyHandle voidHandle)");
             sb.AppendLine($"{indent}    {{");
             sb.AppendLine($"{indent}        return new {handleName}(this, voidHandle.Index, voidHandle.Generation);");
             sb.AppendLine($"{indent}    }}");
@@ -996,7 +996,7 @@ public class EntityGenerator : ISourceGenerator
 
                 sb.AppendLine();
                 // IComponentArena<T>.TryExecuteComponent explicit implementation
-                sb.AppendLine($"{indent}    bool Tomato.EntityHandleSystem.IComponentArena<{component.ComponentFullName}>.TryExecuteComponent(int index, int generation, Tomato.EntityHandleSystem.RefAction<{component.ComponentFullName}> action)");
+                sb.AppendLine($"{indent}    bool Tomato.EntityHandleSystem.IComponentArena<{component.ComponentFullName}>.TryExecuteComponent(int index, int generation, Tomato.HandleSystem.RefAction<{component.ComponentFullName}> action)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        lock (_lock)");
                 sb.AppendLine($"{indent}        {{");

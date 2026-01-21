@@ -1,0 +1,493 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+
+namespace Tomato.HandleSystem.Generator;
+
+/// <summary>
+/// Source Generator that generates Handle structs and Arena classes
+/// for types marked with [Handleable] attribute.
+/// </summary>
+[Generator]
+public class HandleGenerator : ISourceGenerator
+{
+    private const string HandleableAttributeFullName = "Tomato.HandleSystem.HandleableAttribute";
+    private const string HandleableMethodAttributeFullName = "Tomato.HandleSystem.HandleableMethodAttribute";
+
+    public void Initialize(GeneratorInitializationContext context)
+    {
+        context.RegisterForSyntaxNotifications(() => new HandleableSyntaxReceiver());
+    }
+
+    public void Execute(GeneratorExecutionContext context)
+    {
+        if (context.SyntaxReceiver is not HandleableSyntaxReceiver receiver)
+        {
+            return;
+        }
+
+        Compilation compilation = context.Compilation;
+
+        INamedTypeSymbol handleableAttributeSymbol = compilation.GetTypeByMetadataName(HandleableAttributeFullName);
+        INamedTypeSymbol handleableMethodAttributeSymbol = compilation.GetTypeByMetadataName(HandleableMethodAttributeFullName);
+
+        if (handleableAttributeSymbol == null)
+        {
+            return;
+        }
+
+        foreach (TypeDeclarationSyntax typeDeclaration in receiver.CandidateTypes)
+        {
+            SemanticModel semanticModel = compilation.GetSemanticModel(typeDeclaration.SyntaxTree);
+            INamedTypeSymbol classSymbol = semanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
+
+            if (classSymbol == null)
+            {
+                continue;
+            }
+
+            AttributeData handleableAttribute = classSymbol.GetAttributes()
+                .FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, handleableAttributeSymbol));
+
+            if (handleableAttribute == null)
+            {
+                continue;
+            }
+
+            int initialCapacity = 256;
+            string arenaName = null;
+
+            foreach (KeyValuePair<string, TypedConstant> namedArg in handleableAttribute.NamedArguments)
+            {
+                if (namedArg.Key == "InitialCapacity" && namedArg.Value.Value is int capacity)
+                {
+                    initialCapacity = capacity;
+                }
+                else if (namedArg.Key == "ArenaName" && namedArg.Value.Value is string name)
+                {
+                    arenaName = name;
+                }
+            }
+
+            List<MethodInfo> methods = new List<MethodInfo>();
+
+            if (handleableMethodAttributeSymbol != null)
+            {
+                foreach (ISymbol member in classSymbol.GetMembers())
+                {
+                    if (member is IMethodSymbol methodSymbol && methodSymbol.MethodKind == MethodKind.Ordinary && !methodSymbol.IsStatic)
+                    {
+                        AttributeData methodAttribute = methodSymbol.GetAttributes()
+                            .FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, handleableMethodAttributeSymbol));
+
+                        if (methodAttribute != null)
+                        {
+                            bool unsafeFlag = false;
+                            foreach (KeyValuePair<string, TypedConstant> namedArg in methodAttribute.NamedArguments)
+                            {
+                                if (namedArg.Key == "Unsafe" && namedArg.Value.Value is bool u)
+                                {
+                                    unsafeFlag = u;
+                                }
+                            }
+
+                            methods.Add(new MethodInfo(methodSymbol, unsafeFlag));
+                        }
+                    }
+                }
+            }
+
+            string source = GenerateCode(classSymbol, initialCapacity, arenaName, methods);
+
+            string fileName = $"{classSymbol.ContainingNamespace?.ToDisplayString() ?? ""}.{classSymbol.Name}.g.cs";
+            fileName = fileName.TrimStart('.');
+
+            context.AddSource(fileName, SourceText.From(source, Encoding.UTF8));
+        }
+    }
+
+    private string GenerateCode(
+        INamedTypeSymbol classSymbol,
+        int initialCapacity,
+        string customArenaName,
+        List<MethodInfo> methods)
+    {
+        string typeName = classSymbol.Name;
+        string handleName = typeName + "Handle";
+        string arenaName = customArenaName ?? typeName + "Arena";
+        string namespaceName = classSymbol.ContainingNamespace?.ToDisplayString();
+        bool hasNamespace = !string.IsNullOrEmpty(namespaceName) && namespaceName != "<global namespace>";
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.AppendLine("// <auto-generated />");
+        sb.AppendLine("#pragma warning disable CS0618");
+        sb.AppendLine("#pragma warning disable CS0219");
+        sb.AppendLine("#pragma warning disable CS8019");
+        sb.AppendLine();
+        sb.AppendLine("using System;");
+        sb.AppendLine();
+
+        if (hasNamespace)
+        {
+            sb.AppendLine($"namespace {namespaceName}");
+            sb.AppendLine("{");
+        }
+
+        GenerateHandleStruct(sb, typeName, handleName, arenaName, methods, hasNamespace);
+        sb.AppendLine();
+        GenerateArenaClass(sb, typeName, handleName, arenaName, initialCapacity, hasNamespace);
+
+        if (hasNamespace)
+        {
+            sb.AppendLine("}");
+        }
+
+        return sb.ToString();
+    }
+
+    private void GenerateHandleStruct(
+        StringBuilder sb,
+        string typeName,
+        string handleName,
+        string arenaName,
+        List<MethodInfo> methods,
+        bool hasNamespace)
+    {
+        string indent = hasNamespace ? "    " : "";
+
+        sb.AppendLine($"{indent}public struct {handleName} : IEquatable<{handleName}>, global::Tomato.HandleSystem.IHandle");
+        sb.AppendLine($"{indent}{{");
+
+        sb.AppendLine($"{indent}    internal readonly {arenaName} _arena;");
+        sb.AppendLine($"{indent}    private readonly int _generation;");
+        sb.AppendLine($"{indent}    private readonly int _index;");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal {handleName}({arenaName} arena, int index, int generation)");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        _arena = arena;");
+        sb.AppendLine($"{indent}        _index = index;");
+        sb.AppendLine($"{indent}        _generation = generation;");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public bool IsValid => _arena != null && _arena.IsValid(this);");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public static {handleName} Invalid => default;");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public void Dispose()");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        _arena?.DestroyInternal(_index, _generation);");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public bool Equals({handleName} other) =>");
+        sb.AppendLine($"{indent}        _arena == other._arena && _generation == other._generation && _index == other._index;");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public override bool Equals(object obj) => obj is {handleName} h && Equals(h);");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public override int GetHashCode()");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        unchecked");
+        sb.AppendLine($"{indent}        {{");
+        sb.AppendLine($"{indent}            int hash = 17;");
+        sb.AppendLine($"{indent}            hash = hash * 31 + (_arena?.GetHashCode() ?? 0);");
+        sb.AppendLine($"{indent}            hash = hash * 31 + _generation;");
+        sb.AppendLine($"{indent}            hash = hash * 31 + _index;");
+        sb.AppendLine($"{indent}            return hash;");
+        sb.AppendLine($"{indent}        }}");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public static bool operator ==({handleName} left, {handleName} right) => left.Equals(right);");
+        sb.AppendLine($"{indent}    public static bool operator !=({handleName} left, {handleName} right) => !left.Equals(right);");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal int Index => _index;");
+        sb.AppendLine($"{indent}    internal int Generation => _generation;");
+
+        foreach (MethodInfo methodInfo in methods)
+        {
+            sb.AppendLine();
+            GenerateTryMethod(sb, typeName, methodInfo, indent);
+
+            if (methodInfo.Unsafe)
+            {
+                sb.AppendLine();
+                GenerateUnsafeMethod(sb, typeName, methodInfo, indent);
+            }
+        }
+
+        sb.AppendLine($"{indent}}}");
+    }
+
+    private void GenerateTryMethod(StringBuilder sb, string typeName, MethodInfo methodInfo, string indent)
+    {
+        IMethodSymbol method = methodInfo.Method;
+        string methodName = method.Name;
+        bool hasReturnValue = !method.ReturnsVoid;
+        string returnTypeName = hasReturnValue ? GetTypeFullName(method.ReturnType) : null;
+
+        StringBuilder paramListBuilder = new StringBuilder();
+        StringBuilder callArgsBuilder = new StringBuilder();
+        StringBuilder defaultAssignmentsBuilder = new StringBuilder();
+
+        foreach (IParameterSymbol param in method.Parameters)
+        {
+            if (paramListBuilder.Length > 0)
+            {
+                paramListBuilder.Append(", ");
+            }
+            if (callArgsBuilder.Length > 0)
+            {
+                callArgsBuilder.Append(", ");
+            }
+
+            string paramTypeName = GetTypeFullName(param.Type);
+            string paramName = param.Name;
+
+            if (param.RefKind == RefKind.Ref)
+            {
+                paramListBuilder.Append($"ref {paramTypeName} {paramName}");
+                callArgsBuilder.Append($"ref {paramName}");
+            }
+            else if (param.RefKind == RefKind.Out)
+            {
+                paramListBuilder.Append($"out {paramTypeName} {paramName}");
+                callArgsBuilder.Append($"out {paramName}");
+                defaultAssignmentsBuilder.AppendLine($"{indent}            {paramName} = default;");
+            }
+            else
+            {
+                paramListBuilder.Append($"{paramTypeName} {paramName}");
+                callArgsBuilder.Append(paramName);
+            }
+        }
+
+        if (hasReturnValue)
+        {
+            if (paramListBuilder.Length > 0)
+            {
+                paramListBuilder.Append(", ");
+            }
+            paramListBuilder.Append($"out {returnTypeName} result");
+            defaultAssignmentsBuilder.AppendLine($"{indent}            result = default;");
+        }
+
+        string paramList = paramListBuilder.ToString();
+        string callArgs = callArgsBuilder.ToString();
+        string defaultAssignments = defaultAssignmentsBuilder.ToString();
+
+        sb.AppendLine($"{indent}    public bool Try{methodName}({paramList})");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        lock (_arena.LockObject)");
+        sb.AppendLine($"{indent}        {{");
+        sb.AppendLine($"{indent}            ref var item = ref _arena.TryGetRefInternal(_index, _generation, out var valid);");
+        sb.AppendLine($"{indent}            if (!valid)");
+        sb.AppendLine($"{indent}            {{");
+        if (!string.IsNullOrEmpty(defaultAssignments))
+        {
+            sb.Append(defaultAssignments);
+        }
+        sb.AppendLine($"{indent}                return false;");
+        sb.AppendLine($"{indent}            }}");
+
+        string call = string.IsNullOrEmpty(callArgs) ? $"item.{methodName}()" : $"item.{methodName}({callArgs})";
+        if (hasReturnValue)
+        {
+            sb.AppendLine($"{indent}            result = {call};");
+        }
+        else
+        {
+            sb.AppendLine($"{indent}            {call};");
+        }
+
+        sb.AppendLine($"{indent}            return true;");
+        sb.AppendLine($"{indent}        }}");
+        sb.AppendLine($"{indent}    }}");
+    }
+
+    private void GenerateUnsafeMethod(StringBuilder sb, string typeName, MethodInfo methodInfo, string indent)
+    {
+        IMethodSymbol method = methodInfo.Method;
+        string methodName = method.Name;
+        bool hasReturnValue = !method.ReturnsVoid;
+        string returnTypeName = hasReturnValue ? GetTypeFullName(method.ReturnType) : "void";
+
+        StringBuilder paramListBuilder = new StringBuilder();
+        StringBuilder callArgsBuilder = new StringBuilder();
+
+        foreach (IParameterSymbol param in method.Parameters)
+        {
+            if (paramListBuilder.Length > 0)
+            {
+                paramListBuilder.Append(", ");
+            }
+            if (callArgsBuilder.Length > 0)
+            {
+                callArgsBuilder.Append(", ");
+            }
+
+            string paramTypeName = GetTypeFullName(param.Type);
+            string paramName = param.Name;
+
+            if (param.RefKind == RefKind.Ref)
+            {
+                paramListBuilder.Append($"ref {paramTypeName} {paramName}");
+                callArgsBuilder.Append($"ref {paramName}");
+            }
+            else if (param.RefKind == RefKind.Out)
+            {
+                paramListBuilder.Append($"out {paramTypeName} {paramName}");
+                callArgsBuilder.Append($"out {paramName}");
+            }
+            else
+            {
+                paramListBuilder.Append($"{paramTypeName} {paramName}");
+                callArgsBuilder.Append(paramName);
+            }
+        }
+
+        string paramList = paramListBuilder.ToString();
+        string callArgs = callArgsBuilder.ToString();
+
+        sb.AppendLine($"{indent}    public {returnTypeName} {methodName}_Unsafe({paramList})");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        ref var item = ref _arena.GetItemRefUnchecked(_index);");
+
+        string call = string.IsNullOrEmpty(callArgs) ? $"item.{methodName}()" : $"item.{methodName}({callArgs})";
+        if (hasReturnValue)
+        {
+            sb.AppendLine($"{indent}        return {call};");
+        }
+        else
+        {
+            sb.AppendLine($"{indent}        {call};");
+        }
+
+        sb.AppendLine($"{indent}    }}");
+    }
+
+    private void GenerateArenaClass(
+        StringBuilder sb,
+        string typeName,
+        string handleName,
+        string arenaName,
+        int initialCapacity,
+        bool hasNamespace)
+    {
+        string indent = hasNamespace ? "    " : "";
+
+        sb.AppendLine($"{indent}public class {arenaName} : global::Tomato.HandleSystem.ArenaBase<{typeName}, {handleName}>, global::Tomato.HandleSystem.IArena");
+        sb.AppendLine($"{indent}{{");
+
+        sb.AppendLine($"{indent}    public {arenaName}() : this({initialCapacity}, null, null) {{ }}");
+        sb.AppendLine();
+        sb.AppendLine($"{indent}    public {arenaName}(int initialCapacity) : this(initialCapacity, null, null) {{ }}");
+        sb.AppendLine();
+        sb.AppendLine($"{indent}    public {arenaName}(int initialCapacity, global::Tomato.HandleSystem.RefAction<{typeName}> onSpawn, global::Tomato.HandleSystem.RefAction<{typeName}> onDespawn)");
+        sb.AppendLine($"{indent}        : base(initialCapacity, onSpawn, onDespawn) {{ }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public {handleName} Create()");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        lock (_lock)");
+        sb.AppendLine($"{indent}        {{");
+        sb.AppendLine($"{indent}            int index = AllocateInternal(out int generation);");
+        sb.AppendLine($"{indent}            return new {handleName}(this, index, generation);");
+        sb.AppendLine($"{indent}        }}");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public bool IsValid({handleName} handle)");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        lock (_lock) {{ return IsValidInternal(handle.Index, handle.Generation); }}");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    bool global::Tomato.HandleSystem.IArena.IsValid(int index, int generation)");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        lock (_lock) {{ return IsValidInternal(index, generation); }}");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal bool DestroyInternal(int index, int generation)");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        lock (_lock) {{ return DeallocateInternal(index, generation); }}");
+        sb.AppendLine($"{indent}    }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal new ref {typeName} TryGetRefInternal(int index, int generation, out bool valid)");
+        sb.AppendLine($"{indent}        => ref base.TryGetRefInternal(index, generation, out valid);");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal new ref {typeName} GetItemRefUnchecked(int index) => ref base.GetItemRefUnchecked(index);");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    internal object LockObject => _lock;");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public int Count {{ get {{ lock (_lock) {{ return _count; }} }} }}");
+        sb.AppendLine();
+
+        sb.AppendLine($"{indent}    public int Capacity {{ get {{ lock (_lock) {{ return _items.Length; }} }} }}");
+
+        sb.AppendLine($"{indent}}}");
+    }
+
+    private string GetTypeFullName(ITypeSymbol typeSymbol)
+    {
+        return typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+    }
+
+    private class MethodInfo
+    {
+        public IMethodSymbol Method { get; }
+        public bool Unsafe { get; }
+
+        public MethodInfo(IMethodSymbol method, bool @unsafe)
+        {
+            Method = method;
+            Unsafe = @unsafe;
+        }
+    }
+
+    private class HandleableSyntaxReceiver : ISyntaxReceiver
+    {
+        public List<TypeDeclarationSyntax> CandidateTypes { get; } = new List<TypeDeclarationSyntax>();
+
+        public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
+        {
+            if (syntaxNode is TypeDeclarationSyntax typeDeclaration &&
+                (syntaxNode is ClassDeclarationSyntax || syntaxNode is StructDeclarationSyntax))
+            {
+                if (typeDeclaration.AttributeLists.Count > 0)
+                {
+                    foreach (AttributeListSyntax attributeList in typeDeclaration.AttributeLists)
+                    {
+                        foreach (AttributeSyntax attribute in attributeList.Attributes)
+                        {
+                            string name = attribute.Name.ToString();
+                            if (name == "Handleable" || name == "HandleableAttribute" ||
+                                name.EndsWith(".Handleable") || name.EndsWith(".HandleableAttribute"))
+                            {
+                                CandidateTypes.Add(typeDeclaration);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

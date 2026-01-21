@@ -10,5 +10,5 @@ public interface IEntityTypeAccessor
     /// <summary>
     /// 指定EntityのEntity種別を取得する。
     /// </summary>
-    EntityType GetEntityType(VoidHandle handle);
+    EntityType GetEntityType(AnyHandle handle);
 }

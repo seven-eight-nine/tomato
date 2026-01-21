@@ -50,7 +50,7 @@ public sealed class DecisionSystem<TCategory> : IParallelSystem
     }
 
     /// <inheritdoc/>
-    public void ProcessEntity(VoidHandle handle, in SystemContext context)
+    public void ProcessEntity(AnyHandle handle, in SystemContext context)
     {
         if (!_entityRegistry.TryGetContext(handle, out var entityContext) || entityContext == null)
             return;
@@ -140,21 +140,21 @@ public sealed class DecisionSystem<TCategory> : IParallelSystem
 /// <typeparam name="TCategory">アクションカテゴリのenum型</typeparam>
 public sealed class DecisionResultBuffer<TCategory> where TCategory : struct, Enum
 {
-    private readonly ConcurrentDictionary<VoidHandle, SelectionResult<TCategory, InputState, GameState>> _results;
+    private readonly ConcurrentDictionary<AnyHandle, SelectionResult<TCategory, InputState, GameState>> _results;
 
     public DecisionResultBuffer()
     {
-        _results = new ConcurrentDictionary<VoidHandle, SelectionResult<TCategory, InputState, GameState>>();
+        _results = new ConcurrentDictionary<AnyHandle, SelectionResult<TCategory, InputState, GameState>>();
     }
 
     public void Clear() => _results.Clear();
 
-    public void Store(VoidHandle handle, SelectionResult<TCategory, InputState, GameState> result)
+    public void Store(AnyHandle handle, SelectionResult<TCategory, InputState, GameState> result)
     {
         _results[handle] = result;
     }
 
-    public bool TryGet(VoidHandle handle, out SelectionResult<TCategory, InputState, GameState> result)
+    public bool TryGet(AnyHandle handle, out SelectionResult<TCategory, InputState, GameState> result)
     {
         return _results.TryGetValue(handle, out result);
     }

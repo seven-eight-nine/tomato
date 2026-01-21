@@ -13,9 +13,9 @@ namespace Tomato.EntitySystem.Context;
 public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     where TCategory : struct, Enum
 {
-    private readonly Dictionary<VoidHandle, EntityContext<TCategory>> _contexts;
-    private readonly List<VoidHandle> _activeEntities;
-    private readonly List<VoidHandle> _markedForDeletion;
+    private readonly Dictionary<AnyHandle, EntityContext<TCategory>> _contexts;
+    private readonly List<AnyHandle> _activeEntities;
+    private readonly List<AnyHandle> _markedForDeletion;
     private readonly object _lock = new object();
 
     /// <summary>
@@ -37,15 +37,15 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// </summary>
     public EntityContextRegistry()
     {
-        _contexts = new Dictionary<VoidHandle, EntityContext<TCategory>>();
-        _activeEntities = new List<VoidHandle>();
-        _markedForDeletion = new List<VoidHandle>();
+        _contexts = new Dictionary<AnyHandle, EntityContext<TCategory>>();
+        _activeEntities = new List<AnyHandle>();
+        _markedForDeletion = new List<AnyHandle>();
     }
 
     /// <summary>
     /// Entityが存在するか確認する。
     /// </summary>
-    public bool Exists(VoidHandle handle)
+    public bool Exists(AnyHandle handle)
     {
         lock (_lock)
         {
@@ -56,19 +56,19 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// <summary>
     /// 全Entityを取得する。
     /// </summary>
-    public IReadOnlyList<VoidHandle> GetAllEntities()
+    public IReadOnlyList<AnyHandle> GetAllEntities()
     {
         lock (_lock)
         {
             // コピーを返してイテレーション中の変更を防ぐ
-            return new List<VoidHandle>(_activeEntities);
+            return new List<AnyHandle>(_activeEntities);
         }
     }
 
     /// <summary>
     /// 指定した型のエンティティを取得する（現在は全Entityを返す）。
     /// </summary>
-    public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class
+    public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class
     {
         // EntityContextRegistryでは型によるフィルタリングは行わない
         // 全てのEntityを返し、各システムで必要に応じてフィルタリングする
@@ -82,10 +82,10 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// <summary>
     /// 新しいEntityContextを登録する。
     /// </summary>
-    /// <param name="handle">登録するEntityのVoidHandle</param>
+    /// <param name="handle">登録するEntityのAnyHandle</param>
     /// <returns>作成されたEntityContext</returns>
     /// <exception cref="ArgumentException">既に登録されている場合</exception>
-    public EntityContext<TCategory> Register(VoidHandle handle)
+    public EntityContext<TCategory> Register(AnyHandle handle)
     {
         lock (_lock)
         {
@@ -104,7 +104,7 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// <summary>
     /// EntityContextを取得する。
     /// </summary>
-    public bool TryGetContext(VoidHandle handle, out EntityContext<TCategory>? context)
+    public bool TryGetContext(AnyHandle handle, out EntityContext<TCategory>? context)
     {
         lock (_lock)
         {
@@ -115,7 +115,7 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// <summary>
     /// EntityContextを取得する。存在しない場合はnull。
     /// </summary>
-    public EntityContext<TCategory>? GetContext(VoidHandle handle)
+    public EntityContext<TCategory>? GetContext(AnyHandle handle)
     {
         lock (_lock)
         {
@@ -127,7 +127,7 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// Entityを削除マークする。
     /// 実際の削除はProcessDeletions()で行われる。
     /// </summary>
-    public void MarkForDeletion(VoidHandle handle)
+    public void MarkForDeletion(AnyHandle handle)
     {
         lock (_lock)
         {
@@ -145,11 +145,11 @@ public sealed class EntityContextRegistry<TCategory> : IEntityRegistry
     /// <summary>
     /// 削除マークされたEntity一覧を取得する。
     /// </summary>
-    public IReadOnlyList<VoidHandle> GetMarkedForDeletion()
+    public IReadOnlyList<AnyHandle> GetMarkedForDeletion()
     {
         lock (_lock)
         {
-            return new List<VoidHandle>(_markedForDeletion);
+            return new List<AnyHandle>(_markedForDeletion);
         }
     }
 

@@ -25,7 +25,7 @@ namespace Tomato.SystemPipeline.Tests
                 SharedProcessedOrder = sharedOrder;
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 SharedProcessedOrder.Add(SystemId);
             }
@@ -38,7 +38,7 @@ namespace Tomato.SystemPipeline.Tests
             public int ProcessedCount { get; private set; }
             private readonly object _lock = new object();
 
-            public void ProcessEntity(VoidHandle handle, in SystemContext context)
+            public void ProcessEntity(AnyHandle handle, in SystemContext context)
             {
                 lock (_lock)
                 {
@@ -49,19 +49,19 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            private readonly List<VoidHandle> _entities = new List<VoidHandle>();
+            private readonly List<AnyHandle> _entities = new List<AnyHandle>();
 
-            public void AddEntity(VoidHandle handle)
+            public void AddEntity(AnyHandle handle)
             {
                 _entities.Add(handle);
             }
 
-            public IReadOnlyList<VoidHandle> GetAllEntities()
+            public IReadOnlyList<AnyHandle> GetAllEntities()
             {
                 return _entities;
             }
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class
             {
                 return _entities;
             }
@@ -136,7 +136,7 @@ namespace Tomato.SystemPipeline.Tests
             // Add some entities
             for (int i = 0; i < 10; i++)
             {
-                registry.AddEntity(new VoidHandle(arena, i, 0));
+                registry.AddEntity(new AnyHandle(arena, i, 0));
             }
 
             var context = new SystemContext(0.016f, 0, 0, default);

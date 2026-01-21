@@ -61,7 +61,7 @@ public class HasCommandQueueTests
         var handle = arena.Create();
         var executedX = 0;
         var executedY = 0;
-        VoidHandle executedHandle = default;
+        AnyHandle executedHandle = default;
 
         // Act
         handle.TestGameCommandQueue.Enqueue<TestMoveCommand>(cmd =>
@@ -76,12 +76,12 @@ public class HasCommandQueueTests
             };
         });
 
-        handle.TestGameCommandQueue.ExecuteCommand(handle.ToVoidHandle());
+        handle.TestGameCommandQueue.ExecuteCommand(handle.ToAnyHandle());
 
         // Assert
         Assert.Equal(10, executedX);
         Assert.Equal(20, executedY);
-        Assert.Equal(handle.ToVoidHandle().Index, executedHandle.Index);
+        Assert.Equal(handle.ToAnyHandle().Index, executedHandle.Index);
     }
 
     [Fact]
@@ -109,14 +109,14 @@ public class HasCommandQueueTests
         });
 
         // Entity1のキューだけ実行
-        handle1.TestGameCommandQueue.ExecuteCommand(handle1.ToVoidHandle());
+        handle1.TestGameCommandQueue.ExecuteCommand(handle1.ToAnyHandle());
 
         // Assert - Entity1だけ実行されている
         Assert.Single(executionOrder);
         Assert.Equal("Entity1", executionOrder[0]);
 
         // Entity2のキューも実行
-        handle2.TestGameCommandQueue.ExecuteCommand(handle2.ToVoidHandle());
+        handle2.TestGameCommandQueue.ExecuteCommand(handle2.ToAnyHandle());
 
         // Assert - 両方実行されている
         Assert.Equal(2, executionOrder.Count);
@@ -196,14 +196,14 @@ public class HasCommandQueueTests
         });
 
         // GameQueueだけ実行
-        handle.TestGameCommandQueue.ExecuteCommand(handle.ToVoidHandle());
+        handle.TestGameCommandQueue.ExecuteCommand(handle.ToAnyHandle());
 
         // Assert - GameQueueだけ実行されている
         Assert.True(gameExecuted);
         Assert.False(aiExecuted);
 
         // AIQueueも実行
-        handle.TestAICommandQueue.ExecuteAICommand(handle.ToVoidHandle());
+        handle.TestAICommandQueue.ExecuteAICommand(handle.ToAnyHandle());
 
         // Assert - 両方実行されている
         Assert.True(aiExecuted);
@@ -224,12 +224,12 @@ public class HasCommandQueueTests
     }
 }
 
-// テスト用のCommandQueue（VoidHandle引数付き）
+// テスト用のCommandQueue（AnyHandle引数付き）
 [CommandQueue]
 public partial class TestGameCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 // テスト用のMoveコマンド
@@ -238,9 +238,9 @@ public partial class TestMoveCommand
 {
     public int X;
     public int Y;
-    public Action<VoidHandle, int, int>? OnExecute;
+    public Action<AnyHandle, int, int>? OnExecute;
 
-    public void ExecuteCommand(VoidHandle handle)
+    public void ExecuteCommand(AnyHandle handle)
     {
         OnExecute?.Invoke(handle, X, Y);
     }
@@ -268,7 +268,7 @@ public partial class QueueEntity2
 public partial class TestAICommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteAICommand(VoidHandle handle);
+    public partial void ExecuteAICommand(AnyHandle handle);
 }
 
 // AIコマンド
@@ -276,9 +276,9 @@ public partial class TestAICommandQueue
 public partial class TestThinkCommand
 {
     public string? Decision;
-    public Action<VoidHandle, string?>? OnExecute;
+    public Action<AnyHandle, string?>? OnExecute;
 
-    public void ExecuteAICommand(VoidHandle handle)
+    public void ExecuteAICommand(AnyHandle handle)
     {
         OnExecute?.Invoke(handle, Decision);
     }

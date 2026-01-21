@@ -10,15 +10,15 @@ namespace Tomato.EntitySystem.Context;
 
 /// <summary>
 /// Entity単位のゲームコンテキスト。
-/// VoidHandle、ActionStateMachine、CollisionVolumeを統合する。
+/// AnyHandle、ActionStateMachine、CollisionVolumeを統合する。
 /// </summary>
 /// <typeparam name="TCategory">アクションカテゴリのenum型</typeparam>
 public sealed class EntityContext<TCategory> where TCategory : struct, Enum
 {
     /// <summary>
-    /// EntityのVoidHandle。
+    /// EntityのAnyHandle。
     /// </summary>
-    public VoidHandle Handle { get; }
+    public AnyHandle Handle { get; }
 
     /// <summary>
     /// このEntityのアクション状態機械。
@@ -53,8 +53,8 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     /// <summary>
     /// EntityContextを生成する。
     /// </summary>
-    /// <param name="handle">EntityのVoidHandle</param>
-    public EntityContext(VoidHandle handle)
+    /// <param name="handle">EntityのAnyHandle</param>
+    public EntityContext(AnyHandle handle)
     {
         Handle = handle;
         ActionStateMachine = new ActionStateMachine<TCategory>();

@@ -165,7 +165,7 @@ public class PositionReconcilerTests
 
     #region Helper Classes
 
-    private static CollisionResult CreatePushboxCollision(VoidHandle entityA, VoidHandle entityB, Vector3 normal, float penetration)
+    private static CollisionResult CreatePushboxCollision(AnyHandle entityA, AnyHandle entityB, Vector3 normal, float penetration)
     {
         var volumeA = new CollisionVolume(
             owner: entityA,
@@ -185,20 +185,20 @@ public class PositionReconcilerTests
 
     private class MockArena : IEntityArena
     {
-        public VoidHandle CreateHandle(int index) => new VoidHandle(this, index, 0);
+        public AnyHandle CreateHandle(int index) => new AnyHandle(this, index, 0);
         public bool IsValid(int index, int generation) => true;
     }
 
     private class MockTransformAccessor : IEntityTransformAccessor
     {
-        private readonly Dictionary<VoidHandle, Vector3> _positions = new();
+        private readonly Dictionary<AnyHandle, Vector3> _positions = new();
 
-        public Vector3 GetPosition(VoidHandle handle)
+        public Vector3 GetPosition(AnyHandle handle)
         {
             return _positions.TryGetValue(handle, out var pos) ? pos : Vector3.Zero;
         }
 
-        public void SetPosition(VoidHandle handle, Vector3 position)
+        public void SetPosition(AnyHandle handle, Vector3 position)
         {
             _positions[handle] = position;
         }
@@ -206,14 +206,14 @@ public class PositionReconcilerTests
 
     private class MockEntityTypeAccessor : IEntityTypeAccessor
     {
-        private readonly Dictionary<VoidHandle, EntityType> _types = new();
+        private readonly Dictionary<AnyHandle, EntityType> _types = new();
 
-        public EntityType GetEntityType(VoidHandle handle)
+        public EntityType GetEntityType(AnyHandle handle)
         {
             return _types.TryGetValue(handle, out var type) ? type : EntityType.Player;
         }
 
-        public void SetEntityType(VoidHandle handle, EntityType type)
+        public void SetEntityType(AnyHandle handle, EntityType type)
         {
             _types[handle] = type;
         }

@@ -16,13 +16,13 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            private readonly List<VoidHandle> _entities = new List<VoidHandle>();
+            private readonly List<AnyHandle> _entities = new List<AnyHandle>();
 
-            public void AddEntity(VoidHandle handle) => _entities.Add(handle);
+            public void AddEntity(AnyHandle handle) => _entities.Add(handle);
 
-            public IReadOnlyList<VoidHandle> GetAllEntities() => _entities;
+            public IReadOnlyList<AnyHandle> GetAllEntities() => _entities;
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class => _entities;
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class => _entities;
         }
 
         private class PriorityOrderedSystem : IOrderedSerialSystem
@@ -32,7 +32,7 @@ namespace Tomato.SystemPipeline.Tests
             public List<int> ProcessedIndices { get; } = new List<int>();
             public Dictionary<int, int> Priorities { get; } = new Dictionary<int, int>();
 
-            public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+            public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
             {
                 // Sort by priority (higher priority first)
                 var sorted = input
@@ -41,7 +41,7 @@ namespace Tomato.SystemPipeline.Tests
                 output.AddRange(sorted);
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 foreach (var entity in entities)
                 {
@@ -57,7 +57,7 @@ namespace Tomato.SystemPipeline.Tests
             public List<int> ProcessedIndices { get; } = new List<int>();
             public Dictionary<int, List<int>> Dependencies { get; } = new Dictionary<int, List<int>>();
 
-            public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+            public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
             {
                 var remaining = new HashSet<int>(input.Select(h => h.Index));
                 var handleMap = input.ToDictionary(h => h.Index);
@@ -88,7 +88,7 @@ namespace Tomato.SystemPipeline.Tests
                 }
             }
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 foreach (var entity in entities)
                 {
@@ -107,9 +107,9 @@ namespace Tomato.SystemPipeline.Tests
             system.Priorities[2] = 2;
 
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 1, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 2, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -131,9 +131,9 @@ namespace Tomato.SystemPipeline.Tests
             system.Dependencies[1] = new List<int> { 0 };
 
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 1, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 2, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -167,7 +167,7 @@ namespace Tomato.SystemPipeline.Tests
             system.Priorities[5] = 10;
 
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 5, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 5, 0));
 
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -190,9 +190,9 @@ namespace Tomato.SystemPipeline.Tests
             system.Priorities[2] = 1;
 
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 1, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 2, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
             var context = new SystemContext(0.016f, 0, 0, default);
 
@@ -214,9 +214,9 @@ namespace Tomato.SystemPipeline.Tests
             system.Dependencies[2] = new List<int> { 1 };
 
             var registry = new TestEntityRegistry();
-            registry.AddEntity(new VoidHandle(new MockArena(), 0, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 1, 0));
-            registry.AddEntity(new VoidHandle(new MockArena(), 2, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
+            registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
             var context = new SystemContext(0.016f, 0, 0, default);
 

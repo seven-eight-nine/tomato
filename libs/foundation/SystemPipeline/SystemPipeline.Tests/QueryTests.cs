@@ -15,14 +15,14 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            public IReadOnlyList<VoidHandle> GetAllEntities()
+            public IReadOnlyList<AnyHandle> GetAllEntities()
             {
-                return new List<VoidHandle>();
+                return new List<AnyHandle>();
             }
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class
             {
-                return new List<VoidHandle>();
+                return new List<AnyHandle>();
             }
         }
 
@@ -32,9 +32,9 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new TestEntityRegistry();
             var arena = new MockArena();
-            var validHandle = new VoidHandle(arena, 0, 0);
-            var invalidHandle = VoidHandle.Invalid;
-            var entities = new List<VoidHandle> { validHandle, invalidHandle, validHandle };
+            var validHandle = new AnyHandle(arena, 0, 0);
+            var invalidHandle = AnyHandle.Invalid;
+            var entities = new List<AnyHandle> { validHandle, invalidHandle, validHandle };
 
             // Act
             var result = ActiveEntityQuery.Instance.Filter(registry, entities).ToList();
@@ -57,10 +57,10 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new TestEntityRegistry();
             var arena = new MockArena();
-            var handle1 = new VoidHandle(arena, 0, 0);
-            var handle2 = new VoidHandle(arena, 1, 0);
-            var handle3 = new VoidHandle(arena, 2, 0);
-            var entities = new List<VoidHandle> { handle1, handle2, handle3 };
+            var handle1 = new AnyHandle(arena, 0, 0);
+            var handle2 = new AnyHandle(arena, 1, 0);
+            var handle3 = new AnyHandle(arena, 2, 0);
+            var entities = new List<AnyHandle> { handle1, handle2, handle3 };
 
             // Only handle1 and handle3 have the component (index 0 and 2)
             var query = new HasComponentQuery<int>(h => h.Index == 0 || h.Index == 2);
@@ -80,9 +80,9 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new TestEntityRegistry();
             var arena = new MockArena();
-            var validHandle = new VoidHandle(arena, 0, 0);
-            var invalidHandle = VoidHandle.Invalid;
-            var entities = new List<VoidHandle> { validHandle, invalidHandle };
+            var validHandle = new AnyHandle(arena, 0, 0);
+            var invalidHandle = AnyHandle.Invalid;
+            var entities = new List<AnyHandle> { validHandle, invalidHandle };
 
             var compositeQuery = new CompositeQuery(
                 ActiveEntityQuery.Instance,
@@ -103,9 +103,9 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new TestEntityRegistry();
             var arena = new MockArena();
-            var handle1 = new VoidHandle(arena, 0, 0);
-            var handle2 = new VoidHandle(arena, 1, 0);
-            var entities = new List<VoidHandle> { handle1, handle2 };
+            var handle1 = new AnyHandle(arena, 0, 0);
+            var handle2 = new AnyHandle(arena, 1, 0);
+            var entities = new List<AnyHandle> { handle1, handle2 };
 
             var compositeQuery = new CompositeQuery();
 

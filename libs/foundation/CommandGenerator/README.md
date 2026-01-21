@@ -25,7 +25,7 @@ CommandGeneratorは、コマンドパターンの実装を自動化し、ゲー�
 - **オブジェクトプーリング** - GC負荷を最小化
 - **複数キュー対応** - 1つのコマンドを複数のキューに登録可能
 - **型安全** - ジェネリクスによる型安全性
-- **メッセージ配送** - VoidHandleベースのEntity間メッセージング
+- **メッセージ配送** - AnyHandleベースのEntity間メッセージング
 - **Wave処理** - 決定論的なメッセージ処理
 
 ## クイックスタート
@@ -387,7 +387,7 @@ using CommandGenerator;
 public partial class GameCommandQueue
 {
     [CommandMethod]
-    public partial void ExecuteCommand(VoidHandle handle);
+    public partial void ExecuteCommand(AnyHandle handle);
 }
 
 // Entity定義（各Entityが独自のキューを持つ）

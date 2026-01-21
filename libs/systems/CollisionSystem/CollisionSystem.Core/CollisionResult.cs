@@ -26,10 +26,10 @@ public readonly struct CollisionResult
     }
 
     /// <summary>第1ボリュームのオーナー。</summary>
-    public VoidHandle Owner1 => Volume1.Owner;
+    public AnyHandle Owner1 => Volume1.Owner;
 
     /// <summary>第2ボリュームのオーナー。</summary>
-    public VoidHandle Owner2 => Volume2.Owner;
+    public AnyHandle Owner2 => Volume2.Owner;
 
     public override string ToString()
         => $"Collision({Owner1.Index} vs {Owner2.Index}, Penetration={Contact.Penetration})";

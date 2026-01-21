@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../SpatialIndexSystem.Core/SpatialIndexSystem.Core.csproj" />
+    <ProjectReference Include="../../../foundation/HandleSystem/HandleSystem.Core/HandleSystem.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

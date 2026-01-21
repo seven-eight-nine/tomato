@@ -21,5 +21,5 @@ public interface IParallelSystem : ISystem
     /// </summary>
     /// <param name="handle">処理対象のエンティティ</param>
     /// <param name="context">実行コンテキスト</param>
-    void ProcessEntity(VoidHandle handle, in SystemContext context);
+    void ProcessEntity(AnyHandle handle, in SystemContext context);
 }

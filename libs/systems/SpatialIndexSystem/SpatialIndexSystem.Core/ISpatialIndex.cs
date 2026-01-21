@@ -13,19 +13,19 @@ public interface ISpatialIndex
     int Count { get; }
 
     /// <summary>Entityの位置を更新（存在しなければ追加）</summary>
-    void Update(VoidHandle handle, Vector3 position, float radius = 0f);
+    void Update(AnyHandle handle, Vector3 position, float radius = 0f);
 
     /// <summary>Entityを削除</summary>
-    bool Remove(VoidHandle handle);
+    bool Remove(AnyHandle handle);
 
     /// <summary>球範囲内のEntityを検索</summary>
-    void QuerySphere(Vector3 center, float radius, List<VoidHandle> results);
+    void QuerySphere(Vector3 center, float radius, List<AnyHandle> results);
 
     /// <summary>AABB範囲内のEntityを検索</summary>
-    void QueryAABB(AABB bounds, List<VoidHandle> results);
+    void QueryAABB(AABB bounds, List<AnyHandle> results);
 
     /// <summary>最も近いEntityを検索</summary>
-    bool QueryNearest(Vector3 point, float maxDistance, out VoidHandle nearest, out float distance);
+    bool QueryNearest(Vector3 point, float maxDistance, out AnyHandle nearest, out float distance);
 
     /// <summary>全エントリをクリア</summary>
     void Clear();

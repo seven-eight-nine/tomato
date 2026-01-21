@@ -27,15 +27,15 @@ public class MockCollisionArena : EHSIEntityArena, IEntitySpawner
     private readonly HashSet<(int index, int generation)> _validHandles = new();
     private int _nextIndex = 0;
 
-    public VoidHandle Spawn()
+    public AnyHandle Spawn()
     {
         var index = _nextIndex++;
         var generation = 1;
         _validHandles.Add((index, generation));
-        return new VoidHandle(this, index, generation);
+        return new AnyHandle(this, index, generation);
     }
 
-    public bool Despawn(VoidHandle handle)
+    public bool Despawn(AnyHandle handle)
     {
         var key = (handle.Index, handle.Generation);
         if (_validHandles.Contains(key))
@@ -64,14 +64,14 @@ public class MockCollisionMessageEmitter : ICollisionMessageEmitter
 
 public class MockEntityPositionProvider : IEntityPositionProvider
 {
-    private readonly Dictionary<VoidHandle, Vector3> _positions = new();
+    private readonly Dictionary<AnyHandle, Vector3> _positions = new();
 
-    public void SetPosition(VoidHandle handle, Vector3 position)
+    public void SetPosition(AnyHandle handle, Vector3 position)
     {
         _positions[handle] = position;
     }
 
-    public Vector3 GetPosition(VoidHandle handle)
+    public Vector3 GetPosition(AnyHandle handle)
     {
         return _positions.TryGetValue(handle, out var pos) ? pos : Vector3.Zero;
     }

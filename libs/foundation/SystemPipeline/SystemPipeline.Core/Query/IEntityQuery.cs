@@ -15,7 +15,7 @@ public interface IEntityQuery
     /// <param name="registry">エンティティレジストリ</param>
     /// <param name="entities">入力エンティティ</param>
     /// <returns>フィルタリングされたエンティティ</returns>
-    IEnumerable<VoidHandle> Filter(
+    IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities);
+        IEnumerable<AnyHandle> entities);
 }

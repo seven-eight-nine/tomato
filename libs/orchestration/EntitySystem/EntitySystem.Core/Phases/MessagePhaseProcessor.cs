@@ -43,7 +43,7 @@ public sealed class MessageSystem : ISerialSystem
     /// <inheritdoc/>
     public void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
         // WaveProcessorを使用してWave処理

@@ -11,32 +11,32 @@ namespace Tomato.SpatialIndexSystem;
 public static class SpatialQuery
 {
     /// <summary>球範囲内のEntityを検索（リスト返却）</summary>
-    public static List<VoidHandle> QuerySphere(ISpatialIndex index, Vector3 center, float radius)
+    public static List<AnyHandle> QuerySphere(ISpatialIndex index, Vector3 center, float radius)
     {
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         index.QuerySphere(center, radius, results);
         return results;
     }
 
     /// <summary>AABB範囲内のEntityを検索（リスト返却）</summary>
-    public static List<VoidHandle> QueryAABB(ISpatialIndex index, AABB bounds)
+    public static List<AnyHandle> QueryAABB(ISpatialIndex index, AABB bounds)
     {
-        var results = new List<VoidHandle>();
+        var results = new List<AnyHandle>();
         index.QueryAABB(bounds, results);
         return results;
     }
 
     /// <summary>指定位置の最近傍N件を取得</summary>
-    public static List<(VoidHandle Handle, float Distance)> QueryNearestN(
+    public static List<(AnyHandle Handle, float Distance)> QueryNearestN(
         ISpatialIndex index,
         Vector3 point,
         int count,
         float maxDistance = float.MaxValue)
     {
-        var candidates = new List<VoidHandle>();
+        var candidates = new List<AnyHandle>();
         index.QuerySphere(point, maxDistance, candidates);
 
-        var withDistances = new List<(VoidHandle Handle, float Distance)>();
+        var withDistances = new List<(AnyHandle Handle, float Distance)>();
 
         foreach (var handle in candidates)
         {
@@ -50,17 +50,17 @@ public static class SpatialQuery
     }
 
     /// <summary>指定位置の最近傍N件を取得（位置取得関数付き）</summary>
-    public static List<(VoidHandle Handle, float Distance)> QueryNearestN(
+    public static List<(AnyHandle Handle, float Distance)> QueryNearestN(
         ISpatialIndex index,
         Vector3 point,
         int count,
-        Func<VoidHandle, Vector3?> positionGetter,
+        Func<AnyHandle, Vector3?> positionGetter,
         float maxDistance = float.MaxValue)
     {
-        var candidates = new List<VoidHandle>();
+        var candidates = new List<AnyHandle>();
         index.QuerySphere(point, maxDistance, candidates);
 
-        var withDistances = new List<(VoidHandle Handle, float Distance)>(candidates.Count);
+        var withDistances = new List<(AnyHandle Handle, float Distance)>(candidates.Count);
 
         foreach (var handle in candidates)
         {

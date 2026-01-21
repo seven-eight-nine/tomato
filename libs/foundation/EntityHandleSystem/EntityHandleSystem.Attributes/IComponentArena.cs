@@ -4,7 +4,7 @@ namespace Tomato.EntityHandleSystem;
 /// 特定のコンポーネント型へのアクセスを提供する Arena インターフェース。
 ///
 /// <para>このインターフェースは Arena が特定のコンポーネント型を管理していることを示し、
-/// VoidHandle や TypedHandle から型安全なコンポーネントアクセスを可能にします。</para>
+/// AnyHandle や TypedHandle から型安全なコンポーネントアクセスを可能にします。</para>
 ///
 /// <para>Arena は [EntityComponent] で指定されたコンポーネント型ごとに
 /// このインターフェースを実装します。</para>
@@ -22,7 +22,7 @@ public interface IComponentArena<TComponent>
     /// <param name="generation">期待される世代番号</param>
     /// <param name="action">コンポーネントに対して実行するアクション</param>
     /// <returns>アクションが実行された場合は true、ハンドルが無効な場合は false</returns>
-    bool TryExecuteComponent(int index, int generation, RefAction<TComponent> action);
+    bool TryExecuteComponent(int index, int generation, Tomato.HandleSystem.RefAction<TComponent> action);
 
     /// <summary>
     /// 指定されたインデックスのコンポーネントへの参照を検証なしで取得します。

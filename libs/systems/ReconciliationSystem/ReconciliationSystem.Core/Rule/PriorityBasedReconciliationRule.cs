@@ -35,8 +35,8 @@ public sealed class PriorityBasedReconciliationRule : ReconciliationRule
     }
 
     public override void ComputePushout(
-        VoidHandle entityA, EntityType typeA,
-        VoidHandle entityB, EntityType typeB,
+        AnyHandle entityA, EntityType typeA,
+        AnyHandle entityB, EntityType typeB,
         in CollisionContact contact,
         out Vector3 pushoutA,
         out Vector3 pushoutB)

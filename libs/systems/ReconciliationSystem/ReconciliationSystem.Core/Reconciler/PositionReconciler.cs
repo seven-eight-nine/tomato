@@ -16,8 +16,8 @@ public sealed class PositionReconciler
     private readonly IEntityTransformAccessor _transforms;
     private readonly IEntityTypeAccessor _entityTypes;
 
-    private readonly List<(VoidHandle, VoidHandle, CollisionContact)> _pushboxCollisions;
-    private readonly Dictionary<VoidHandle, Vector3> _pushouts;
+    private readonly List<(AnyHandle, AnyHandle, CollisionContact)> _pushboxCollisions;
+    private readonly Dictionary<AnyHandle, Vector3> _pushouts;
 
     public PositionReconciler(
         DependencyGraph dependencyGraph,
@@ -30,14 +30,14 @@ public sealed class PositionReconciler
         _rule = rule;
         _transforms = transforms;
         _entityTypes = entityTypes;
-        _pushboxCollisions = new List<(VoidHandle, VoidHandle, CollisionContact)>();
-        _pushouts = new Dictionary<VoidHandle, Vector3>();
+        _pushboxCollisions = new List<(AnyHandle, AnyHandle, CollisionContact)>();
+        _pushouts = new Dictionary<AnyHandle, Vector3>();
     }
 
     /// <summary>
     /// LateUpdate処理を実行する。
     /// </summary>
-    public void Process(IEnumerable<VoidHandle> entities, IReadOnlyList<CollisionResult> pushboxCollisions)
+    public void Process(IEnumerable<AnyHandle> entities, IReadOnlyList<CollisionResult> pushboxCollisions)
     {
         // 1. 押し出し衝突を収集
         CollectPushboxCollisions(pushboxCollisions);
@@ -76,7 +76,7 @@ public sealed class PositionReconciler
         }
     }
 
-    private void ReconcileEntity(VoidHandle handle)
+    private void ReconcileEntity(AnyHandle handle)
     {
         // 依存先に追従（騎乗等の実装）
         // 現在は基本実装のみ
@@ -116,7 +116,7 @@ public sealed class PositionReconciler
         }
     }
 
-    private void AccumulatePushout(VoidHandle handle, Vector3 pushout)
+    private void AccumulatePushout(AnyHandle handle, Vector3 pushout)
     {
         if (!_pushouts.TryGetValue(handle, out var current))
             current = Vector3.Zero;

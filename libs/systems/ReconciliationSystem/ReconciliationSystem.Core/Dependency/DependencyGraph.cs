@@ -11,23 +11,23 @@ namespace Tomato.ReconciliationSystem;
 /// </summary>
 public sealed class DependencyGraph
 {
-    private readonly Dictionary<VoidHandle, List<VoidHandle>> _dependencies;  // Entity -> 依存先リスト
-    private readonly Dictionary<VoidHandle, List<VoidHandle>> _dependents;    // Entity -> 依存元リスト
+    private readonly Dictionary<AnyHandle, List<AnyHandle>> _dependencies;  // Entity -> 依存先リスト
+    private readonly Dictionary<AnyHandle, List<AnyHandle>> _dependents;    // Entity -> 依存元リスト
 
     public DependencyGraph()
     {
-        _dependencies = new Dictionary<VoidHandle, List<VoidHandle>>();
-        _dependents = new Dictionary<VoidHandle, List<VoidHandle>>();
+        _dependencies = new Dictionary<AnyHandle, List<AnyHandle>>();
+        _dependents = new Dictionary<AnyHandle, List<AnyHandle>>();
     }
 
     /// <summary>
     /// 依存関係を追加する（fromがtoに依存）。
     /// </summary>
-    public void AddDependency(VoidHandle from, VoidHandle to)
+    public void AddDependency(AnyHandle from, AnyHandle to)
     {
         if (!_dependencies.TryGetValue(from, out var deps))
         {
-            deps = new List<VoidHandle>();
+            deps = new List<AnyHandle>();
             _dependencies[from] = deps;
         }
         if (!deps.Contains(to))
@@ -35,7 +35,7 @@ public sealed class DependencyGraph
 
         if (!_dependents.TryGetValue(to, out var depts))
         {
-            depts = new List<VoidHandle>();
+            depts = new List<AnyHandle>();
             _dependents[to] = depts;
         }
         if (!depts.Contains(from))
@@ -45,7 +45,7 @@ public sealed class DependencyGraph
     /// <summary>
     /// 依存関係を削除する。
     /// </summary>
-    public void RemoveDependency(VoidHandle from, VoidHandle to)
+    public void RemoveDependency(AnyHandle from, AnyHandle to)
     {
         if (_dependencies.TryGetValue(from, out var deps))
             deps.Remove(to);
@@ -57,23 +57,23 @@ public sealed class DependencyGraph
     /// <summary>
     /// Entityの依存先を取得する。
     /// </summary>
-    public IReadOnlyList<VoidHandle> GetDependencies(VoidHandle entity)
+    public IReadOnlyList<AnyHandle> GetDependencies(AnyHandle entity)
     {
-        return _dependencies.TryGetValue(entity, out var deps) ? deps : Array.Empty<VoidHandle>();
+        return _dependencies.TryGetValue(entity, out var deps) ? deps : Array.Empty<AnyHandle>();
     }
 
     /// <summary>
     /// Entityの依存元を取得する。
     /// </summary>
-    public IReadOnlyList<VoidHandle> GetDependents(VoidHandle entity)
+    public IReadOnlyList<AnyHandle> GetDependents(AnyHandle entity)
     {
-        return _dependents.TryGetValue(entity, out var depts) ? depts : Array.Empty<VoidHandle>();
+        return _dependents.TryGetValue(entity, out var depts) ? depts : Array.Empty<AnyHandle>();
     }
 
     /// <summary>
     /// Entityを削除する（関連する依存関係も削除）。
     /// </summary>
-    public void RemoveEntity(VoidHandle entity)
+    public void RemoveEntity(AnyHandle entity)
     {
         // 自分への依存を持つEntityから削除
         if (_dependents.TryGetValue(entity, out var dependents))

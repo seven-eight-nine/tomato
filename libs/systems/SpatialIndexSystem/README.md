@@ -33,7 +33,7 @@ grid.Remove(entityHandle);
 ### 球範囲検索
 
 ```csharp
-var results = new List<VoidHandle>();
+var results = new List<AnyHandle>();
 grid.QuerySphere(center: playerPosition, radius: 50f, results);
 
 foreach (var handle in results)
@@ -50,7 +50,7 @@ var bounds = new AABB(
     new Vector3(10, 10, 10)
 );
 
-var results = new List<VoidHandle>();
+var results = new List<AnyHandle>();
 grid.QueryAABB(bounds, results);
 ```
 
@@ -129,7 +129,7 @@ var nearest = SpatialQuery.QueryNearestN(
 
 ## 依存関係
 
-- EntityHandleSystem.Attributes（VoidHandle）
+- EntityHandleSystem.Attributes（AnyHandle）
 - CollisionSystem.Core（Vector3, AABB）
 
 ## テスト

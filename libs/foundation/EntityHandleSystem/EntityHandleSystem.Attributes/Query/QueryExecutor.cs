@@ -39,7 +39,7 @@ public sealed class QueryExecutor
     /// <summary>クエリを実行</summary>
     internal QueryResult Execute(IReadOnlyList<IQueryFilter> filters)
     {
-        var handles = new List<VoidHandle>();
+        var handles = new List<AnyHandle>();
 
         foreach (var arena in _arenas)
         {

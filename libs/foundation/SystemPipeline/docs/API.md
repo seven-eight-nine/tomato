@@ -40,7 +40,7 @@ public interface ISerialSystem : ISystem
 {
     void ProcessSerial(
         IEntityRegistry registry,
-        IReadOnlyList<VoidHandle> entities,
+        IReadOnlyList<AnyHandle> entities,
         in SystemContext context);
 }
 ```
@@ -54,7 +54,7 @@ public interface ISerialSystem : ISystem
 | 名前 | 型 | 説明 |
 |------|-----|------|
 | `registry` | `IEntityRegistry` | エンティティレジストリ |
-| `entities` | `IReadOnlyList<VoidHandle>` | 処理対象エンティティ |
+| `entities` | `IReadOnlyList<AnyHandle>` | 処理対象エンティティ |
 | `context` | `in SystemContext` | 実行コンテキスト |
 
 ---
@@ -66,7 +66,7 @@ public interface ISerialSystem : ISystem
 ```csharp
 public interface IParallelSystem : ISystem
 {
-    void ProcessEntity(VoidHandle handle, in SystemContext context);
+    void ProcessEntity(AnyHandle handle, in SystemContext context);
 }
 ```
 
@@ -88,7 +88,7 @@ public interface IParallelSystem : ISystem
 ```csharp
 public interface IOrderedSerialSystem : ISerialSystem
 {
-    void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output);
+    void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output);
 }
 ```
 
@@ -99,7 +99,7 @@ public interface IOrderedSerialSystem : ISerialSystem
 **使用例: 優先度ソート**
 
 ```csharp
-public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
 {
     var sorted = input.OrderByDescending(h => GetPriority(h));
     output.AddRange(sorted);
@@ -109,7 +109,7 @@ public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> outp
 **使用例: トポロジカルソート**
 
 ```csharp
-public void OrderEntities(IReadOnlyList<VoidHandle> input, List<VoidHandle> output)
+public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output)
 {
     // 依存関係を考慮してソート
     foreach (var handle in TopologicalSort(input))
@@ -153,7 +153,7 @@ public interface IMessageQueueSystem : ISystem
 public interface IMessageHandlerRegistry
 {
     bool HasHandler<TMessage>() where TMessage : struct;
-    void Handle<TMessage>(VoidHandle handle, in TMessage message, in SystemContext context)
+    void Handle<TMessage>(AnyHandle handle, in TMessage message, in SystemContext context)
         where TMessage : struct;
 }
 ```
@@ -172,8 +172,8 @@ public interface IMessageHandlerRegistry
 ```csharp
 public interface IEntityRegistry
 {
-    IReadOnlyList<VoidHandle> GetAllEntities();
-    IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class;
+    IReadOnlyList<AnyHandle> GetAllEntities();
+    IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class;
 }
 ```
 
@@ -428,7 +428,7 @@ public struct MessageQueue
     public int Count { get; }
 
     public void Enqueue<TMessage>(in TMessage message) where TMessage : struct;
-    public void ProcessMessages(VoidHandle handle, IMessageHandlerRegistry registry, in SystemContext context);
+    public void ProcessMessages(AnyHandle handle, IMessageHandlerRegistry registry, in SystemContext context);
     public void Clear();
 }
 ```
@@ -446,21 +446,21 @@ public struct MessageQueue
 
 ---
 
-### VoidHandle
+### AnyHandle
 
 エンティティハンドル（構造体）。
 
 ```csharp
-public readonly struct VoidHandle
+public readonly struct AnyHandle
 {
     public object Arena { get; }
     public int Index { get; }
     public int Generation { get; }
     public bool IsValid { get; }
 
-    public static VoidHandle Invalid { get; }
+    public static AnyHandle Invalid { get; }
 
-    public VoidHandle(object arena, int index, int generation);
+    public AnyHandle(object arena, int index, int generation);
 }
 ```
 
@@ -548,9 +548,9 @@ public partial class Player { }
 ```csharp
 public interface IEntityQuery
 {
-    IEnumerable<VoidHandle> Filter(
+    IEnumerable<AnyHandle> Filter(
         IEntityRegistry registry,
-        IEnumerable<VoidHandle> entities);
+        IEnumerable<AnyHandle> entities);
 }
 ```
 
@@ -582,7 +582,7 @@ var active = ActiveEntityQuery.Instance.Filter(registry, entities);
 ```csharp
 public sealed class HasComponentQuery<TComponent> : IEntityQuery
 {
-    public HasComponentQuery(Func<VoidHandle, bool> hasComponentCheck);
+    public HasComponentQuery(Func<AnyHandle, bool> hasComponentCheck);
 }
 ```
 

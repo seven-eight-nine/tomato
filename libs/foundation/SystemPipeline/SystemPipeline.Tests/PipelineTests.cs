@@ -15,7 +15,7 @@ namespace Tomato.SystemPipeline.Tests
             public List<float> RecordedTotalTimes { get; } = new List<float>();
             public List<int> RecordedFrameCounts { get; } = new List<int>();
 
-            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<VoidHandle> entities, in SystemContext context)
+            public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
                 RecordedDeltaTimes.Add(context.DeltaTime);
                 RecordedTotalTimes.Add(context.TotalTime);
@@ -25,14 +25,14 @@ namespace Tomato.SystemPipeline.Tests
 
         private class TestEntityRegistry : IEntityRegistry
         {
-            public IReadOnlyList<VoidHandle> GetAllEntities()
+            public IReadOnlyList<AnyHandle> GetAllEntities()
             {
-                return new List<VoidHandle>();
+                return new List<AnyHandle>();
             }
 
-            public IReadOnlyList<VoidHandle> GetEntitiesOfType<TArena>() where TArena : class
+            public IReadOnlyList<AnyHandle> GetEntitiesOfType<TArena>() where TArena : class
             {
-                return new List<VoidHandle>();
+                return new List<AnyHandle>();
             }
         }
 

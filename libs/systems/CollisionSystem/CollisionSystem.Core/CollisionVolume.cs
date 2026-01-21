@@ -9,7 +9,7 @@ namespace Tomato.CollisionSystem;
 public sealed class CollisionVolume
 {
     /// <summary>発行元Entityのハンドル。</summary>
-    public readonly VoidHandle Owner;
+    public readonly AnyHandle Owner;
 
     /// <summary>衝突形状。</summary>
     public readonly CollisionShape Shape;
@@ -30,7 +30,7 @@ public sealed class CollisionVolume
     public bool IsExpired => Lifetime > 0 && RemainingLifetime <= 0;
 
     public CollisionVolume(
-        VoidHandle owner,
+        AnyHandle owner,
         CollisionShape shape,
         CollisionFilter filter,
         int volumeType = 0,

@@ -159,7 +159,7 @@ dotnet test libs/ReconciliationSystem/ReconciliationSystem.Tests/
 
 ## 依存関係
 
-- CommandGenerator - VoidHandle
+- CommandGenerator - AnyHandle
 - CollisionSystem - Vector3, CollisionContact, CollisionResult, VolumeType
 
 ## ディレクトリ構造

@@ -52,9 +52,9 @@ public partial class LowPriorityTestCommand
 [Command<MessageHandlerQueue>(Priority = 50)]
 public partial class TestDamageCommand
 {
-    public VoidHandle Target;
+    public AnyHandle Target;
     public int Amount;
-    public Action<VoidHandle, int>? OnExecute;
+    public Action<AnyHandle, int>? OnExecute;
 
     public void Execute()
     {
