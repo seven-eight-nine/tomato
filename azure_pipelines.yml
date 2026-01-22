@@ -81,28 +81,35 @@ steps:
       git checkout $(Build.SourceVersion) -- .
     fi
     
-    # Azure Pipeline 関連ファイルを除外
+    # Azure Pipeline 関連ファイルを確実に除外
     rm -rf .azure-pipelines azure-pipelines.yml
+    git rm -rf --cached .azure-pipelines azure-pipelines.yml 2>/dev/null || true
     
     echo "=== Files to be committed ==="
     ls -la
+    echo "=== Checking .azure-pipelines ==="
+    ls -la .azure-pipelines 2>/dev/null && echo "WARNING: .azure-pipelines still exists!" || echo "OK: .azure-pipelines removed"
     echo "=== End of file list ==="
     
     # コミット
     git add -A
     git commit -m "Release $(TAG_NAME)" || echo "No changes to commit"
     
-    # リリース日時を取得
+    # 最新コミットのハッシュを取得
+    LATEST_COMMIT=$(git rev-parse HEAD)
     RELEASE_DATE=$(date +%s)
     
-    # コミッター情報を匿名化（名前・メール・時刻）
+    # コミッター情報を匿名化
+    # - Author名/メール: 全コミット対象
+    # - 時刻: 最新コミットのみ変更
+    echo "if commit.original_id == b'${LATEST_COMMIT}':" > /tmp/callback.py
+    echo "    commit.author_date = b'${RELEASE_DATE} +0000'" >> /tmp/callback.py
+    echo "    commit.committer_date = b'${RELEASE_DATE} +0000'" >> /tmp/callback.py
+    
     git filter-repo --force \
       --email-callback 'return b"noreply@example.com"' \
       --name-callback 'return b"Pipeline"' \
-      --commit-callback "
-        commit.author_date = b'${RELEASE_DATE} +0000'
-        commit.committer_date = b'${RELEASE_DATE} +0000'
-      "
+      --commit-callback "$(cat /tmp/callback.py)"
     
     # リモートを再追加（filter-repo で消えるため）
     git remote remove github 2>/dev/null || true

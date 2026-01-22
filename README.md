@@ -31,6 +31,7 @@ tomato/
 │   │   ├── ActionExecutionSystem/  # 行動実行・ステートマシン
 │   │   ├── CharacterSpawnSystem/   # キャラクタースポーン管理
 │   │   ├── CollisionSystem/     # 衝突判定（Hitbox/Hurtbox/Pushbox）
+│   │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   │   ├── ReconciliationSystem/   # 位置調停・サーバー同期
 │   │   ├── DiagnosticsSystem/   # フレームプロファイリング
 │   │   ├── SchedulerSystem/     # フレームベーススケジューラ
@@ -338,6 +339,7 @@ Wave 1: 全Entityの次Waveのメッセージを処理
 | systems | CharacterSpawnSystem | 269 |
 | systems | ActionSelector | 125 |
 | systems | CollisionSystem | 74 |
+| systems | CombatSystem | 37 |
 | systems | ActionExecutionSystem | 46 |
 | systems | DiagnosticsSystem | 34 |
 | systems | SerializationSystem | 33 |

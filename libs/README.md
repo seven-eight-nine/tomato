@@ -17,6 +17,7 @@ libs/
 │   ├── ActionExecutionSystem/ # 行動実行・ステートマシン
 │   ├── CharacterSpawnSystem/ # キャラクタースポーン
 │   ├── CollisionSystem/     # 当たり判定
+│   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   ├── ReconciliationSystem/ # 位置調停・サーバー同期
 │   ├── DiagnosticsSystem/   # フレームプロファイリング
 │   ├── SchedulerSystem/     # フレームベーススケジューラ
@@ -46,6 +47,7 @@ libs/
 | **ActionExecutionSystem** | アクション実行・ステートマシン管理 | 46 |
 | **CharacterSpawnSystem** | キャラクター生成・リソース管理 | 269 |
 | **CollisionSystem** | 当たり判定（Hitbox/Hurtbox/Pushbox/Trigger） | 74 |
+| **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停 | 31 |
 | **DiagnosticsSystem** | フレームプロファイリング・計測 | 34 |
 | **SchedulerSystem** | フレームベーススケジューラ・クールダウン | 32 |
@@ -196,6 +198,7 @@ CommandGenerator.Core
 ├── SpatialIndexSystem.Core
 ├── SchedulerSystem.Core（EntityCooldownManager）
 ├── CollisionSystem.Core
+├── CombatSystem.Core（HandleSystem.Coreにも依存）
 └── ...
 ```
 

@@ -31,6 +31,7 @@
 | 統合コンテキスト | **EntitySystem** | 6フェーズゲームループの統括、全システム連携 |
 | パイプラインコンテキスト | SystemPipeline | ECSスタイルのシステム実行パイプライン |
 | 衝突コンテキスト | CollisionSystem | 空間的な衝突判定とメッセージ発行 |
+| 戦闘コンテキスト | CombatSystem | 攻撃とダメージ処理、多段ヒット制御 |
 | メッセージコンテキスト | CommandGenerator | メッセージの配送と処理 |
 | 行動コンテキスト | ActionSelector, ActionExecutionSystem | 行動の決定と実行 |
 | 調停コンテキスト | ReconciliationSystem | 位置調停と依存順計算 |
@@ -78,6 +79,13 @@
 - メッセージ発行は別レイヤー（EmitCollisionMessages）で実行
 - 形状判定とフィルタリングの分離
 
+#### CombatSystem: ダメージ処理の統一
+
+- HitGroupによる攻撃の同一視（複数ヒット判定を1回の攻撃として扱う）
+- HitHistoryは被攻撃側が所有（攻撃が消えても履歴は残る）
+- ターゲット判定はアプリ側に委譲（AttackInfo.CanTarget）
+- 多段ヒット制御（HittableCount、IntervalTime）
+
 #### EntitySystem: 統合レイヤー
 
 - 6フェーズゲームループの統括（Collision→Message→Decision→Execution→Reconciliation→Cleanup）
@@ -109,6 +117,12 @@
 │ Collision  │ │ Command    │ │ Action     │ │ Action     │ │ Character  │
 │ System     │ │ Generator  │ │ Selector   │ │ Execution  │ │ SpawnSys   │
 └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
+      │              │              │              │              │
+      ▼              │              │              │              │
+┌────────────┐       │              │              │              │
+│ Combat     │       │              │              │              │
+│ System     │       │              │              │              │
+└─────┬──────┘       │              │              │              │
       │              │              │              │              │
       └──────────────┴──────────────┴──────┬───────┴──────────────┘
                                            │
