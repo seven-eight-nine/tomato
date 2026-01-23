@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-1%2C332%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-1%2C461%20passing-brightgreen)]()
 
 3次元空間上でEntityが相互作用するアクションゲームのためのコアフレームワーク。
 TDD（テスト駆動開発）で構築された、決定論的で拡張可能なゲームループシステム。
@@ -14,7 +14,7 @@ TDD（テスト駆動開発）で構築された、決定論的で拡張可能�
 - **ECSスタイルのシステムパイプライン**: Serial/Parallel/MessageQueueの3種類の処理パターン
 - **Source Generator活用**: EntityHandle、MessageHandler、MessageQueueSystemを自動生成
 - **モジュラーアーキテクチャ**: 各システムが独立してテスト可能
-- **1,332テスト**: 高いテストカバレッジによる信頼性
+- **1,461テスト**: 高いテストカバレッジによる信頼性
 
 ## プロジェクト構成
 
@@ -24,7 +24,8 @@ tomato/
 │   ├── foundation/              # 基盤システム
 │   │   ├── EntityHandleSystem/  # 型安全なEntityハンドル、Arena、Query（Source Generator）
 │   │   ├── CommandGenerator/    # コマンドキュー・メッセージハンドラ生成（Source Generator）
-│   │   └── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
+│   │   ├── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
+│   │   └── FlowTree/            # コールスタック付き汎用フロー制御（ビヘイビアツリー）
 │   │
 │   ├── systems/                 # 個別機能システム
 │   │   ├── ActionSelector/      # 行動選択エンジン
@@ -32,6 +33,7 @@ tomato/
 │   │   ├── CharacterSpawnSystem/   # キャラクタースポーン管理
 │   │   ├── CollisionSystem/     # 衝突判定（Hitbox/Hurtbox/Pushbox）
 │   │   ├── CombatSystem/        # 攻撃・ダメージ処理
+│   │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ管理
 │   │   ├── ReconciliationSystem/   # 位置調停・サーバー同期
 │   │   ├── DiagnosticsSystem/   # フレームプロファイリング
 │   │   ├── SchedulerSystem/     # フレームベーススケジューラ
@@ -39,7 +41,7 @@ tomato/
 │   │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │   │
 │   └── orchestration/           # 統合・オーケストレーション
-│       └── EntitySystem/        # 6フェーズゲームループ統合
+│       └── GameLoop/        # 6フェーズゲームループ統合
 │
 └── docs/
     ├── ARCHITECTURE.md          # アーキテクチャ概要
@@ -73,7 +75,7 @@ GameLoopOrchestrator.Tick(deltaTime)
 
 ```bash
 # 全システムをビルド
-dotnet build libs/orchestration/EntitySystem/EntitySystem.Core/
+dotnet build libs/orchestration/GameLoop/GameLoop.Core/
 
 # 個別ビルド
 dotnet build libs/foundation/SystemPipeline/SystemPipeline.Core/
@@ -83,15 +85,21 @@ dotnet build libs/foundation/EntityHandleSystem/EntityHandleSystem.Attributes/
 ### テスト実行
 
 ```bash
-# 全テスト（推奨）
-dotnet test libs/orchestration/EntitySystem/EntitySystem.Tests/
-dotnet test libs/foundation/SystemPipeline/SystemPipeline.Tests/
+# foundation
+dotnet test libs/foundation/HandleSystem/HandleSystem.Tests/
 dotnet test libs/foundation/EntityHandleSystem/EntityHandleSystem.Tests/
 dotnet test libs/foundation/CommandGenerator/CommandGenerator.Tests/
+dotnet test libs/foundation/SystemPipeline/SystemPipeline.Tests/
+dotnet test libs/foundation/FlowTree/FlowTree.Tests/
+
+# systems
 dotnet test libs/systems/CharacterSpawnSystem/CharacterSpawnSystem.Tests/
-dotnet test libs/systems/CollisionSystem/CollisionSystem.Tests/
 dotnet test libs/systems/ActionSelector/ActionSelector.Tests/
 dotnet test libs/systems/ActionExecutionSystem/ActionExecutionSystem.Tests/
+dotnet test libs/systems/CollisionSystem/CollisionSystem.Tests/
+dotnet test libs/systems/CombatSystem/CombatSystem.Tests/
+dotnet test libs/systems/StatusEffectSystem/StatusEffectSystem.Tests/
+dotnet test libs/systems/SerializationSystem/SerializationSystem.Tests/
 ```
 
 ## 基盤システム（Foundation）
@@ -203,6 +211,32 @@ pipeline.Execute(updateGroup, deltaTime);
 | **Parallel** | `IParallelSystem` | 各エンティティを並列に処理 |
 | **MessageQueue** | `IMessageQueueSystem` | メッセージをWave単位で処理 |
 
+### FlowTree
+
+コールスタック付き汎用フロー制御ライブラリ。ビヘイビアツリーのパターンを基盤としつつ、AI行動選択に限らず非同期処理やワークフロー全般に適用可能。
+
+```csharp
+// ツリー定義
+var tree = new FlowTree("Patrol");
+tree.Build()
+    .Sequence()
+        .Action(static (ref FlowContext ctx) => GetNextWaypoint(ref ctx))
+        .Action(static (ref FlowContext ctx) => MoveToWaypoint(ref ctx))
+        .Wait(2.0f)
+    .End()
+    .Complete();
+
+// 実行
+var context = FlowContext.Create(new Blackboard(64), 0.016f);
+var status = tree.Tick(ref context);
+```
+
+主な機能:
+- **動的サブツリー**: SubTreeNodeで別ツリーを呼び出し、コールスタックで追跡
+- **自己再帰・相互再帰**: ツリー参照による自然な再帰記述
+- **低GC**: 通常使用ではヒープアロケーションなし
+- **豊富なノード**: Sequence, Selector, Parallel, Race, Join, Retry, Timeout等
+
 ## 個別機能システム（Systems）
 
 ### CollisionSystem
@@ -268,6 +302,7 @@ controller.RequestState(CharacterRequestState.Active);
 
 | システム | 説明 |
 |---------|------|
+| **StatusEffectSystem** | 状態異常・バフ/デバフの管理 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停 |
 | **DiagnosticsSystem** | フレーム時間計測・プロファイリング |
 | **SchedulerSystem** | フレームベースのクールダウン・スケジュール |
@@ -276,7 +311,7 @@ controller.RequestState(CharacterRequestState.Active);
 
 ## 統合システム（Orchestration）
 
-### EntitySystem
+### GameLoop
 
 6フェーズのゲームループを統合する最上位システム。
 
@@ -333,21 +368,23 @@ Wave 1: 全Entityの次Waveのメッセージを処理
 
 | カテゴリ | システム | テスト数 |
 |---------|---------|---------|
-| foundation | EntityHandleSystem | 299 |
-| foundation | CommandGenerator | 246 |
-| foundation | SystemPipeline | 53 |
+| foundation | EntityHandleSystem | 309 |
+| foundation | CommandGenerator | 243 |
+| foundation | SystemPipeline | 51 |
+| foundation | FlowTree | 107 |
+| foundation | HandleSystem | 25 |
 | systems | CharacterSpawnSystem | 269 |
-| systems | ActionSelector | 125 |
-| systems | CollisionSystem | 74 |
+| systems | ActionSelector | 66 |
+| systems | CollisionSystem | 68 |
 | systems | CombatSystem | 37 |
 | systems | ActionExecutionSystem | 46 |
+| systems | StatusEffectSystem | 50 |
+| systems | SerializationSystem | 60 |
 | systems | DiagnosticsSystem | 34 |
-| systems | SerializationSystem | 33 |
 | systems | SpatialIndexSystem | 33 |
 | systems | SchedulerSystem | 32 |
 | systems | ReconciliationSystem | 31 |
-| orchestration | EntitySystem | 57 |
-| | **合計** | **1,332** |
+| | **合計** | **1,461** |
 
 ## ドキュメント
 
@@ -356,7 +393,8 @@ Wave 1: 全Entityの次Waveのメッセージを処理
 - [設計ドキュメント](docs/plans/action-game-design.md)
 - [SystemPipeline詳細](libs/foundation/SystemPipeline/README.md)
 - [EntityHandleSystem詳細](libs/foundation/EntityHandleSystem/README.md)
-- [EntitySystem詳細](libs/orchestration/EntitySystem/README.md)
+- [FlowTree詳細](libs/foundation/FlowTree/README.md)
+- [GameLoop詳細](libs/orchestration/GameLoop/README.md)
 - [ライブラリ一覧](libs/README.md)
 
 ## ライセンス

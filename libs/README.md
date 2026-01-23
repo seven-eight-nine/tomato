@@ -10,7 +10,8 @@ libs/
 │   ├── HandleSystem/        # 汎用ハンドルパターン（Source Generator）
 │   ├── EntityHandleSystem/  # Entity専用ハンドル（HandleSystem依存）
 │   ├── CommandGenerator/    # メッセージハンドラ生成（Source Generator）
-│   └── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
+│   ├── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
+│   └── FlowTree/            # コールスタック付き汎用フロー制御
 │
 ├── systems/                 # 個別機能システム
 │   ├── ActionSelector/      # 行動選択エンジン
@@ -18,6 +19,7 @@ libs/
 │   ├── CharacterSpawnSystem/ # キャラクタースポーン
 │   ├── CollisionSystem/     # 当たり判定
 │   ├── CombatSystem/        # 攻撃・ダメージ処理
+│   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ
 │   ├── ReconciliationSystem/ # 位置調停・サーバー同期
 │   ├── DiagnosticsSystem/   # フレームプロファイリング
 │   ├── SchedulerSystem/     # フレームベーススケジューラ
@@ -25,7 +27,7 @@ libs/
 │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │
 └── orchestration/           # 統合・オーケストレーション
-    └── EntitySystem/        # 6フェーズゲームループ統合
+    └── GameLoop/        # 6フェーズゲームループ統合
 ```
 
 ## システム一覧
@@ -37,30 +39,32 @@ libs/
 | **HandleSystem** | 汎用ハンドルパターン（IHandle, IArena, ArenaBase）、エンティティ以外にも適用可能（Source Generator） | 25 |
 | **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
 | **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
-| **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 53 |
+| **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
+| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 107 |
 
 ### systems/ - 個別機能システム
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
-| **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 125 |
+| **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 66 |
 | **ActionExecutionSystem** | アクション実行・ステートマシン管理 | 46 |
 | **CharacterSpawnSystem** | キャラクター生成・リソース管理 | 269 |
-| **CollisionSystem** | 当たり判定（Hitbox/Hurtbox/Pushbox/Trigger） | 74 |
+| **CollisionSystem** | 当たり判定（Hitbox/Hurtbox/Pushbox/Trigger） | 68 |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
+| **StatusEffectSystem** | 状態異常・バフ/デバフ管理 | 50 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停 | 31 |
 | **DiagnosticsSystem** | フレームプロファイリング・計測 | 34 |
 | **SchedulerSystem** | フレームベーススケジューラ・クールダウン | 32 |
 | **SpatialIndexSystem** | 空間ハッシュグリッドによる高速検索 | 33 |
-| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 33 |
+| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 60 |
 
 ### orchestration/ - 統合システム
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
-| **EntitySystem** | 6フェーズゲームループを実現する最上位統合システム | 57 |
+| **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | - |
 
-**合計: 1,357+ テスト**
+**合計: 1,461 テスト**
 
 ## 主要な使用例
 
@@ -130,6 +134,39 @@ var snapshot = manager.CaptureSnapshot(frameNumber);
 manager.RestoreSnapshot(snapshot);
 ```
 
+### FlowTree
+
+```csharp
+// ツリー定義（入れ物と中身が分離）
+var tree = new FlowTree("Patrol");
+tree.Build()
+    .Sequence()
+        .Action(static (ref FlowContext ctx) => GetNextWaypoint(ref ctx))
+        .Action(static (ref FlowContext ctx) => MoveToWaypoint(ref ctx))
+        .Wait(2.0f)
+    .End()
+    .Complete();
+
+// 実行
+var context = FlowContext.Create(new Blackboard(64), 0.016f);
+var status = tree.Tick(ref context);
+
+// 自己再帰も自然に書ける
+var countdown = new FlowTree("Countdown");
+countdown.Build()
+    .Selector()
+        .Sequence()
+            .Condition((ref FlowContext ctx) => ctx.Blackboard.GetInt(counterKey) <= 0)
+            .Success()
+        .End()
+        .Sequence()
+            .Action((ref FlowContext ctx) => { /* decrement */ return NodeStatus.Success; })
+            .SubTree(countdown)  // 自己参照
+        .End()
+    .End()
+    .Complete();
+```
+
 ## ディレクトリ構造
 
 各システムは以下の構造を持つ:
@@ -193,6 +230,14 @@ CommandGenerator.Core
 ├── MessageQueue
 ├── WaveProcessor
 └── IMessageDispatcher
+
+FlowTree.Core (独立・外部依存なし)
+├── FlowTree / IFlowNode / NodeStatus
+├── Composite: Sequence, Selector, Parallel, Race, Join
+├── Decorator: Retry, Timeout, Delay, Guard, Repeat
+├── Leaf: Action, Condition, SubTree, Wait
+├── Blackboard / BlackboardKey<T>
+└── FlowCallStack / CallFrame
 
 その他のシステムはEntityHandleSystem.Attributesに依存:
 ├── SpatialIndexSystem.Core

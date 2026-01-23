@@ -25,6 +25,7 @@ public sealed class StandardExecutableAction<TCategory> : IExecutableAction<TCat
     }
 
     public string ActionId => _definition.ActionId;
+    public string Label => _definition.ActionId;
     public TCategory Category => _definition.Category;
     public float ElapsedTime => _elapsedTime;
     public int ElapsedFrames => _elapsedFrames;
