@@ -27,10 +27,10 @@ LateUpdateでのEntity位置の調停を担うシステム。依存順の計算�
 │          ┌──────────────┼──────────────┐                │
 │          ▼              ▼              ▼                │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐  │
-│  │ Dependency  │ │ Dependency  │ │ Reconciliation  │  │
-│  │   Graph     │ │  Resolver   │ │     Rule        │  │
-│  │ 依存関係管理│ │トポロジカル │ │ 押し出し計算   │  │
-│  │             │ │  ソート     │ │                 │  │
+│  │ Dependency  │ │ Topological │ │ Reconciliation  │  │
+│  │   Graph     │ │   Sorter    │ │     Rule        │  │
+│  │(DependSort) │ │(DependSort) │ │ 押し出し計算   │  │
+│  │             │ │             │ │                 │  │
 │  └─────────────┘ └─────────────┘ └─────────────────┘  │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
@@ -38,10 +38,10 @@ LateUpdateでのEntity位置の調停を担うシステム。依存順の計算�
 
 ## コンポーネント
 
-### 依存関係
+### 依存関係（DependencySortSystem使用）
 
-- `DependencyGraph` - Entity間の依存関係を管理するDAG
-- `DependencyResolver` - トポロジカルソートで処理順序を計算
+- `DependencyGraph<AnyHandle>` - Entity間の依存関係を管理するDAG
+- `TopologicalSorter<AnyHandle>` - トポロジカルソートで処理順序を計算
 
 ### ルール
 
@@ -63,8 +63,11 @@ LateUpdateでのEntity位置の調停を担うシステム。依存順の計算�
 ### 基本的な使用法
 
 ```csharp
+using Tomato.DependencySortSystem;
+using Tomato.ReconciliationSystem;
+
 // コンポーネントを作成
-var dependencyGraph = new DependencyGraph();
+var dependencyGraph = new DependencyGraph<AnyHandle>();
 var rule = new PriorityBasedReconciliationRule();
 var transforms = new MyTransformAccessor(); // IEntityTransformAccessor実装
 var entityTypes = new MyEntityTypeAccessor(); // IEntityTypeAccessor実装
@@ -76,8 +79,6 @@ var reconciler = new PositionReconciler(
     entityTypes);
 
 // 依存関係を登録（騎乗者→馬）
-var rider = new EntityId(1);
-var horse = new EntityId(2);
 dependencyGraph.AddDependency(rider, horse);
 
 // LateUpdateで実行
@@ -104,20 +105,19 @@ rule.SetPriority(EntityType.Enemy, 200);  // 大型敵を押し出しにくく
 ### 依存順の計算
 
 ```csharp
-var graph = new DependencyGraph();
-var resolver = new DependencyResolver(graph);
+var graph = new DependencyGraph<AnyHandle>();
+var sorter = new TopologicalSorter<AnyHandle>();
 
 // A -> B -> C の依存関係
-var a = new EntityId(1);
-var b = new EntityId(2);
-var c = new EntityId(3);
-
 graph.AddDependency(a, b);
 graph.AddDependency(b, c);
 
 // トポロジカルソート: C, B, A の順序（依存先が先）
-var order = resolver.ComputeOrder(new[] { a, b, c });
-// order[0] == c, order[1] == b, order[2] == a
+var result = sorter.Sort(new[] { a, b, c }, graph);
+if (result.Success)
+{
+    // result.SortedOrder[0] == c, [1] == b, [2] == a
+}
 ```
 
 ### 押し出し処理
@@ -144,7 +144,7 @@ rule.ComputePushout(
 
 1. `Process()` 呼び出し
 2. Pushbox衝突を収集
-3. `DependencyResolver.ComputeOrder()` で処理順序を計算
+3. `TopologicalSorter.Sort()` で処理順序を計算
 4. 依存順に従って各Entityを調停
 5. 押し出し量を計算し蓄積
 6. 押し出しを一括適用
@@ -152,15 +152,14 @@ rule.ComputePushout(
 ## テスト
 
 ```bash
-dotnet test libs/ReconciliationSystem/ReconciliationSystem.Tests/
+dotnet test libs/systems/ReconciliationSystem/ReconciliationSystem.Tests/
 ```
-
-現在のテスト数: 31
 
 ## 依存関係
 
+- **DependencySortSystem** - 汎用トポロジカルソートライブラリ
 - CommandGenerator - AnyHandle
-- CollisionSystem - Vector3, CollisionContact, CollisionResult, VolumeType
+- CollisionSystem - Vector3, CollisionContact, CollisionResult
 
 ## ディレクトリ構造
 
@@ -169,9 +168,7 @@ ReconciliationSystem/
 ├── README.md
 ├── ReconciliationSystem.Core/
 │   ├── ReconciliationSystem.Core.csproj
-│   ├── Dependency/
-│   │   ├── DependencyGraph.cs
-│   │   └── DependencyResolver.cs
+│   ├── VolumeType.cs
 │   ├── Rule/
 │   │   ├── EntityType.cs
 │   │   ├── ReconciliationRule.cs
@@ -183,8 +180,6 @@ ReconciliationSystem/
 │       └── IEntityTypeAccessor.cs
 └── ReconciliationSystem.Tests/
     ├── ReconciliationSystem.Tests.csproj
-    ├── DependencyGraphTests.cs
-    ├── DependencyResolverTests.cs
     ├── ReconciliationRuleTests.cs
     └── PositionReconcilerTests.cs
 ```

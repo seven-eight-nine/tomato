@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Tomato.CollisionSystem;
+using Tomato.DependencySortSystem;
 using Tomato.EntityHandleSystem;
 
 namespace Tomato.ReconciliationSystem;
@@ -10,8 +11,8 @@ namespace Tomato.ReconciliationSystem;
 /// </summary>
 public sealed class PositionReconciler
 {
-    private readonly DependencyGraph _dependencyGraph;
-    private readonly DependencyResolver _dependencyResolver;
+    private readonly DependencyGraph<AnyHandle> _dependencyGraph;
+    private readonly TopologicalSorter<AnyHandle> _sorter;
     private readonly ReconciliationRule _rule;
     private readonly IEntityTransformAccessor _transforms;
     private readonly IEntityTypeAccessor _entityTypes;
@@ -20,19 +21,24 @@ public sealed class PositionReconciler
     private readonly Dictionary<AnyHandle, Vector3> _pushouts;
 
     public PositionReconciler(
-        DependencyGraph dependencyGraph,
+        DependencyGraph<AnyHandle> dependencyGraph,
         ReconciliationRule rule,
         IEntityTransformAccessor transforms,
         IEntityTypeAccessor entityTypes)
     {
         _dependencyGraph = dependencyGraph;
-        _dependencyResolver = new DependencyResolver(dependencyGraph);
+        _sorter = new TopologicalSorter<AnyHandle>();
         _rule = rule;
         _transforms = transforms;
         _entityTypes = entityTypes;
         _pushboxCollisions = new List<(AnyHandle, AnyHandle, CollisionContact)>();
         _pushouts = new Dictionary<AnyHandle, Vector3>();
     }
+
+    /// <summary>
+    /// 依存グラフを取得する。
+    /// </summary>
+    public DependencyGraph<AnyHandle> DependencyGraph => _dependencyGraph;
 
     /// <summary>
     /// LateUpdate処理を実行する。
@@ -43,15 +49,15 @@ public sealed class PositionReconciler
         CollectPushboxCollisions(pushboxCollisions);
 
         // 2. 依存順を計算
-        var order = _dependencyResolver.ComputeOrder(entities);
-        if (order == null)
+        var result = _sorter.Sort(entities, _dependencyGraph);
+        if (!result.Success)
         {
             // 循環依存検出時はスキップ
             return;
         }
 
         // 3. 依存順に従って位置調停
-        foreach (var handle in order)
+        foreach (var handle in result.SortedOrder!)
         {
             ReconcileEntity(handle);
         }

@@ -11,7 +11,9 @@ libs/
 │   ├── EntityHandleSystem/  # Entity専用ハンドル（HandleSystem依存）
 │   ├── CommandGenerator/    # メッセージハンドラ生成（Source Generator）
 │   ├── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
-│   └── FlowTree/            # コールスタック付き汎用フロー制御
+│   ├── FlowTree/            # コールスタック付き汎用フロー制御
+│   ├── DeepCloneGenerator/  # ディープクローン自動生成（Source Generator）
+│   └── DependencySortSystem/ # 汎用トポロジカルソート
 │
 ├── systems/                 # 個別機能システム
 │   ├── ActionSelector/      # 行動選択エンジン
@@ -20,9 +22,8 @@ libs/
 │   ├── CollisionSystem/     # 当たり判定
 │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ
-│   ├── ReconciliationSystem/ # 位置調停・サーバー同期
-│   ├── DiagnosticsSystem/   # フレームプロファイリング
-│   ├── SchedulerSystem/     # フレームベーススケジューラ
+│   ├── InventorySystem/     # アイテム・インベントリ管理
+│   ├── ReconciliationSystem/ # 位置調停・依存順処理
 │   ├── SpatialIndexSystem/  # 空間ハッシュグリッド
 │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │
@@ -41,6 +42,8 @@ libs/
 | **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
 | **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 107 |
+| **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 82 |
+| **DependencySortSystem** | 汎用トポロジカルソート、循環検出 | 28 |
 
 ### systems/ - 個別機能システム
 
@@ -52,19 +55,18 @@ libs/
 | **CollisionSystem** | 当たり判定（Hitbox/Hurtbox/Pushbox/Trigger） | 68 |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
 | **StatusEffectSystem** | 状態異常・バフ/デバフ管理 | 50 |
-| **ReconciliationSystem** | 依存関係を考慮した位置調停 | 31 |
-| **DiagnosticsSystem** | フレームプロファイリング・計測 | 34 |
-| **SchedulerSystem** | フレームベーススケジューラ・クールダウン | 32 |
+| **InventorySystem** | アイテム・インベントリ管理 | 101 |
+| **ReconciliationSystem** | 依存関係を考慮した位置調停（DependencySortSystem使用） | 11 |
 | **SpatialIndexSystem** | 空間ハッシュグリッドによる高速検索 | 33 |
-| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 60 |
+| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 21 |
 
 ### orchestration/ - 統合システム
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
-| **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | - |
+| **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 56 |
 
-**合計: 1,461 テスト**
+**合計: 1,603 テスト**
 
 ## 主要な使用例
 
@@ -167,6 +169,52 @@ countdown.Build()
     .Complete();
 ```
 
+### DependencySortSystem
+
+```csharp
+using Tomato.DependencySortSystem;
+
+// 依存グラフを作成
+var graph = new DependencyGraph<string>();
+graph.AddDependency("app", "database");
+graph.AddDependency("database", "config");
+
+// トポロジカルソート
+var sorter = new TopologicalSorter<string>();
+var result = sorter.Sort(graph.GetAllNodes(), graph);
+
+if (result.Success)
+{
+    // result.SortedOrder: config -> database -> app
+    foreach (var node in result.SortedOrder!)
+    {
+        Console.WriteLine(node);
+    }
+}
+else
+{
+    // 循環検出時
+    Console.WriteLine($"循環: {string.Join(" -> ", result.CyclePath!)}");
+}
+```
+
+### ReconciliationSystem
+
+```csharp
+using Tomato.DependencySortSystem;
+using Tomato.ReconciliationSystem;
+
+// 依存グラフを作成（DependencySortSystemを使用）
+var graph = new DependencyGraph<AnyHandle>();
+graph.AddDependency(rider, horse);  // 騎乗者は馬に依存
+
+// PositionReconcilerを作成
+var reconciler = new PositionReconciler(graph, rule, transforms, entityTypes);
+
+// 処理実行（依存順に位置調停 + 押し出し処理）
+reconciler.Process(entities, pushboxCollisions);
+```
+
 ## ディレクトリ構造
 
 各システムは以下の構造を持つ:
@@ -239,11 +287,21 @@ FlowTree.Core (独立・外部依存なし)
 ├── Blackboard / BlackboardKey<T>
 └── FlowCallStack / CallFrame
 
+DependencySortSystem.Core (独立・外部依存なし)
+├── DependencyGraph<TNode>
+├── TopologicalSorter<TNode>
+└── SortResult<TNode>
+
+DeepCloneGenerator (Source Generator)
+├── [DeepClonable]
+├── [CloneWith] / [CloneIgnore]
+└── DeepClone() メソッド生成
+
 その他のシステムはEntityHandleSystem.Attributesに依存:
 ├── SpatialIndexSystem.Core
-├── SchedulerSystem.Core（EntityCooldownManager）
 ├── CollisionSystem.Core
 ├── CombatSystem.Core（HandleSystem.Coreにも依存）
+├── ReconciliationSystem.Core（DependencySortSystem.Coreにも依存）
 └── ...
 ```
 

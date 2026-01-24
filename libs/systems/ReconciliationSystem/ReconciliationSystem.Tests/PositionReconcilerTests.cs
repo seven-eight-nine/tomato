@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using Tomato.ReconciliationSystem;
+using Tomato.DependencySortSystem;
 using Tomato.CommandGenerator;
 using Tomato.CollisionSystem;
 using Tomato.EntityHandleSystem;
@@ -24,7 +25,7 @@ public class PositionReconcilerTests
     [Fact]
     public void PositionReconciler_ShouldBeCreatable()
     {
-        var graph = new DependencyGraph();
+        var graph = new DependencyGraph<AnyHandle>();
         var rule = new PriorityBasedReconciliationRule();
         var transforms = new MockTransformAccessor();
         var entityTypes = new MockEntityTypeAccessor();
@@ -37,7 +38,7 @@ public class PositionReconcilerTests
     [Fact]
     public void Process_ShouldApplyPushout()
     {
-        var graph = new DependencyGraph();
+        var graph = new DependencyGraph<AnyHandle>();
         var rule = new PriorityBasedReconciliationRule();
         var transforms = new MockTransformAccessor();
         var entityTypes = new MockEntityTypeAccessor();
@@ -72,7 +73,7 @@ public class PositionReconcilerTests
     [Fact]
     public void Process_ShouldRespectDependencyOrder()
     {
-        var graph = new DependencyGraph();
+        var graph = new DependencyGraph<AnyHandle>();
         var rule = new PriorityBasedReconciliationRule();
         var transforms = new MockTransformAccessor();
         var entityTypes = new MockEntityTypeAccessor();
@@ -101,7 +102,7 @@ public class PositionReconcilerTests
     [Fact]
     public void Process_CircularDependency_ShouldNotCrash()
     {
-        var graph = new DependencyGraph();
+        var graph = new DependencyGraph<AnyHandle>();
         var rule = new PriorityBasedReconciliationRule();
         var transforms = new MockTransformAccessor();
         var entityTypes = new MockEntityTypeAccessor();
@@ -130,7 +131,7 @@ public class PositionReconcilerTests
     [Fact]
     public void Process_MultiplePushouts_ShouldAccumulate()
     {
-        var graph = new DependencyGraph();
+        var graph = new DependencyGraph<AnyHandle>();
         var rule = new PriorityBasedReconciliationRule();
         var transforms = new MockTransformAccessor();
         var entityTypes = new MockEntityTypeAccessor();
@@ -170,13 +171,13 @@ public class PositionReconcilerTests
         var volumeA = new CollisionVolume(
             owner: entityA,
             shape: new SphereShape(1.0f),
-            filter: CollisionFilter.PlayerHitbox,
+            filter: CollisionFilter.All,
             volumeType: VolumeType.Pushbox);
 
         var volumeB = new CollisionVolume(
             owner: entityB,
             shape: new SphereShape(1.0f),
-            filter: CollisionFilter.PlayerHitbox,
+            filter: CollisionFilter.All,
             volumeType: VolumeType.Pushbox);
 
         var contact = new CollisionContact(Vector3.Zero, normal, penetration);

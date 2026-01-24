@@ -20,7 +20,7 @@
 
 #### テスト駆動開発（TDD）
 
-全てのコードはテストファーストで開発される。1,332のテストが設計の正しさを証明する。
+全てのコードはテストファーストで開発される。1,603のテストが設計の正しさを証明する。
 
 ### ドメイン駆動設計（DDD）
 
@@ -34,7 +34,8 @@
 | 戦闘コンテキスト | CombatSystem | 攻撃とダメージ処理、多段ヒット制御 |
 | メッセージコンテキスト | CommandGenerator | メッセージの配送と処理 |
 | 行動コンテキスト | ActionSelector, ActionExecutionSystem | 行動の決定と実行 |
-| 調停コンテキスト | ReconciliationSystem | 位置調停と依存順計算 |
+| 依存ソートコンテキスト | DependencySortSystem | 汎用トポロジカルソートと循環検出 |
+| 調停コンテキスト | ReconciliationSystem | 位置調停と押し出し処理 |
 | エンティティコンテキスト | EntityHandleSystem | Entityの生成・管理・コンポーネント |
 | スポーンコンテキスト | CharacterSpawnSystem | キャラクターのリソース管理とスポーン |
 
@@ -401,14 +402,16 @@ SelectionResult (カテゴリ毎の勝者)
 
 ### 依存順計算
 
+DependencySortSystemを使用してトポロジカルソートを行う。
+
 ```
 馬B → 騎乗者A → 旗C
 
 処理順: B → A → C
 
-1. DAGを構築
-2. 循環検出
-3. トポロジカルソート
+1. DependencyGraph<AnyHandle>にDAGを構築
+2. TopologicalSorter<AnyHandle>.Sort()で順序計算
+3. 循環検出時はCyclePathで循環経路を取得可能
 ```
 
 ### 押し出しルール
