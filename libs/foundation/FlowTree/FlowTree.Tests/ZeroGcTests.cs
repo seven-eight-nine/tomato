@@ -5,60 +5,45 @@ namespace Tomato.FlowTree.Tests;
 
 public class ZeroGcTests
 {
-    private static FlowContext CreateContext(FlowCallStack? stack = null)
-    {
-        return FlowContext.Create(
-            new Blackboard(64),
-            stack,
-            deltaTime: 0.016f
-        );
-    }
-
     [Fact]
     public void Tick_NoAllocation()
     {
         // 事前構築
         var stack = new FlowCallStack(32);
-        var bb = new Blackboard(64);
+        var state = new TestState();
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build()
+        subTree.Build(state)
             .Sequence()
-                .Action(static (ref FlowContext _) => NodeStatus.Success)
-                .Action(static (ref FlowContext _) => NodeStatus.Success)
+                .Action(static () => NodeStatus.Success)
+                .Action(static () => NodeStatus.Success)
             .End()
             .Complete();
 
         var tree = new FlowTree("Main");
-        tree.Build()
+        tree
+            .WithCallStack(stack)
+            .Build(state)
             .Sequence()
-                .Action(static (ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var key = new BlackboardKey<int>(1);
-                    ctx.Blackboard.SetInt(key, 42);
+                    s.IntValue = 42;
                     return NodeStatus.Success;
                 })
                 .Selector()
-                    .Condition(static (ref FlowContext ctx) =>
-                    {
-                        var key = new BlackboardKey<bool>(2);
-                        return ctx.Blackboard.GetBool(key);
-                    })
-                    .Action(static (ref FlowContext _) => NodeStatus.Success)
+                    .Condition(s => s.BoolValue)
+                    .Action(static () => NodeStatus.Success)
                 .End()
                 .SubTree(subTree)
                 .Wait(0.1f)
             .End()
             .Complete();
 
-        var ctx = FlowContext.Create(bb, stack, 0.05f);
-
         // ウォームアップ（JIT等）
         for (int i = 0; i < 100; i++)
         {
             tree.Reset();
-            tree.Tick(ref ctx);
-            ctx.DeltaTime = 0.05f;
+            tree.Tick(0.05f);
         }
 
         // GCアロケーション計測
@@ -67,12 +52,11 @@ public class ZeroGcTests
         for (int i = 0; i < 1000; i++)
         {
             tree.Reset();
-            ctx.DeltaTime = 0.016f;
 
             // Tick数回でツリーが完了するまで
             for (int t = 0; t < 10; t++)
             {
-                var status = tree.Tick(ref ctx);
+                var status = tree.Tick(0.016f);
                 if (status != NodeStatus.Running)
                     break;
             }
@@ -83,47 +67,6 @@ public class ZeroGcTests
 
         // ゼロアロケーションを検証（多少の許容範囲を設ける）
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during Tick loop.");
-    }
-
-    [Fact]
-    public void Blackboard_NoAllocation()
-    {
-        var bb = new Blackboard(64);
-        var intKey = new BlackboardKey<int>(1);
-        var floatKey = new BlackboardKey<float>(2);
-        var boolKey = new BlackboardKey<bool>(3);
-
-        // ウォームアップ
-        for (int i = 0; i < 100; i++)
-        {
-            bb.SetInt(intKey, i);
-            bb.SetFloat(floatKey, i * 0.5f);
-            bb.SetBool(boolKey, i % 2 == 0);
-            bb.GetInt(intKey);
-            bb.GetFloat(floatKey);
-            bb.GetBool(boolKey);
-        }
-
-        // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-
-        for (int i = 0; i < 10000; i++)
-        {
-            bb.SetInt(intKey, i);
-            bb.SetFloat(floatKey, i * 0.5f);
-            bb.SetBool(boolKey, i % 2 == 0);
-            _ = bb.GetInt(intKey);
-            _ = bb.GetFloat(floatKey);
-            _ = bb.GetBool(boolKey);
-            bb.TryGetInt(intKey, out _);
-            bb.TryGetFloat(floatKey, out _);
-            bb.TryGetBool(boolKey, out _);
-        }
-
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
-        long allocated = allocatedAfter - allocatedBefore;
-
-        Assert.True(allocated < 1024, $"Allocated {allocated} bytes during Blackboard operations.");
     }
 
     [Fact]
@@ -169,21 +112,21 @@ public class ZeroGcTests
     public void CompositeNodes_NoAllocation()
     {
         var sequence = new SequenceNode(
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Success),
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Success)
+            new ActionNode(static () => NodeStatus.Success),
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var selector = new SelectorNode(
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Failure),
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Success)
+            new ActionNode(static () => NodeStatus.Failure),
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var parallel = new ParallelNode(
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Success),
-            new ActionNode(static (ref FlowContext _) => NodeStatus.Success)
+            new ActionNode(static () => NodeStatus.Success),
+            new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
 
         // ウォームアップ
         for (int i = 0; i < 100; i++)
@@ -218,12 +161,12 @@ public class ZeroGcTests
     [Fact]
     public void DecoratorNodes_NoAllocation()
     {
-        var innerAction = new ActionNode(static (ref FlowContext _) => NodeStatus.Success);
+        var innerAction = new ActionNode(static () => NodeStatus.Success);
         var inverter = new InverterNode(innerAction);
-        var succeeder = new SucceederNode(new ActionNode(static (ref FlowContext _) => NodeStatus.Failure));
-        var repeat = new RepeatNode(3, new ActionNode(static (ref FlowContext _) => NodeStatus.Success));
+        var succeeder = new SucceederNode(new ActionNode(static () => NodeStatus.Failure));
+        var repeat = new RepeatNode(3, new ActionNode(static () => NodeStatus.Success));
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
 
         // ウォームアップ
         for (int i = 0; i < 100; i++)
@@ -253,5 +196,51 @@ public class ZeroGcTests
         long allocated = allocatedAfter - allocatedBefore;
 
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during decorator node operations.");
+    }
+
+    [Fact]
+    public void GenericContext_NoAllocation()
+    {
+        var state = new TestState { IntValue = 0 };
+
+        var tree = new FlowTree();
+        tree.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    s.IntValue++;
+                    return NodeStatus.Success;
+                })
+                .Condition(s => s.IntValue > 0)
+            .End()
+            .Complete();
+
+        // ウォームアップ
+        for (int i = 0; i < 100; i++)
+        {
+            tree.Reset();
+            tree.Tick(0.016f);
+        }
+
+        // GCアロケーション計測
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+
+        for (int i = 0; i < 10000; i++)
+        {
+            tree.Reset();
+            tree.Tick(0.016f);
+        }
+
+        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocated = allocatedAfter - allocatedBefore;
+
+        Assert.True(allocated < 1024, $"Allocated {allocated} bytes during generic context operations.");
+    }
+
+    private class TestState
+    {
+        public int IntValue { get; set; }
+        public float FloatValue { get; set; }
+        public bool BoolValue { get; set; }
     }
 }

@@ -4,26 +4,22 @@ namespace Tomato.FlowTree.Tests;
 
 public class SubTreeTests
 {
-    private static FlowContext CreateContext(FlowCallStack? callStack = null)
-    {
-        return FlowContext.Create(
-            new Blackboard(),
-            callStack ?? new FlowCallStack(32)
-        );
-    }
-
     [Fact]
     public void SubTreeNode_DirectReference()
     {
         var childTree = new FlowTree();
         childTree.Build()
-            .Action(static (ref FlowContext _) => NodeStatus.Success)
+            .Action(static () => NodeStatus.Success)
             .Complete();
 
-        var subTreeNode = new SubTreeNode(childTree);
-        var ctx = CreateContext();
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build()
+            .SubTree(childTree)
+            .Complete();
 
-        Assert.Equal(NodeStatus.Success, subTreeNode.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
     }
 
     [Fact]
@@ -31,11 +27,15 @@ public class SubTreeTests
     {
         var childTree = new FlowTree(); // Build()呼び出しなし
 
-        var subTreeNode = new SubTreeNode(childTree);
-        var ctx = CreateContext();
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build()
+            .SubTree(childTree)
+            .Complete();
 
         // 構築されていないツリーはFailure
-        Assert.Equal(NodeStatus.Failure, subTreeNode.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Failure, mainTree.Tick(0.016f));
     }
 
     [Fact]
@@ -46,21 +46,25 @@ public class SubTreeTests
         var childTree = new FlowTree();
         childTree.Build()
             .Sequence()
-                .Action((ref FlowContext _) => { callCount++; return NodeStatus.Success; })
-                .Action((ref FlowContext _) => { callCount++; return NodeStatus.Running; })
-                .Action((ref FlowContext _) => { callCount++; return NodeStatus.Success; })
+                .Action(() => { callCount++; return NodeStatus.Success; })
+                .Action(() => { callCount++; return NodeStatus.Running; })
+                .Action(() => { callCount++; return NodeStatus.Success; })
             .End()
             .Complete();
 
-        var subTreeNode = new SubTreeNode(childTree);
-        var ctx = CreateContext();
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build()
+            .SubTree(childTree)
+            .Complete();
 
         // 1回目: Running
-        Assert.Equal(NodeStatus.Running, subTreeNode.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Running, mainTree.Tick(0.016f));
         Assert.Equal(2, callCount);
 
         // 2回目: まだRunning（Sequenceの2番目がRunningを返し続ける）
-        Assert.Equal(NodeStatus.Running, subTreeNode.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Running, mainTree.Tick(0.016f));
         Assert.Equal(3, callCount);
     }
 
@@ -72,29 +76,30 @@ public class SubTreeTests
         // Tree 3: 葉ノード
         var tree3 = new FlowTree();
         tree3.Build()
-            .Action((ref FlowContext _) => { executed[2] = true; return NodeStatus.Success; })
+            .Action(() => { executed[2] = true; return NodeStatus.Success; })
             .Complete();
 
         // Tree 2: Tree 3を呼ぶ
         var tree2 = new FlowTree();
         tree2.Build()
             .Sequence()
-                .Action((ref FlowContext _) => { executed[1] = true; return NodeStatus.Success; })
+                .Action(() => { executed[1] = true; return NodeStatus.Success; })
                 .SubTree(tree3)
             .End()
             .Complete();
 
         // Tree 1: Tree 2を呼ぶ
         var tree1 = new FlowTree();
-        tree1.Build()
+        tree1
+            .WithCallStack(new FlowCallStack(32))
+            .Build()
             .Sequence()
-                .Action((ref FlowContext _) => { executed[0] = true; return NodeStatus.Success; })
+                .Action(() => { executed[0] = true; return NodeStatus.Success; })
                 .SubTree(tree2)
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        Assert.Equal(NodeStatus.Success, tree1.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree1.Tick(0.016f));
 
         Assert.True(executed[0]);
         Assert.True(executed[1]);
@@ -106,43 +111,41 @@ public class SubTreeTests
     {
         // 自己再帰的なツリー（終了条件なし）
         var recursiveTree = new FlowTree();
-        recursiveTree.Build()
+        recursiveTree
+            .WithCallStack(new FlowCallStack(5))
+            .WithMaxCallDepth(5)
+            .Build()
             .Sequence()
-                .Action(static (ref FlowContext _) => NodeStatus.Success)
+                .Action(static () => NodeStatus.Success)
                 .SubTree(recursiveTree) // 自己呼び出し
             .End()
             .Complete();
 
-        var ctx = FlowContext.Create(
-            new Blackboard(),
-            new FlowCallStack(5), // 小さなスタック
-            maxCallDepth: 5
-        );
-
         // スタックオーバーフローでFailure
-        Assert.Equal(NodeStatus.Failure, recursiveTree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Failure, recursiveTree.Tick(0.016f));
     }
 
     [Fact]
     public void SubTreeNode_SelfRecursion()
     {
         // 終了条件付き自己再帰
-        var counterKey = new BlackboardKey<int>(1);
+        var state = new CounterState { Counter = 5 };
 
         var countdown = new FlowTree();
-        countdown.Build()
+        countdown
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Selector()
                 // 終了条件: counter <= 0
                 .Sequence()
-                    .Condition((ref FlowContext ctx) => ctx.Blackboard.GetInt(counterKey) <= 0)
+                    .Condition(s => s.Counter <= 0)
                     .Success()
                 .End()
                 // 再帰: counter-- して自己呼び出し
                 .Sequence()
-                    .Action((ref FlowContext ctx) =>
+                    .Action(s =>
                     {
-                        var counter = ctx.Blackboard.GetInt(counterKey);
-                        ctx.Blackboard.SetInt(counterKey, counter - 1);
+                        s.Counter--;
                         return NodeStatus.Success;
                     })
                     .SubTree(countdown)
@@ -150,38 +153,34 @@ public class SubTreeTests
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 5);
-
-        var status = countdown.Tick(ref ctx);
+        var status = countdown.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal(0, ctx.Blackboard.GetInt(counterKey));
+        Assert.Equal(0, state.Counter);
     }
 
     [Fact]
     public void SubTreeNode_MutualRecursion()
     {
         // 相互再帰: ping → pong → ping → ...
-        var counterKey = new BlackboardKey<int>(1);
-        var logKey = new BlackboardKey<string>(2);
+        var state = new PingPongState { Counter = 6, Log = "" };
 
         var ping = new FlowTree("ping");
         var pong = new FlowTree("pong");
 
-        ping.Build()
+        ping
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                    ctx.Blackboard.SetString(logKey, log + "P");
-                    var counter = ctx.Blackboard.GetInt(counterKey);
-                    ctx.Blackboard.SetInt(counterKey, counter - 1);
+                    s.Log += "P";
+                    s.Counter--;
                     return NodeStatus.Success;
                 })
                 .Selector()
                     .Sequence()
-                        .Condition((ref FlowContext ctx) => ctx.Blackboard.GetInt(counterKey) > 0)
+                        .Condition(s => s.Counter > 0)
                         .SubTree(pong)
                     .End()
                     .Success()
@@ -189,19 +188,17 @@ public class SubTreeTests
             .End()
             .Complete();
 
-        pong.Build()
+        pong.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                    ctx.Blackboard.SetString(logKey, log + "O");
-                    var counter = ctx.Blackboard.GetInt(counterKey);
-                    ctx.Blackboard.SetInt(counterKey, counter - 1);
+                    s.Log += "O";
+                    s.Counter--;
                     return NodeStatus.Success;
                 })
                 .Selector()
                     .Sequence()
-                        .Condition((ref FlowContext ctx) => ctx.Blackboard.GetInt(counterKey) > 0)
+                        .Condition(s => s.Counter > 0)
                         .SubTree(ping)
                     .End()
                     .Success()
@@ -209,13 +206,20 @@ public class SubTreeTests
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 6);
-        ctx.Blackboard.SetString(logKey, "");
-
-        var status = ping.Tick(ref ctx);
+        var status = ping.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal("POPOPO", ctx.Blackboard.GetString(logKey));
+        Assert.Equal("POPOPO", state.Log);
+    }
+
+    private class CounterState
+    {
+        public int Counter { get; set; }
+    }
+
+    private class PingPongState
+    {
+        public int Counter { get; set; }
+        public string Log { get; set; } = "";
     }
 }

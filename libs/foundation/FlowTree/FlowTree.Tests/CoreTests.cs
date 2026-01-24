@@ -5,70 +5,6 @@ namespace Tomato.FlowTree.Tests;
 public class CoreTests
 {
     [Fact]
-    public void BlackboardKey_Equality()
-    {
-        var key1 = new BlackboardKey<int>(1);
-        var key2 = new BlackboardKey<int>(1);
-        var key3 = new BlackboardKey<int>(2);
-
-        Assert.Equal(key1, key2);
-        Assert.NotEqual(key1, key3);
-    }
-
-    [Fact]
-    public void Blackboard_IntValues()
-    {
-        var bb = new Blackboard();
-        var key = new BlackboardKey<int>(1);
-
-        Assert.False(bb.TryGetInt(key, out _));
-        Assert.Equal(42, bb.GetInt(key, 42));
-
-        bb.SetInt(key, 100);
-        Assert.True(bb.TryGetInt(key, out var value));
-        Assert.Equal(100, value);
-        Assert.Equal(100, bb.GetInt(key));
-    }
-
-    [Fact]
-    public void Blackboard_FloatValues()
-    {
-        var bb = new Blackboard();
-        var key = new BlackboardKey<float>(1);
-
-        bb.SetFloat(key, 3.14f);
-        Assert.True(bb.TryGetFloat(key, out var value));
-        Assert.Equal(3.14f, value);
-    }
-
-    [Fact]
-    public void Blackboard_BoolValues()
-    {
-        var bb = new Blackboard();
-        var key = new BlackboardKey<bool>(1);
-
-        Assert.False(bb.GetBool(key));
-        bb.SetBool(key, true);
-        Assert.True(bb.GetBool(key));
-    }
-
-    [Fact]
-    public void Blackboard_Clear()
-    {
-        var bb = new Blackboard();
-        var intKey = new BlackboardKey<int>(1);
-        var floatKey = new BlackboardKey<float>(2);
-
-        bb.SetInt(intKey, 100);
-        bb.SetFloat(floatKey, 1.5f);
-
-        bb.Clear();
-
-        Assert.False(bb.TryGetInt(intKey, out _));
-        Assert.False(bb.TryGetFloat(floatKey, out _));
-    }
-
-    [Fact]
     public void FlowCallStack_PushPop()
     {
         var stack = new FlowCallStack(8);
@@ -128,5 +64,44 @@ public class CoreTests
         Assert.True(stack.Contains(tree1));
         Assert.True(stack.Contains(tree2));
         Assert.False(stack.Contains(tree3));
+    }
+
+    [Fact]
+    public void FlowContext_GenericState()
+    {
+        var state = new TestState { Counter = 10 };
+        var tree = new FlowTree();
+        tree.Build(state)
+            .Action(s =>
+            {
+                s.Counter++;
+                return NodeStatus.Success;
+            })
+            .Complete();
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(11, state.Counter);
+    }
+
+    [Fact]
+    public void FlowContext_GenericCondition()
+    {
+        var state = new TestState { IsEnabled = false };
+        var tree = new FlowTree();
+        tree.Build(state)
+            .Condition(s => s.IsEnabled)
+            .Complete();
+
+        Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
+
+        state.IsEnabled = true;
+        tree.Reset();
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+    }
+
+    private class TestState
+    {
+        public int Counter { get; set; }
+        public bool IsEnabled { get; set; }
     }
 }

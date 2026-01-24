@@ -41,7 +41,7 @@ libs/
 | **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
 | **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
-| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 107 |
+| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 128 |
 | **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 82 |
 | **DependencySortSystem** | 汎用トポロジカルソート、循環検出 | 28 |
 
@@ -66,7 +66,7 @@ libs/
 |---------|------|---------|
 | **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 56 |
 
-**合計: 1,603 テスト**
+**合計: 1,624 テスト**
 
 ## 主要な使用例
 
@@ -139,30 +139,42 @@ manager.RestoreSnapshot(snapshot);
 ### FlowTree
 
 ```csharp
+// 状態クラス定義
+public class PatrolState
+{
+    public Vector3 CurrentWaypoint { get; set; }
+    public int WaypointIndex { get; set; }
+}
+
 // ツリー定義（入れ物と中身が分離）
+var state = new PatrolState();
 var tree = new FlowTree("Patrol");
-tree.Build()
+tree.Build(state)
     .Sequence()
-        .Action(static (ref FlowContext ctx) => GetNextWaypoint(ref ctx))
-        .Action(static (ref FlowContext ctx) => MoveToWaypoint(ref ctx))
+        .Action(s => GetNextWaypoint(s))
+        .Action(s => MoveToWaypoint(s))
         .Wait(2.0f)
     .End()
     .Complete();
 
 // 実行
-var context = FlowContext.Create(new Blackboard(64), 0.016f);
-var status = tree.Tick(ref context);
+var status = tree.Tick(0.016f);
 
 // 自己再帰も自然に書ける
+public class CounterState { public int Counter { get; set; } }
+
+var counterState = new CounterState { Counter = 5 };
 var countdown = new FlowTree("Countdown");
-countdown.Build()
+countdown
+    .WithCallStack(new FlowCallStack(32))
+    .Build(counterState)
     .Selector()
         .Sequence()
-            .Condition((ref FlowContext ctx) => ctx.Blackboard.GetInt(counterKey) <= 0)
+            .Condition(s => s.Counter <= 0)
             .Success()
         .End()
         .Sequence()
-            .Action((ref FlowContext ctx) => { /* decrement */ return NodeStatus.Success; })
+            .Action(s => { s.Counter--; return NodeStatus.Success; })
             .SubTree(countdown)  // 自己参照
         .End()
     .End()
@@ -281,10 +293,9 @@ CommandGenerator.Core
 
 FlowTree.Core (独立・外部依存なし)
 ├── FlowTree / IFlowNode / NodeStatus
-├── Composite: Sequence, Selector, Parallel, Race, Join
-├── Decorator: Retry, Timeout, Delay, Guard, Repeat
-├── Leaf: Action, Condition, SubTree, Wait
-├── Blackboard / BlackboardKey<T>
+├── Composite: Sequence, Selector, Parallel, Race, Join, ShuffledSelector, WeightedRandomSelector, RoundRobin
+├── Decorator: Retry, Timeout, Delay, Guard, Repeat, Event
+├── Leaf: Action, Condition, SubTree, DynamicSubTree, Wait, Yield
 └── FlowCallStack / CallFrame
 
 DependencySortSystem.Core (独立・外部依存なし)

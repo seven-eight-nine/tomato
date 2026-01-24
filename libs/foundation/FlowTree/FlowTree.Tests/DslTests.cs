@@ -5,11 +5,6 @@ namespace Tomato.FlowTree.Tests;
 
 public class FlowTreeBuilderTests
 {
-    private static FlowContext CreateContext()
-    {
-        return FlowContext.Create(new Blackboard());
-    }
-
     [Fact]
     public void Builder_SimpleSequence()
     {
@@ -18,13 +13,12 @@ public class FlowTreeBuilderTests
         var tree = new FlowTree();
         tree.Build()
             .Sequence()
-                .Action((ref FlowContext _) => { callCount++; return NodeStatus.Success; })
-                .Action((ref FlowContext _) => { callCount++; return NodeStatus.Success; })
+                .Action(() => { callCount++; return NodeStatus.Success; })
+                .Action(() => { callCount++; return NodeStatus.Success; })
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(2, callCount);
     }
 
@@ -37,15 +31,14 @@ public class FlowTreeBuilderTests
         tree.Build()
             .Sequence()
                 .Selector()
-                    .Action((ref FlowContext _) => { executed[0] = true; return NodeStatus.Failure; })
-                    .Action((ref FlowContext _) => { executed[1] = true; return NodeStatus.Success; })
+                    .Action(() => { executed[0] = true; return NodeStatus.Failure; })
+                    .Action(() => { executed[1] = true; return NodeStatus.Success; })
                 .End()
-                .Action((ref FlowContext _) => { executed[2] = true; return NodeStatus.Success; })
+                .Action(() => { executed[2] = true; return NodeStatus.Success; })
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.True(executed[0]);
         Assert.True(executed[1]);
         Assert.True(executed[2]);
@@ -58,19 +51,17 @@ public class FlowTreeBuilderTests
 
         var tree = new FlowTree();
         tree.Build()
-            .Retry(2, new ActionNode((ref FlowContext _) =>
+            .Retry(2, new ActionNode(() =>
             {
                 callCount++;
                 return callCount < 2 ? NodeStatus.Failure : NodeStatus.Success;
             }))
             .Complete();
 
-        var ctx = CreateContext();
-
         // 1回目: Failure → Running
-        Assert.Equal(NodeStatus.Running, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
         // 2回目: Success
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(2, callCount);
     }
 
@@ -81,23 +72,20 @@ public class FlowTreeBuilderTests
 
         var subTree = new FlowTree("SubTree");
         subTree.Build()
-            .Action((ref FlowContext _) => { executed[1] = true; return NodeStatus.Success; })
+            .Action(() => { executed[1] = true; return NodeStatus.Success; })
             .Complete();
 
         var mainTree = new FlowTree("MainTree");
-        mainTree.Build()
+        mainTree
+            .WithCallStack(new FlowCallStack(16))
+            .Build()
             .Sequence()
-                .Action((ref FlowContext _) => { executed[0] = true; return NodeStatus.Success; })
+                .Action(() => { executed[0] = true; return NodeStatus.Success; })
                 .SubTree(subTree)
             .End()
             .Complete();
 
-        var ctx = FlowContext.Create(
-            new Blackboard(),
-            new FlowCallStack(16)
-        );
-
-        Assert.Equal(NodeStatus.Success, mainTree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
         Assert.True(executed[0]);
         Assert.True(executed[1]);
     }
@@ -110,10 +98,8 @@ public class FlowTreeBuilderTests
             .Wait(0.5f)
             .Complete();
 
-        var ctx = FlowContext.Create(new Blackboard(), 0.3f);
-
-        Assert.Equal(NodeStatus.Running, tree.Tick(ref ctx));
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx)); // 0.6秒経過
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.3f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.3f)); // 0.6秒経過
     }
 
     [Fact]
@@ -121,11 +107,10 @@ public class FlowTreeBuilderTests
     {
         var tree = new FlowTree();
         tree.Build()
-            .Action(static (ref FlowContext _) => NodeStatus.Success)
+            .Action(static () => NodeStatus.Success)
             .Complete();
 
-        var ctx = CreateContext();
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
     }
 
     [Fact]
@@ -134,7 +119,7 @@ public class FlowTreeBuilderTests
         var tree = new FlowTree();
         var builder = tree.Build()
             .Sequence()
-                .Action(static (ref FlowContext _) => NodeStatus.Success);
+                .Action(static () => NodeStatus.Success);
 
         Assert.Throws<System.InvalidOperationException>(() => builder.Complete());
     }
@@ -146,27 +131,46 @@ public class FlowTreeBuilderTests
         var builder = tree.Build();
         Assert.Throws<System.InvalidOperationException>(() => builder.Complete());
     }
+
+    [Fact]
+    public void Builder_GenericState()
+    {
+        var state = new GameState { Score = 100 };
+        var tree = new FlowTree();
+        tree.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    s.Score += 10;
+                    return NodeStatus.Success;
+                })
+                .Condition(s => s.Score > 100)
+            .End()
+            .Complete();
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(110, state.Score);
+    }
+
+    private class GameState
+    {
+        public int Score { get; set; }
+    }
 }
 
 public class FlowShorthandTests
 {
-    private static FlowContext CreateContext()
-    {
-        return FlowContext.Create(new Blackboard());
-    }
-
     [Fact]
     public void Flow_TreeCreation()
     {
         var tree = Tree("TestTree");
         tree.Build()
             .Sequence()
-                .Action(static (ref FlowContext _) => NodeStatus.Success)
+                .Action(static () => NodeStatus.Success)
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        Assert.Equal(NodeStatus.Success, tree.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal("TestTree", tree.Name);
     }
 
@@ -174,11 +178,11 @@ public class FlowShorthandTests
     public void Flow_Sequence()
     {
         var sequence = Sequence(
-            Action(static (ref FlowContext _) => NodeStatus.Success),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+            Action(static () => NodeStatus.Success),
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, sequence.Tick(ref ctx));
     }
 
@@ -186,11 +190,11 @@ public class FlowShorthandTests
     public void Flow_Selector()
     {
         var selector = Selector(
-            Action(static (ref FlowContext _) => NodeStatus.Failure),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+            Action(static () => NodeStatus.Failure),
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, selector.Tick(ref ctx));
     }
 
@@ -198,11 +202,11 @@ public class FlowShorthandTests
     public void Flow_Parallel()
     {
         var parallel = Parallel(
-            Action(static (ref FlowContext _) => NodeStatus.Success),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+            Action(static () => NodeStatus.Success),
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, parallel.Tick(ref ctx));
     }
 
@@ -210,11 +214,11 @@ public class FlowShorthandTests
     public void Flow_Race()
     {
         var race = Race(
-            Action(static (ref FlowContext _) => NodeStatus.Running),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+            Action(static () => NodeStatus.Running),
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, race.Tick(ref ctx));
     }
 
@@ -222,43 +226,44 @@ public class FlowShorthandTests
     public void Flow_Join()
     {
         var join = Join(
-            Action(static (ref FlowContext _) => NodeStatus.Success),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+            Action(static () => NodeStatus.Success),
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, join.Tick(ref ctx));
     }
 
     [Fact]
     public void Flow_Decorators()
     {
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
 
-        var inverted = Inverter(Action(static (ref FlowContext _) => NodeStatus.Success));
+        var inverted = Inverter(Action(static () => NodeStatus.Success));
         Assert.Equal(NodeStatus.Failure, inverted.Tick(ref ctx));
 
-        var succeeded = Succeeder(Action(static (ref FlowContext _) => NodeStatus.Failure));
+        var succeeded = Succeeder(Action(static () => NodeStatus.Failure));
         Assert.Equal(NodeStatus.Success, succeeded.Tick(ref ctx));
 
-        var failed = Failer(Action(static (ref FlowContext _) => NodeStatus.Success));
+        var failed = Failer(Action(static () => NodeStatus.Success));
         Assert.Equal(NodeStatus.Failure, failed.Tick(ref ctx));
     }
 
     [Fact]
-    public void Flow_Guard()
+    public void Flow_Guard_WithState()
     {
-        var key = new BlackboardKey<bool>(1);
+        var state = new TestState { IsEnabled = false };
 
-        var guarded = Guard(
-            (ref FlowContext ctx) => ctx.Blackboard.GetBool(key),
-            Action(static (ref FlowContext _) => NodeStatus.Success)
+        var guarded = new GuardNode<TestState>(
+            s => s.IsEnabled,
+            Action(static () => NodeStatus.Success)
         );
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext { State = state };
         Assert.Equal(NodeStatus.Failure, guarded.Tick(ref ctx));
 
-        ctx.Blackboard.SetBool(key, true);
+        state.IsEnabled = true;
+        guarded.Reset();
         Assert.Equal(NodeStatus.Success, guarded.Tick(ref ctx));
     }
 
@@ -266,13 +271,13 @@ public class FlowShorthandTests
     public void Flow_Retry()
     {
         int count = 0;
-        var retried = Retry(2, Action((ref FlowContext _) =>
+        var retried = Retry(2, Action(() =>
         {
             count++;
             return count < 2 ? NodeStatus.Failure : NodeStatus.Success;
         }));
 
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Running, retried.Tick(ref ctx)); // 失敗→リトライ
         Assert.Equal(NodeStatus.Success, retried.Tick(ref ctx)); // 成功
     }
@@ -280,9 +285,9 @@ public class FlowShorthandTests
     [Fact]
     public void Flow_Timeout()
     {
-        var timeout = Timeout(0.5f, Action(static (ref FlowContext _) => NodeStatus.Running));
+        var timeout = Timeout(0.5f, Action(static () => NodeStatus.Running));
 
-        var ctx = FlowContext.Create(new Blackboard(), 0.6f);
+        var ctx = new FlowContext { DeltaTime = 0.6f };
         Assert.Equal(NodeStatus.Failure, timeout.Tick(ref ctx)); // タイムアウト
     }
 
@@ -290,9 +295,9 @@ public class FlowShorthandTests
     public void Flow_Delay()
     {
         int callCount = 0;
-        var delayed = Delay(0.5f, Action((ref FlowContext _) => { callCount++; return NodeStatus.Success; }));
+        var delayed = Delay(0.5f, Action(() => { callCount++; return NodeStatus.Success; }));
 
-        var ctx = FlowContext.Create(new Blackboard(), 0.3f);
+        var ctx = new FlowContext { DeltaTime = 0.3f };
         Assert.Equal(NodeStatus.Running, delayed.Tick(ref ctx)); // 遅延中
         Assert.Equal(0, callCount);
 
@@ -303,14 +308,14 @@ public class FlowShorthandTests
     [Fact]
     public void Flow_SuccessFailure()
     {
-        var ctx = CreateContext();
+        var ctx = new FlowContext();
 
         Assert.Equal(NodeStatus.Success, Success.Tick(ref ctx));
         Assert.Equal(NodeStatus.Failure, Failure.Tick(ref ctx));
     }
 
     [Fact]
-    public void Flow_ComplexTree()
+    public void Flow_ComplexTree_WithState()
     {
         // 計画書にあるような複雑なツリーの例
         var patrolFlow = new FlowTree("Patrol");
@@ -322,21 +327,46 @@ public class FlowShorthandTests
         attackFlow.Build().Success().Complete();
         fleeFlow.Build().Success().Complete();
 
-        var isLowHealthKey = new BlackboardKey<bool>(1);
-        var hasTargetKey = new BlackboardKey<bool>(2);
+        var state = new AIState();
 
         // AI行動選択ツリー（計画書の例を再現）
         var aiTree = Tree("AI Behavior");
-        aiTree.Build()
+        aiTree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state)
             .Selector()
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetBool(isLowHealthKey),
+                .Guard(s => s.IsLowHealth,
                     new SubTreeNode(fleeFlow))
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetBool(hasTargetKey),
+                .Guard(s => s.HasTarget,
                     new SubTreeNode(attackFlow))
                 .SubTree(patrolFlow)
             .End()
             .Complete();
 
         Assert.Equal("AI Behavior", aiTree.Name);
+
+        // 初期状態: パトロール
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+
+        // ターゲット発見: 攻撃
+        state.HasTarget = true;
+        aiTree.Reset();
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+
+        // 体力低下: 逃走
+        state.IsLowHealth = true;
+        aiTree.Reset();
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+    }
+
+    private class TestState
+    {
+        public bool IsEnabled { get; set; }
+    }
+
+    private class AIState
+    {
+        public bool IsLowHealth { get; set; }
+        public bool HasTarget { get; set; }
     }
 }

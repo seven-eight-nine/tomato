@@ -3,14 +3,21 @@ using System;
 namespace Tomato.FlowTree;
 
 /// <summary>
-/// アクションを実行するデリゲート。
+/// アクションを実行するデリゲート（ステートレス）。
 /// </summary>
-/// <param name="context">実行コンテキスト</param>
 /// <returns>ノードの状態</returns>
-public delegate NodeStatus FlowAction(ref FlowContext context);
+public delegate NodeStatus FlowAction();
 
 /// <summary>
-/// アクションを実行するノード。
+/// アクションを実行するデリゲート（型付き）。
+/// </summary>
+/// <typeparam name="T">状態の型</typeparam>
+/// <param name="state">状態オブジェクト</param>
+/// <returns>ノードの状態</returns>
+public delegate NodeStatus FlowAction<in T>(T state) where T : class;
+
+/// <summary>
+/// アクションを実行するノード（ステートレス）。
 /// </summary>
 public sealed class ActionNode : IFlowNode
 {
@@ -28,12 +35,40 @@ public sealed class ActionNode : IFlowNode
     /// <inheritdoc/>
     public NodeStatus Tick(ref FlowContext context)
     {
-        return _action(ref context);
+        return _action();
     }
 
     /// <inheritdoc/>
     public void Reset()
     {
-        // ActionNodeは状態を持たないためリセット不要
+    }
+}
+
+/// <summary>
+/// アクションを実行するノード（型付き）。
+/// </summary>
+/// <typeparam name="T">状態の型</typeparam>
+public sealed class ActionNode<T> : IFlowNode where T : class
+{
+    private readonly FlowAction<T> _action;
+
+    /// <summary>
+    /// ActionNodeを作成する。
+    /// </summary>
+    /// <param name="action">実行するアクション</param>
+    public ActionNode(FlowAction<T> action)
+    {
+        _action = action ?? throw new ArgumentNullException(nameof(action));
+    }
+
+    /// <inheritdoc/>
+    public NodeStatus Tick(ref FlowContext context)
+    {
+        return _action((T)context.State!);
+    }
+
+    /// <inheritdoc/>
+    public void Reset()
+    {
     }
 }

@@ -11,17 +11,23 @@ namespace: `Tomato.FlowTree`
 1. [クイックスタート](#クイックスタート)
 2. [用語定義](#用語定義)
 3. [設計哲学](#設計哲学)
-4. [ノードリファレンス](#ノードリファレンス)
-5. [サブツリーとコールスタック](#サブツリーとコールスタック)
-6. [再帰の仕組み](#再帰の仕組み)
-7. [Blackboard](#blackboard)
+4. [状態管理](#状態管理)
+5. [ノードリファレンス](#ノードリファレンス)
+6. [サブツリーとコールスタック](#サブツリーとコールスタック)
+7. [再帰の仕組み](#再帰の仕組み)
 8. [DSL詳細](#dsl詳細)
 9. [サンプル集：AI行動選択](#サンプル集ai行動選択)
 10. [サンプル集：非同期処理](#サンプル集非同期処理)
 11. [サンプル集：UIフロー](#サンプル集uiフロー)
-12. [パフォーマンス](#パフォーマンス)
-13. [注意事項](#注意事項)
-14. [ディレクトリ構造](#ディレクトリ構造)
+12. [サンプル集：シーン遷移](#サンプル集シーン遷移)
+13. [サンプル集：メニュー状態遷移](#サンプル集メニュー状態遷移)
+14. [サンプル集：セーブ/ロードフロー](#サンプル集セーブロードフロー)
+15. [サンプル集：マッチメイキング](#サンプル集マッチメイキング)
+16. [サンプル集：クエスト/ミッション進行](#サンプル集クエストミッション進行)
+17. [サンプル集：アニメーションシーケンス](#サンプル集アニメーションシーケンス)
+18. [パフォーマンス](#パフォーマンス)
+19. [注意事項](#注意事項)
+20. [ディレクトリ構造](#ディレクトリ構造)
 
 ---
 
@@ -32,41 +38,47 @@ namespace: `Tomato.FlowTree`
 ```csharp
 using Tomato.FlowTree;
 
+// 状態クラス
+public class PatrolState
+{
+    public int CurrentWaypoint { get; set; }
+    public bool IsMoving { get; set; }
+}
+
 // DSLで定義（推奨）
+var state = new PatrolState();
 var patrolTree = new FlowTree("Patrol");
-patrolTree.Build()
+patrolTree.Build(state)
     .Sequence()
-        .Action(static (ref FlowContext ctx) => GetNextWaypoint(ref ctx))
-        .Action(static (ref FlowContext ctx) => MoveToWaypoint(ref ctx))
+        .Action(s => GetNextWaypoint(s))
+        .Action(s => MoveToWaypoint(s))
         .Wait(2.0f)  // 2秒待機
     .End()
     .Complete();
 ```
 
-### 2. コンテキストを作成
-
-```csharp
-var context = FlowContext.Create(
-    new Blackboard(64),
-    new FlowCallStack(32),
-    0.016f
-);
-```
-
-### 3. 毎フレーム実行
+### 2. 毎フレーム実行
 
 ```csharp
 void Update(float deltaTime)
 {
-    context.DeltaTime = deltaTime;
-
-    var status = patrolTree.Tick(ref context);
+    var status = patrolTree.Tick(deltaTime);
 
     if (status == NodeStatus.Success)
     {
         patrolTree.Reset();  // 完了後にリセットして再開
     }
 }
+```
+
+### 3. サブツリーを使う場合
+
+```csharp
+// コールスタックを設定
+patrolTree.WithCallStack(new FlowCallStack(32));
+
+// 最大呼び出し深度を制限（オプション）
+patrolTree.WithMaxCallDepth(16);
 ```
 
 ---
@@ -80,7 +92,7 @@ void Update(float deltaTime)
 | **FlowTree** | - | ツリー構造で処理フローを定義したもの。入れ物と中身が分離している |
 | **ノード** | Node | ツリーを構成する要素。Tick()で評価される |
 | **Tick** | - | ノードを1回評価すること |
-| **コンテキスト** | Context | 実行に必要な情報をまとめた構造体 |
+| **状態** | State | ユーザー定義の状態オブジェクト |
 
 ### FlowTreeの構造
 
@@ -160,6 +172,83 @@ Root
 - 通常使用（再帰なし）ではGCは発生しない
 - 深い再帰時のみ、List拡張によるGCが発生
 
+### 原則5: シンプルなAPI
+
+ユーザーのラムダ式には状態オブジェクトのみを渡す。フレームワーク内部の詳細（FlowContext等）は公開しない。
+
+```csharp
+// 状態を受け取る
+.Action(s => { s.Counter++; return NodeStatus.Success; })
+
+// 状態を使わない
+.Action(static () => NodeStatus.Success)
+```
+
+---
+
+## 状態管理
+
+### 状態オブジェクトの定義
+
+任意のクラスを状態として使用できる:
+
+```csharp
+public class EnemyState
+{
+    public float Health { get; set; } = 100f;
+    public bool HasTarget { get; set; }
+    public Vector3 TargetPosition { get; set; }
+    public int AttackCount { get; set; }
+}
+```
+
+### 状態の設定
+
+`Build(state)` で状態オブジェクトを渡す:
+
+```csharp
+var state = new EnemyState();
+var tree = new FlowTree();
+
+tree.Build(state)
+    .Sequence()
+        .Condition(s => s.HasTarget)
+        .Action(s =>
+        {
+            s.AttackCount++;
+            return NodeStatus.Success;
+        })
+    .End()
+    .Complete();
+```
+
+### ステートレスなツリー
+
+状態が不要な場合は `Build()` を使用:
+
+```csharp
+var tree = new FlowTree();
+tree.Build()
+    .Sequence()
+        .Action(static () => { DoSomething(); return NodeStatus.Success; })
+        .Wait(1.0f)
+    .End()
+    .Complete();
+```
+
+### 型付きビルダーでのステートレスノード
+
+型付きビルダー内でも状態を使わないノードを追加できる:
+
+```csharp
+tree.Build(state)
+    .Sequence()
+        .Action(s => ProcessState(s))           // 状態を使う
+        .Action(static () => NodeStatus.Success)  // 状態を使わない
+    .End()
+    .Complete();
+```
+
 ---
 
 ## ノードリファレンス
@@ -172,9 +261,9 @@ Root
 
 ```csharp
 new SequenceNode(
-    new ActionNode((ref FlowContext ctx) => Step1(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Step2(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Step3(ref ctx))
+    new ActionNode<MyState>(s => Step1(s)),
+    new ActionNode<MyState>(s => Step2(s)),
+    new ActionNode<MyState>(s => Step3(s))
 )
 ```
 
@@ -190,9 +279,9 @@ new SequenceNode(
 
 ```csharp
 new SelectorNode(
-    new ActionNode((ref FlowContext ctx) => TryOption1(ref ctx)),  // 失敗したら次へ
-    new ActionNode((ref FlowContext ctx) => TryOption2(ref ctx)),  // 失敗したら次へ
-    new ActionNode((ref FlowContext ctx) => Fallback(ref ctx))     // 最後の手段
+    new ActionNode<MyState>(s => TryOption1(s)),  // 失敗したら次へ
+    new ActionNode<MyState>(s => TryOption2(s)),  // 失敗したら次へ
+    new ActionNode<MyState>(s => Fallback(s))     // 最後の手段
 )
 ```
 
@@ -209,14 +298,14 @@ new SelectorNode(
 ```csharp
 // RequireAll: 全成功でSuccess、1つでも失敗でFailure
 new ParallelNode(ParallelPolicy.RequireAll,
-    new ActionNode((ref FlowContext ctx) => Task1(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Task2(ref ctx))
+    new ActionNode<MyState>(s => Task1(s)),
+    new ActionNode<MyState>(s => Task2(s))
 )
 
 // RequireOne: 1つ成功でSuccess、全失敗でFailure
 new ParallelNode(ParallelPolicy.RequireOne,
-    new ActionNode((ref FlowContext ctx) => Task1(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Task2(ref ctx))
+    new ActionNode<MyState>(s => Task1(s)),
+    new ActionNode<MyState>(s => Task2(s))
 )
 ```
 
@@ -242,23 +331,88 @@ new RaceNode(
 ```csharp
 // RequireAll: 全成功でSuccess（デフォルト）
 new JoinNode(
-    new ActionNode((ref FlowContext ctx) => LoadTextures(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => LoadSounds(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => LoadData(ref ctx))
+    new ActionNode<MyState>(s => LoadTextures(s)),
+    new ActionNode<MyState>(s => LoadSounds(s)),
+    new ActionNode<MyState>(s => LoadData(s))
 )
 ```
 
 #### RandomSelectorNode
 
-子ノードをランダムな順序で試行する。
+子ノードをランダムに1つ選択して実行する。
 
 ```csharp
 new RandomSelectorNode(
-    new ActionNode((ref FlowContext ctx) => Attack1(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Attack2(ref ctx)),
-    new ActionNode((ref FlowContext ctx) => Attack3(ref ctx))
+    new ActionNode<MyState>(s => Attack1(s)),
+    new ActionNode<MyState>(s => Attack2(s)),
+    new ActionNode<MyState>(s => Attack3(s))
 )
 ```
+
+#### ShuffledSelectorNode
+
+全選択肢を一巡するまで同じものを選ばない（シャッフル再生）。全ての子を実行したら再シャッフル。
+
+```csharp
+// ダイアログをランダム順で再生（重複なし）
+new ShuffledSelectorNode(
+    new ActionNode<MyState>(s => PlayDialogue1(s)),
+    new ActionNode<MyState>(s => PlayDialogue2(s)),
+    new ActionNode<MyState>(s => PlayDialogue3(s))
+)
+
+// シード指定版
+new ShuffledSelectorNode(42, /* children */)
+```
+
+| 動作 | 説明 |
+|-----|------|
+| 初回 | インデックス配列をシャッフル |
+| 実行 | シャッフル順に子を実行 |
+| 一巡後 | 再シャッフルして最初から |
+
+#### WeightedRandomSelectorNode
+
+各子ノードの重みに基づいて確率的に選択する。重みは相対値（合計で正規化）。
+
+```csharp
+// 重みとノードをタプルで指定
+new WeightedRandomSelectorNode(
+    (3.0f, new ActionNode<MyState>(s => CommonAction(s))),   // 75%
+    (1.0f, new ActionNode<MyState>(s => RareAction(s)))      // 25%
+)
+
+// シード指定版
+new WeightedRandomSelectorNode(42, /* weighted children */)
+```
+
+| 重み | 確率（4.0合計の場合） |
+|------|---------------------|
+| 3.0 | 75% |
+| 1.0 | 25% |
+| 0.0 | 選択されない |
+
+#### RoundRobinSelectorNode
+
+0→1→2→0→... と順番に選択する。ツリー全体で選択位置を保持。
+
+```csharp
+// 巡回パトロール
+new RoundRobinSelectorNode(
+    new ActionNode<MyState>(s => PatrolPointA(s)),
+    new ActionNode<MyState>(s => PatrolPointB(s)),
+    new ActionNode<MyState>(s => PatrolPointC(s))
+)
+```
+
+| 呼び出し | 実行される子 |
+|---------|------------|
+| 1回目 | 子0 |
+| 2回目 | 子1 |
+| 3回目 | 子2 |
+| 4回目 | 子0（ループ） |
+
+**注意**: Reset()を呼んでも選択位置はリセットされない（意図的な設計）。
 
 ---
 
@@ -271,7 +425,7 @@ new RandomSelectorNode(
 ```csharp
 // Success → Failure, Failure → Success
 new InverterNode(
-    new ConditionNode((ref FlowContext ctx) => IsEnemyVisible(ref ctx))
+    new ConditionNode<MyState>(s => s.IsEnemyVisible)
 )
 ```
 
@@ -282,12 +436,12 @@ new InverterNode(
 ```csharp
 // 子が何を返してもSuccess
 new SucceederNode(
-    new ActionNode((ref FlowContext ctx) => TryOptionalAction(ref ctx))
+    new ActionNode<MyState>(s => TryOptionalAction(s))
 )
 
 // 子が何を返してもFailure
 new FailerNode(
-    new ActionNode((ref FlowContext ctx) => DoSomething(ref ctx))
+    new ActionNode<MyState>(s => DoSomething(s))
 )
 ```
 
@@ -298,7 +452,7 @@ new FailerNode(
 ```csharp
 // 3回繰り返す
 new RepeatNode(3,
-    new ActionNode((ref FlowContext ctx) => DoSomething(ref ctx))
+    new ActionNode<MyState>(s => DoSomething(s))
 )
 ```
 
@@ -309,12 +463,12 @@ new RepeatNode(3,
 ```csharp
 // 失敗するまで繰り返す
 new RepeatUntilFailNode(
-    new ActionNode((ref FlowContext ctx) => TryAction(ref ctx))
+    new ActionNode<MyState>(s => TryAction(s))
 )
 
 // 成功するまで繰り返す
 new RepeatUntilSuccessNode(
-    new ActionNode((ref FlowContext ctx) => TryAction(ref ctx))
+    new ActionNode<MyState>(s => TryAction(s))
 )
 ```
 
@@ -325,7 +479,7 @@ new RepeatUntilSuccessNode(
 ```csharp
 // 最大3回リトライ
 new RetryNode(3,
-    new ActionNode((ref FlowContext ctx) => TryConnect(ref ctx))
+    new ActionNode<MyState>(s => TryConnect(s))
 )
 ```
 
@@ -336,7 +490,7 @@ new RetryNode(3,
 ```csharp
 // 5秒でタイムアウト
 new TimeoutNode(5.0f,
-    new ActionNode((ref FlowContext ctx) => LongRunningTask(ref ctx))
+    new ActionNode<MyState>(s => LongRunningTask(s))
 )
 ```
 
@@ -347,7 +501,7 @@ new TimeoutNode(5.0f,
 ```csharp
 // 1秒待ってから実行
 new DelayNode(1.0f,
-    new ActionNode((ref FlowContext ctx) => DoAfterDelay(ref ctx))
+    new ActionNode<MyState>(s => DoAfterDelay(s))
 )
 ```
 
@@ -357,10 +511,56 @@ new DelayNode(1.0f,
 
 ```csharp
 // 条件を満たさなければ即座にFailure
-new GuardNode(
-    (ref FlowContext ctx) => HasTarget(ref ctx),
+new GuardNode<MyState>(
+    s => s.HasTarget,
     new SubTreeNode(attackTree)
 )
+```
+
+#### EventNode
+
+ノードの開始/終了時にイベントを発火する。
+
+```csharp
+// ステートレス版
+new EventNode(
+    new ActionNode(static () => DoSomething()),
+    onEnter: () => { Console.WriteLine("処理開始"); },
+    onExit: result => { Console.WriteLine($"処理終了: {result}"); }
+)
+
+// 状態付き版
+new EventNode<MyState>(
+    new ActionNode(static () => DoSomething()),
+    onEnter: s => { s.StartTime = DateTime.Now; },
+    onExit: (s, result) => { s.EndTime = DateTime.Now; }
+)
+
+// DSLで使用（Event()の次のノードに自動適用）
+tree.Build(state)
+    .Event(
+        onEnter: s => { s.IsProcessing = true; },
+        onExit: (s, result) => { s.IsProcessing = false; })
+    .Sequence()
+        .Action(s => DoSomething(s))
+    .End()
+    .Complete();
+```
+
+| イベント | 発火タイミング |
+|---------|--------------|
+| onEnter | 初回Tick時のみ |
+| onExit | Success/Failureになった時のみ（Running中は発火しない） |
+
+**デリゲート型**:
+```csharp
+// ステートレス
+public delegate void FlowEventHandler();
+public delegate void FlowExitEventHandler(NodeStatus result);
+
+// 状態付き
+public delegate void FlowEventHandler<in T>(T state) where T : class;
+public delegate void FlowExitEventHandler<in T>(T state, NodeStatus result) where T : class;
 ```
 
 ---
@@ -372,14 +572,18 @@ new GuardNode(
 アクションを実行する。
 
 ```csharp
-new ActionNode(static (ref FlowContext ctx) =>
+// ステートレス
+new ActionNode(static () =>
 {
-    // 処理を実行
-    var target = ctx.Blackboard.GetObject<Entity>(targetKey);
-    if (target == null) return NodeStatus.Failure;
+    DoSomething();
+    return NodeStatus.Success;
+})
 
-    MoveToward(target);
-    return IsAtTarget(target) ? NodeStatus.Success : NodeStatus.Running;
+// 状態付き
+new ActionNode<MyState>(s =>
+{
+    s.Counter++;
+    return IsComplete(s) ? NodeStatus.Success : NodeStatus.Running;
 })
 ```
 
@@ -388,10 +592,11 @@ new ActionNode(static (ref FlowContext ctx) =>
 条件を評価する。trueならSuccess、falseならFailure。
 
 ```csharp
-new ConditionNode(static (ref FlowContext ctx) =>
-{
-    return ctx.Blackboard.GetBool(hasTargetKey);
-})
+// ステートレス
+new ConditionNode(static () => SomeGlobalCondition())
+
+// 状態付き
+new ConditionNode<MyState>(s => s.HasTarget)
 ```
 
 #### SubTreeNode
@@ -404,6 +609,36 @@ var attackTree = new FlowTree("Attack");
 // ... build attackTree ...
 
 new SubTreeNode(attackTree)
+```
+
+#### DynamicSubTreeNode
+
+ラムダ式でサブツリーを動的に渡す。ノードに入るたびにラムダを評価し、Running中は同じツリーを継続。
+
+```csharp
+// ステートレス
+new DynamicSubTreeNode(() =>
+{
+    return GetCurrentMood() == Mood.Happy ? happyTree : sadTree;
+})
+
+// 状態付き
+new DynamicSubTreeNode<MyState>(s =>
+{
+    return s.Difficulty > 5 ? hardTree : easyTree;
+})
+```
+
+| 状態 | 動作 |
+|-----|------|
+| 初回/完了後 | プロバイダを呼び出して新しいツリーを取得 |
+| Running中 | 同じツリーを継続使用 |
+| null返却 | Failureを返す |
+
+**デリゲート型**:
+```csharp
+public delegate FlowTree? FlowTreeProvider();
+public delegate FlowTree? FlowTreeProvider<in T>(T state) where T : class;
 ```
 
 #### WaitNode
@@ -443,18 +678,20 @@ FlowTree参照を直接指定してサブツリーを呼び出す。
 var patrolTree = new FlowTree("Patrol");
 var attackTree = new FlowTree("Attack");
 
-patrolTree.Build()
+patrolTree.Build(state)
     // ... patrol logic ...
     .Complete();
 
-attackTree.Build()
+attackTree.Build(state)
     // ... attack logic ...
     .Complete();
 
 var aiTree = new FlowTree("AI");
-aiTree.Build()
+aiTree
+    .WithCallStack(new FlowCallStack(32))
+    .Build(state)
     .Selector()
-        .Guard((ref FlowContext ctx) => HasTarget(ref ctx),
+        .Guard(s => s.HasTarget,
             new SubTreeNode(attackTree))  // attackTreeを呼び出し
         .SubTree(patrolTree)              // patrolTreeを呼び出し
     .End()
@@ -466,33 +703,22 @@ aiTree.Build()
 SubTreeNodeを通じてサブツリーを呼び出すと、コールスタックに記録される。
 
 ```csharp
-// コンテキストにコールスタックを設定
+// コールスタックを設定
 var callStack = new FlowCallStack(32);  // 最大深度32
-var context = FlowContext.Create(
-    new Blackboard(64),
-    callStack,
-    0.016f
-);
+tree.WithCallStack(callStack);
 
-// 実行中のコールスタックを表示
-for (int i = 0; i < callStack.Count; i++)
-{
-    var frame = callStack[i];
-    Console.WriteLine($"[{i}] Tree: {frame.Tree?.Name ?? "(anonymous)"}");
-}
+// 実行
+tree.Tick(0.016f);
 ```
 
 ### スタックオーバーフロー保護
 
-`maxCallDepth`を超えるとSubTreeNodeはFailureを返す。
+`WithMaxCallDepth()`で最大深度を制限できる。超えるとSubTreeNodeはFailureを返す。
 
 ```csharp
-var context = FlowContext.Create(
-    new Blackboard(),
-    new FlowCallStack(8),
-    deltaTime: 0f,
-    maxCallDepth: 8  // 最大8段まで
-);
+tree
+    .WithCallStack(new FlowCallStack(32))
+    .WithMaxCallDepth(8);  // 最大8段まで
 ```
 
 ---
@@ -504,35 +730,44 @@ var context = FlowContext.Create(
 FlowTree参照を直接使うことで、自然に自己再帰が書ける。
 
 ```csharp
-var counterKey = new BlackboardKey<int>(1);
+public class CounterState
+{
+    public int Counter { get; set; }
+    public string Log { get; set; } = "";
+}
+
+var state = new CounterState { Counter = 3 };
 
 // カウントダウン再帰
 var countdownTree = new FlowTree("Countdown");
-countdownTree.Build()
+countdownTree
+    .WithCallStack(new FlowCallStack(32))
+    .Build(state)
     .Selector()
         // 終了条件: counter <= 0
         .Sequence()
-            .Condition((ref FlowContext ctx) =>
-                ctx.Blackboard.GetInt(counterKey) <= 0)
-            .Action((ref FlowContext ctx) =>
+            .Condition(s => s.Counter <= 0)
+            .Action(s =>
             {
-                Console.WriteLine("Done!");
+                s.Log += "Done!";
                 return NodeStatus.Success;
             })
         .End()
         // 再帰: counter-- して自己呼び出し
         .Sequence()
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
-                var counter = ctx.Blackboard.GetInt(counterKey);
-                Console.WriteLine(counter);
-                ctx.Blackboard.SetInt(counterKey, counter - 1);
+                s.Log += s.Counter.ToString();
+                s.Counter--;
                 return NodeStatus.Success;
             })
             .SubTree(countdownTree)  // 自己呼び出し
         .End()
     .End()
     .Complete();
+
+countdownTree.Tick(0.016f);
+// state.Log == "321Done!"
 ```
 
 ### 相互再帰
@@ -540,27 +775,31 @@ countdownTree.Build()
 複数のツリーが互いを参照することも可能。
 
 ```csharp
-var counterKey = new BlackboardKey<int>(1);
-var logKey = new BlackboardKey<string>(2);
+public class PingPongState
+{
+    public int Counter { get; set; }
+    public string Log { get; set; } = "";
+}
+
+var state = new PingPongState { Counter = 6 };
 
 var treeA = new FlowTree("A");
 var treeB = new FlowTree("B");
 
 // TreeA: "A"を記録してカウンタデクリメント、counter > 0ならTreeBを呼ぶ
-treeA.Build()
+treeA
+    .WithCallStack(new FlowCallStack(32))
+    .Build(state)
     .Sequence()
-        .Action((ref FlowContext ctx) =>
+        .Action(s =>
         {
-            var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-            ctx.Blackboard.SetString(logKey, log + "A");
-            var counter = ctx.Blackboard.GetInt(counterKey);
-            ctx.Blackboard.SetInt(counterKey, counter - 1);
+            s.Log += "A";
+            s.Counter--;
             return NodeStatus.Success;
         })
         .Selector()
             .Sequence()
-                .Condition((ref FlowContext ctx) =>
-                    ctx.Blackboard.GetInt(counterKey) > 0)
+                .Condition(s => s.Counter > 0)
                 .SubTree(treeB)  // TreeBを呼び出し
             .End()
             .Success()
@@ -569,26 +808,26 @@ treeA.Build()
     .Complete();
 
 // TreeB: "B"を記録してカウンタデクリメント、counter > 0ならTreeAを呼ぶ
-treeB.Build()
+treeB.Build(state)
     .Sequence()
-        .Action((ref FlowContext ctx) =>
+        .Action(s =>
         {
-            var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-            ctx.Blackboard.SetString(logKey, log + "B");
-            var counter = ctx.Blackboard.GetInt(counterKey);
-            ctx.Blackboard.SetInt(counterKey, counter - 1);
+            s.Log += "B";
+            s.Counter--;
             return NodeStatus.Success;
         })
         .Selector()
             .Sequence()
-                .Condition((ref FlowContext ctx) =>
-                    ctx.Blackboard.GetInt(counterKey) > 0)
+                .Condition(s => s.Counter > 0)
                 .SubTree(treeA)  // TreeAを呼び出し
             .End()
             .Success()
         .End()
     .End()
     .Complete();
+
+treeA.Tick(0.016f);
+// state.Log == "ABABAB"
 ```
 
 ### 深度ごとの状態管理
@@ -598,74 +837,9 @@ treeB.Build()
 
 ```
 呼び出しスタック:
-[depth 0] countdownTree (counter=3)
-[depth 1] countdownTree (counter=2)  ← 状態が独立
-[depth 2] countdownTree (counter=1)  ← 状態が独立
-```
-
----
-
-## Blackboard
-
-### 型安全なキー
-
-```csharp
-// キーは静的に定義（ゼロGC）
-public static class GameKeys
-{
-    public static readonly BlackboardKey<int> Score = new(1);
-    public static readonly BlackboardKey<float> Health = new(2);
-    public static readonly BlackboardKey<bool> IsAlive = new(3);
-    public static readonly BlackboardKey<string> PlayerName = new(4);
-}
-```
-
-### 基本操作
-
-```csharp
-var bb = new Blackboard(64);  // 初期容量
-
-// 設定
-bb.SetInt(GameKeys.Score, 100);
-bb.SetFloat(GameKeys.Health, 75.5f);
-bb.SetBool(GameKeys.IsAlive, true);
-bb.SetString(GameKeys.PlayerName, "Player1");
-
-// 取得（デフォルト値付き）
-int score = bb.GetInt(GameKeys.Score, 0);
-float health = bb.GetFloat(GameKeys.Health, 100f);
-bool alive = bb.GetBool(GameKeys.IsAlive);
-string name = bb.GetString(GameKeys.PlayerName, "Unknown");
-
-// 存在確認
-if (bb.TryGetInt(GameKeys.Score, out var s))
-{
-    Console.WriteLine($"Score: {s}");
-}
-```
-
-### ScopedBlackboard
-
-サブツリー内でのみ有効なスコープ付きBlackboard。
-
-```csharp
-var parent = new Blackboard(64);
-parent.SetInt(scoreKey, 100);
-
-using (var scoped = new ScopedBlackboard(parent))
-{
-    // 親の値を参照可能
-    int score = scoped.GetInt(scoreKey);  // 100
-
-    // ローカルで上書き（親には影響しない）
-    scoped.SetInt(scoreKey, 200);
-
-    // スコープ内では200
-    Console.WriteLine(scoped.GetInt(scoreKey));  // 200
-}
-
-// スコープ外では元の値
-Console.WriteLine(parent.GetInt(scoreKey));  // 100
+[depth 0] countdownTree (Sequenceの進行状態: 子1実行中)
+[depth 1] countdownTree (Sequenceの進行状態: 子0実行中)  ← 状態が独立
+[depth 2] countdownTree (Sequenceの進行状態: 子1実行中)  ← 状態が独立
 ```
 
 ---
@@ -676,12 +850,12 @@ Console.WriteLine(parent.GetInt(scoreKey));  // 100
 
 ```csharp
 var tree = new FlowTree("MyTree");
-tree.Build()
+tree.Build(state)
     .Sequence()
-        .Action((ref FlowContext ctx) => DoAction(ref ctx))
+        .Action(s => DoAction(s))
         .Selector()
-            .Condition((ref FlowContext ctx) => SomeCondition(ref ctx))
-            .Action((ref FlowContext ctx) => Alternative(ref ctx))
+            .Condition(s => SomeCondition(s))
+            .Action(s => Alternative(s))
         .End()
     .End()
     .Complete();
@@ -702,13 +876,13 @@ tree.Build()
 
 // ノードを直接作成
 var seq = Sequence(
-    Action((ref FlowContext ctx) => Step1(ref ctx)),
-    Action((ref FlowContext ctx) => Step2(ref ctx))
+    Action(static () => Step1()),
+    Action(static () => Step2())
 );
 
 var sel = Selector(
-    Condition((ref FlowContext ctx) => Check1(ref ctx)),
-    Action((ref FlowContext ctx) => Fallback(ref ctx))
+    Condition(static () => Check1()),
+    Action(static () => Fallback())
 );
 ```
 
@@ -716,17 +890,70 @@ var sel = Selector(
 
 ```csharp
 var tree = new FlowTree();
-tree.Build()
+tree.Build(state)
     .Retry(3,
         new TimeoutNode(5.0f,
             new SequenceNode(
-                new ActionNode((ref FlowContext ctx) => TryConnect(ref ctx)),
-                new ActionNode((ref FlowContext ctx) => FetchData(ref ctx))
+                new ActionNode<MyState>(s => TryConnect(s)),
+                new ActionNode<MyState>(s => FetchData(s))
             )
         )
     )
     .Complete();
 ```
+
+### DSLメソッド一覧
+
+#### Composite
+
+| メソッド | 説明 |
+|---------|------|
+| `Sequence()` | 順次実行を開始 |
+| `Selector()` | フォールバック選択を開始 |
+| `Parallel(policy)` | 並列実行を開始 |
+| `Race()` | 最初の完了採用を開始 |
+| `Join(policy)` | 全完了待機を開始 |
+| `RandomSelector()` | ランダム選択を開始 |
+| `ShuffledSelector()` | シャッフル選択を開始 |
+| `WeightedRandomSelector()` | 重み付きランダム選択を開始 |
+| `RoundRobin()` | 順番選択を開始 |
+| `End()` | Compositeノードを終了 |
+
+**WeightedRandomSelector専用**:
+```csharp
+.WeightedRandomSelector()
+    .Weighted(3.0f, node1)  // 重み3
+    .Weighted(1.0f, node2)  // 重み1
+.End()
+```
+
+#### Decorator
+
+| メソッド | 説明 |
+|---------|------|
+| `Inverter(child)` | 結果を反転 |
+| `Succeeder(child)` | 常にSuccess |
+| `Failer(child)` | 常にFailure |
+| `Repeat(count, child)` | 指定回数繰り返し |
+| `Retry(maxRetries, child)` | 失敗時にリトライ |
+| `Timeout(seconds, child)` | タイムアウト制限 |
+| `Delay(seconds, child)` | 遅延実行 |
+| `Guard(condition, child)` | 条件付き実行 |
+| `Event(onEnter, onExit)` | 次のノードにイベント発火を適用 |
+
+#### Leaf
+
+| メソッド | 説明 |
+|---------|------|
+| `Action(action)` | アクションを実行 |
+| `Condition(condition)` | 条件を評価 |
+| `SubTree(tree)` | サブツリーを呼び出し |
+| `DynamicSubTree(provider)` | 動的にサブツリーを選択 |
+| `Wait(seconds)` | 指定時間待機 |
+| `Yield()` | 1Tick待機 |
+| `Success()` | 即座にSuccess |
+| `Failure()` | 即座にFailure |
+| `Node(node)` | 任意のノードを追加 |
 
 ---
 
@@ -735,35 +962,39 @@ tree.Build()
 ### 敵AI
 
 ```csharp
+public class EnemyState
+{
+    public bool IsLowHealth { get; set; }
+    public bool HasTarget { get; set; }
+    public bool IsTargetInRange { get; set; }
+}
+
 public static class EnemyAI
 {
-    // キー定義
-    public static readonly BlackboardKey<bool> IsLowHealth = new(1);
-    public static readonly BlackboardKey<bool> HasTarget = new(2);
-    public static readonly BlackboardKey<bool> IsTargetInRange = new(3);
-
     // サブツリー
     private static readonly FlowTree AttackTree = new FlowTree("Attack");
     private static readonly FlowTree ChaseTree = new FlowTree("Chase");
     private static readonly FlowTree PatrolTree = new FlowTree("Patrol");
     private static readonly FlowTree FleeTree = new FlowTree("Flee");
 
-    public static FlowTree CreateMainTree()
+    public static FlowTree CreateMainTree(EnemyState state)
     {
-        BuildSubTrees();
+        BuildSubTrees(state);
 
         var tree = new FlowTree("EnemyAI");
-        tree.Build()
+        tree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state)
             .Selector()
                 // 体力が低ければ逃げる
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetBool(IsLowHealth),
+                .Guard(s => s.IsLowHealth,
                     new SubTreeNode(FleeTree))
                 // ターゲットがいる
                 .Sequence()
-                    .Condition((ref FlowContext ctx) => ctx.Blackboard.GetBool(HasTarget))
+                    .Condition(s => s.HasTarget)
                     .Selector()
                         // 射程内なら攻撃
-                        .Guard((ref FlowContext ctx) => ctx.Blackboard.GetBool(IsTargetInRange),
+                        .Guard(s => s.IsTargetInRange,
                             new SubTreeNode(AttackTree))
                         // 射程外なら追跡
                         .SubTree(ChaseTree)
@@ -777,19 +1008,19 @@ public static class EnemyAI
         return tree;
     }
 
-    private static void BuildSubTrees()
+    private static void BuildSubTrees(EnemyState state)
     {
-        AttackTree.Build()
+        AttackTree.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) => { /* aim */ return NodeStatus.Success; })
-                .Action((ref FlowContext ctx) => { /* fire */ return NodeStatus.Success; })
+                .Action(s => { /* aim */ return NodeStatus.Success; })
+                .Action(s => { /* fire */ return NodeStatus.Success; })
             .End()
             .Complete();
 
-        PatrolTree.Build()
+        PatrolTree.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) => { /* get waypoint */ return NodeStatus.Success; })
-                .Action((ref FlowContext ctx) => { /* move to */ return NodeStatus.Running; })
+                .Action(s => { /* get waypoint */ return NodeStatus.Success; })
+                .Action(s => { /* move to */ return NodeStatus.Running; })
                 .Wait(2.0f)
             .End()
             .Complete();
@@ -802,26 +1033,31 @@ public static class EnemyAI
 ### ボスAI（フェーズ切り替え）
 
 ```csharp
+public class BossState
+{
+    public int Phase { get; set; } = 1;
+    public float Health { get; set; } = 100f;
+}
+
 public static class BossAI
 {
-    public static readonly BlackboardKey<int> Phase = new(1);
-    public static readonly BlackboardKey<float> Health = new(2);
-
     private static readonly FlowTree Phase1Tree = new FlowTree("Phase1");
     private static readonly FlowTree Phase2Tree = new FlowTree("Phase2");
     private static readonly FlowTree Phase3Tree = new FlowTree("Phase3");
 
-    public static FlowTree CreateMainTree()
+    public static FlowTree CreateMainTree(BossState state)
     {
-        BuildSubTrees();
+        BuildSubTrees(state);
 
         var tree = new FlowTree("BossAI");
-        tree.Build()
+        tree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state)
             .Selector()
                 // フェーズごとに分岐
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetInt(Phase) == 1,
+                .Guard(s => s.Phase == 1,
                     new SubTreeNode(Phase1Tree))
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetInt(Phase) == 2,
+                .Guard(s => s.Phase == 2,
                     new SubTreeNode(Phase2Tree))
                 .SubTree(Phase3Tree)
             .End()
@@ -830,16 +1066,16 @@ public static class BossAI
         return tree;
     }
 
-    private static void BuildSubTrees()
+    private static void BuildSubTrees(BossState state)
     {
-        Phase1Tree.Build()
+        Phase1Tree.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) => { /* phase 1 attack */ return NodeStatus.Success; })
-                .Action((ref FlowContext ctx) =>
+                .Action(s => { /* phase 1 attack */ return NodeStatus.Success; })
+                .Action(s =>
                 {
                     // HPが70%以下でフェーズ2へ
-                    if (ctx.Blackboard.GetFloat(Health) <= 70f)
-                        ctx.Blackboard.SetInt(Phase, 2);
+                    if (s.Health <= 70f)
+                        s.Phase = 2;
                     return NodeStatus.Success;
                 })
             .End()
@@ -857,41 +1093,50 @@ public static class BossAI
 ### ゲームローディング
 
 ```csharp
-public static FlowTree CreateLoadingFlow()
+public class LoadingState
+{
+    public bool LevelLoaded { get; set; }
+    public bool AssetsLoaded { get; set; }
+    public bool SystemsInitialized { get; set; }
+}
+
+public static FlowTree CreateLoadingFlow(LoadingState state)
 {
     var loadLevel = new FlowTree("LoadLevel");
     var loadAssets = new FlowTree("LoadAssets");
     var initializeSystems = new FlowTree("InitializeSystems");
 
     // 各サブツリーを構築
-    loadLevel.Build()
-        .Action((ref FlowContext ctx) =>
+    loadLevel.Build(state)
+        .Action(s =>
         {
-            // レベルローディングのシミュレーション
-            return IsLevelLoaded() ? NodeStatus.Success : NodeStatus.Running;
+            return s.LevelLoaded ? NodeStatus.Success : NodeStatus.Running;
         })
         .Complete();
 
-    loadAssets.Build()
-        .Action((ref FlowContext ctx) =>
+    loadAssets.Build(state)
+        .Action(s =>
         {
-            return AreAssetsLoaded() ? NodeStatus.Success : NodeStatus.Running;
+            return s.AssetsLoaded ? NodeStatus.Success : NodeStatus.Running;
         })
         .Complete();
 
-    initializeSystems.Build()
-        .Action((ref FlowContext ctx) =>
+    initializeSystems.Build(state)
+        .Action(s =>
         {
             InitializeGameSystems();
+            s.SystemsInitialized = true;
             return NodeStatus.Success;
         })
         .Complete();
 
     // メインローディングフロー
     var tree = new FlowTree("GameLoading");
-    tree.Build()
+    tree
+        .WithCallStack(new FlowCallStack(16))
+        .Build(state)
         .Sequence()
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
                 ShowLoadingScreen();
                 return NodeStatus.Success;
@@ -901,7 +1146,7 @@ public static FlowTree CreateLoadingFlow()
                 .SubTree(loadAssets)
                 .SubTree(initializeSystems)
             .End()
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
                 HideLoadingScreen();
                 return NodeStatus.Success;
@@ -916,27 +1161,35 @@ public static FlowTree CreateLoadingFlow()
 ### ネットワークリクエスト with リトライ
 
 ```csharp
-public static FlowTree CreateNetworkRequestFlow()
+public class NetworkState
+{
+    public bool RequestSent { get; set; }
+    public bool ResponseReceived { get; set; }
+    public string? Response { get; set; }
+}
+
+public static FlowTree CreateNetworkRequestFlow(NetworkState state)
 {
     var tree = new FlowTree("NetworkRequest");
-    tree.Build()
+    tree.Build(state)
         .Node(new RetryNode(3,  // 最大3回リトライ
             new TimeoutNode(10.0f,  // 10秒でタイムアウト
                 new SequenceNode(
-                    new ActionNode((ref FlowContext ctx) =>
+                    new ActionNode<NetworkState>(s =>
                     {
                         SendRequest();
+                        s.RequestSent = true;
                         return NodeStatus.Success;
                     }),
-                    new ActionNode((ref FlowContext ctx) =>
+                    new ActionNode<NetworkState>(s =>
                     {
-                        return IsResponseReceived()
+                        return s.ResponseReceived
                             ? NodeStatus.Success
                             : NodeStatus.Running;
                     }),
-                    new ActionNode((ref FlowContext ctx) =>
+                    new ActionNode<NetworkState>(s =>
                     {
-                        ParseResponse();
+                        ParseResponse(s);
                         return NodeStatus.Success;
                     })
                 )
@@ -980,23 +1233,27 @@ public static FlowTree CreateMultiServerConnectionFlow()
 ### ダイアログフロー
 
 ```csharp
-public static readonly BlackboardKey<bool> IsConfirmed = new(1);
+public class DialogState
+{
+    public bool IsConfirmed { get; set; }
+    public bool HasUserInput { get; set; }
+}
 
-public static FlowTree CreateDialogFlow()
+public static FlowTree CreateDialogFlow(DialogState state)
 {
     var confirmBranch = new FlowTree("ConfirmBranch");
     var cancelBranch = new FlowTree("CancelBranch");
 
-    confirmBranch.Build()
-        .Action((ref FlowContext ctx) =>
+    confirmBranch.Build(state)
+        .Action(s =>
         {
             ExecuteConfirmAction();
             return NodeStatus.Success;
         })
         .Complete();
 
-    cancelBranch.Build()
-        .Action((ref FlowContext ctx) =>
+    cancelBranch.Build(state)
+        .Action(s =>
         {
             ExecuteCancelAction();
             return NodeStatus.Success;
@@ -1004,19 +1261,21 @@ public static FlowTree CreateDialogFlow()
         .Complete();
 
     var tree = new FlowTree("DialogFlow");
-    tree.Build()
+    tree
+        .WithCallStack(new FlowCallStack(16))
+        .Build(state)
         .Sequence()
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
                 ShowDialog();
                 return NodeStatus.Success;
             })
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
-                return HasUserInput() ? NodeStatus.Success : NodeStatus.Running;
+                return s.HasUserInput ? NodeStatus.Success : NodeStatus.Running;
             })
             .Selector()
-                .Guard((ref FlowContext ctx) => ctx.Blackboard.GetBool(IsConfirmed),
+                .Guard(s => s.IsConfirmed,
                     new SubTreeNode(confirmBranch))
                 .SubTree(cancelBranch)
             .End()
@@ -1030,40 +1289,568 @@ public static FlowTree CreateDialogFlow()
 ### チュートリアルフロー
 
 ```csharp
-public static FlowTree CreateTutorialFlow()
+public class TutorialState
+{
+    public bool HasPlayerMoved { get; set; }
+    public bool HasPlayerAttacked { get; set; }
+}
+
+public static FlowTree CreateTutorialFlow(TutorialState state)
 {
     var tree = new FlowTree("Tutorial");
-    tree.Build()
+    tree.Build(state)
         .Sequence()
             // ステップ1: 移動の説明
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
                     ShowTutorialMessage("WASDで移動できます");
                     return NodeStatus.Success;
                 })
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    return HasPlayerMoved() ? NodeStatus.Success : NodeStatus.Running;
+                    return s.HasPlayerMoved ? NodeStatus.Success : NodeStatus.Running;
                 })
             .End()
             // ステップ2: 攻撃の説明
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
                     ShowTutorialMessage("クリックで攻撃できます");
                     return NodeStatus.Success;
                 })
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    return HasPlayerAttacked() ? NodeStatus.Success : NodeStatus.Running;
+                    return s.HasPlayerAttacked ? NodeStatus.Success : NodeStatus.Running;
                 })
             .End()
             // 完了
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
                 ShowTutorialMessage("チュートリアル完了！");
                 return NodeStatus.Success;
+            })
+        .End()
+        .Complete();
+
+    return tree;
+}
+```
+
+---
+
+## サンプル集：シーン遷移
+
+ゲームのシーン遷移はツリー構造で表現できる。従来は状態遷移を個別に実装しがちだが、FlowTreeで一元管理することで見通しが良くなる。
+
+### 基本的なシーン遷移
+
+```csharp
+public class SceneState
+{
+    public string? NextScene { get; set; }
+    public bool IsGameOver { get; set; }
+    public bool IsQuitRequested { get; set; }
+}
+
+public static class SceneFlow
+{
+    private static readonly FlowTree TitleScene = new FlowTree("Title");
+    private static readonly FlowTree GameScene = new FlowTree("Game");
+    private static readonly FlowTree ResultScene = new FlowTree("Result");
+
+    public static FlowTree CreateSceneFlow(SceneState state)
+    {
+        BuildScenes(state);
+
+        var tree = new FlowTree("SceneFlow");
+        tree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state)
+            .Sequence()
+                // タイトル画面
+                .SubTree(TitleScene)
+                // ゲームループ（リトライ可能）
+                .Node(new RepeatUntilFailNode(
+                    new SequenceNode(
+                        new SubTreeNode(GameScene),
+                        new SubTreeNode(ResultScene),
+                        // リトライならSuccess、終了ならFailure
+                        new ConditionNode<SceneState>(s => !s.IsQuitRequested)
+                    )
+                ))
+                // 終了処理
+                .Action(s =>
+                {
+                    SaveGameData();
+                    return NodeStatus.Success;
+                })
+            .End()
+            .Complete();
+
+        return tree;
+    }
+
+    private static void BuildScenes(SceneState state)
+    {
+        // タイトル画面
+        TitleScene.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowTitleScreen();
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    // スタートボタン待機
+                    return IsStartPressed() ? NodeStatus.Success : NodeStatus.Running;
+                })
+                .Action(s =>
+                {
+                    HideTitleScreen();
+                    return NodeStatus.Success;
+                })
+            .End()
+            .Complete();
+
+        // ゲーム画面
+        GameScene.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    LoadLevel();
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    // ゲームオーバーまたはクリアまで継続
+                    if (s.IsGameOver)
+                        return NodeStatus.Success;
+                    UpdateGame();
+                    return NodeStatus.Running;
+                })
+            .End()
+            .Complete();
+
+        // リザルト画面
+        ResultScene.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowResultScreen();
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    return HasResultInput() ? NodeStatus.Success : NodeStatus.Running;
+                })
+            .End()
+            .Complete();
+    }
+}
+```
+
+---
+
+## サンプル集：メニュー状態遷移
+
+階層的なメニュー構造もFlowTreeで自然に表現できる。
+
+```csharp
+public class MenuState
+{
+    public int SelectedIndex { get; set; }
+    public bool IsBackPressed { get; set; }
+}
+
+public static class MenuFlow
+{
+    private static readonly FlowTree MainMenu = new FlowTree("MainMenu");
+    private static readonly FlowTree OptionsMenu = new FlowTree("Options");
+    private static readonly FlowTree AudioSettings = new FlowTree("Audio");
+
+    public static FlowTree CreateMenuFlow(MenuState state)
+    {
+        BuildMenus(state);
+
+        var tree = new FlowTree("MenuFlow");
+        tree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state)
+            .SubTree(MainMenu)
+            .Complete();
+
+        return tree;
+    }
+
+    private static void BuildMenus(MenuState state)
+    {
+        // メインメニュー
+        MainMenu.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowMainMenu();
+                    return NodeStatus.Success;
+                })
+                // メニュー操作ループ
+                .Node(new RepeatUntilFailNode(
+                    new SequenceNode(
+                        // 入力待機
+                        new ActionNode<MenuState>(s =>
+                        {
+                            return HasMenuInput() ? NodeStatus.Success : NodeStatus.Running;
+                        }),
+                        // 選択に応じた処理
+                        new SelectorNode(
+                            // ゲーム開始
+                            new SequenceNode(
+                                new ConditionNode<MenuState>(s => s.SelectedIndex == 0),
+                                new ActionNode<MenuState>(s =>
+                                {
+                                    HideMainMenu();
+                                    return NodeStatus.Failure; // ループ終了
+                                })
+                            ),
+                            // オプション
+                            new SequenceNode(
+                                new ConditionNode<MenuState>(s => s.SelectedIndex == 1),
+                                new SubTreeNode(OptionsMenu)
+                            ),
+                            SuccessNode.Instance // その他は継続
+                        )
+                    )
+                ))
+            .End()
+            .Complete();
+
+        // オプションメニュー
+        OptionsMenu.Build(state)
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowOptionsMenu();
+                    s.IsBackPressed = false;
+                    return NodeStatus.Success;
+                })
+                .Node(new RepeatUntilSuccessNode(
+                    new SelectorNode(
+                        // 戻るボタン
+                        new SequenceNode(
+                            new ConditionNode<MenuState>(s => s.IsBackPressed),
+                            SuccessNode.Instance
+                        ),
+                        // 入力待ち
+                        new ActionNode(static () => NodeStatus.Running)
+                    )
+                ))
+                .Action(s =>
+                {
+                    HideOptionsMenu();
+                    return NodeStatus.Success;
+                })
+            .End()
+            .Complete();
+    }
+}
+```
+
+---
+
+## サンプル集：セーブ/ロードフロー
+
+```csharp
+public class SaveState
+{
+    public bool SaveSuccessful { get; set; }
+    public bool LoadSuccessful { get; set; }
+}
+
+public static FlowTree CreateSaveFlow(SaveState state)
+{
+    var tree = new FlowTree("SaveFlow");
+    tree.Build(state)
+        .Sequence()
+            // セーブ中表示
+            .Action(s =>
+            {
+                ShowSavingIndicator();
+                return NodeStatus.Success;
+            })
+            // データ収集
+            .Action(s =>
+            {
+                CollectSaveData();
+                return NodeStatus.Success;
+            })
+            // ディスク書き込み（リトライ付き）
+            .Retry(3,
+                new SequenceNode(
+                    new ActionNode<SaveState>(s =>
+                    {
+                        return WriteSaveFile() ? NodeStatus.Success : NodeStatus.Failure;
+                    }),
+                    new ActionNode<SaveState>(s =>
+                    {
+                        return VerifySaveFile() ? NodeStatus.Success : NodeStatus.Failure;
+                    })
+                )
+            )
+            // 完了表示
+            .Event(onExit: (s, result) =>
+                {
+                    HideSavingIndicator();
+                    s.SaveSuccessful = result == NodeStatus.Success;
+                })
+            .Action(s =>
+            {
+                ShowSaveComplete();
+                return NodeStatus.Success;
+            })
+        .End()
+        .Complete();
+
+    return tree;
+}
+```
+
+---
+
+## サンプル集：マッチメイキング
+
+```csharp
+public class MatchmakingState
+{
+    public bool IsCancelled { get; set; }
+    public string? MatchId { get; set; }
+    public int PlayerCount { get; set; }
+    public const int RequiredPlayers = 4;
+}
+
+public static FlowTree CreateMatchmakingFlow(MatchmakingState state)
+{
+    var tree = new FlowTree("Matchmaking");
+    tree.Build(state)
+        .Sequence()
+            // マッチメイキングUI表示
+            .Event(
+                onEnter: s => { ShowMatchmakingUI(); },
+                onExit: (s, result) =>
+                {
+                    HideMatchmakingUI();
+                    if (result == NodeStatus.Failure)
+                        ShowMatchmakingError();
+                })
+            .Sequence()
+                // サーバー接続
+                .Retry(3,
+                    new TimeoutNode(10.0f,
+                        new ActionNode<MatchmakingState>(s =>
+                        {
+                            return ConnectToMatchServer()
+                                ? NodeStatus.Success
+                                : NodeStatus.Running;
+                        })
+                    )
+                )
+                // マッチ検索開始
+                .Action(s =>
+                {
+                    StartMatchSearch();
+                    return NodeStatus.Success;
+                })
+                // マッチ待機（キャンセル可能）
+                .Selector()
+                    // キャンセル
+                    .Sequence()
+                        .Condition(s => s.IsCancelled)
+                        .Action(s =>
+                        {
+                            CancelMatchSearch();
+                            return NodeStatus.Failure;
+                        })
+                    .End()
+                    // タイムアウト
+                    .Timeout(60.0f,
+                        new ActionNode<MatchmakingState>(s =>
+                        {
+                            var matchId = CheckMatchFound();
+                            if (matchId != null)
+                            {
+                                s.MatchId = matchId;
+                                return NodeStatus.Success;
+                            }
+                            UpdateSearchStatus();
+                            return NodeStatus.Running;
+                        })
+                    )
+                .End()
+                // マッチ参加
+                .Action(s =>
+                {
+                    return JoinMatch(s.MatchId!) ? NodeStatus.Success : NodeStatus.Failure;
+                })
+                // プレイヤー待機
+                .Action(s =>
+                {
+                    s.PlayerCount = GetPlayerCount();
+                    return s.PlayerCount >= MatchmakingState.RequiredPlayers
+                        ? NodeStatus.Success
+                        : NodeStatus.Running;
+                })
+            .End()
+        .End()
+        .Complete();
+
+    return tree;
+}
+```
+
+---
+
+## サンプル集：クエスト/ミッション進行
+
+```csharp
+public class QuestState
+{
+    public int QuestPhase { get; set; }
+    public bool HasKeyItem { get; set; }
+    public int ChoiceResult { get; set; }
+}
+
+public static FlowTree CreateMainQuest(QuestState state)
+{
+    var tree = new FlowTree("MainQuest");
+    tree.Build(state)
+        .Sequence()
+            // フェーズ1: 情報収集
+            .Event(onExit: (s, _) => { s.QuestPhase = 1; })
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowObjective("村人と話す");
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    return HasTalkedToAllVillagers()
+                        ? NodeStatus.Success
+                        : NodeStatus.Running;
+                })
+            .End()
+            // フェーズ2: ダンジョン探索
+            .Event(onExit: (s, _) => { s.QuestPhase = 2; })
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowObjective("古代遺跡を調査する");
+                    return NodeStatus.Success;
+                })
+                // キーアイテム取得まで探索
+                .Action(s =>
+                {
+                    return s.HasKeyItem ? NodeStatus.Success : NodeStatus.Running;
+                })
+            .End()
+            // フェーズ3: 選択肢による分岐
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowChoiceDialog("アイテムをどうする？",
+                        new[] { "村に渡す", "自分で使う", "破壊する" });
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    return HasMadeChoice() ? NodeStatus.Success : NodeStatus.Running;
+                })
+                // 選択結果による分岐
+                .DynamicSubTree(s =>
+                {
+                    return s.ChoiceResult switch
+                    {
+                        0 => CreateGoodEndingFlow(s),
+                        1 => CreateNeutralEndingFlow(s),
+                        2 => CreateBadEndingFlow(s),
+                        _ => CreateNeutralEndingFlow(s)
+                    };
+                })
+            .End()
+        .End()
+        .Complete();
+
+    return tree;
+}
+```
+
+---
+
+## サンプル集：アニメーションシーケンス
+
+```csharp
+public class CutsceneState
+{
+    public bool SkipRequested { get; set; }
+}
+
+public static FlowTree CreateCutscene(CutsceneState state)
+{
+    var tree = new FlowTree("Cutscene");
+    tree.Build(state)
+        .Sequence()
+            // 並列で複数の演出を開始
+            .Join()
+                .Action(s =>
+                {
+                    return PlayCameraAnimation("pan_to_castle")
+                        ? NodeStatus.Success : NodeStatus.Running;
+                })
+                .Action(s =>
+                {
+                    return FadeInMusic("epic_theme")
+                        ? NodeStatus.Success : NodeStatus.Running;
+                })
+            .End()
+            // セリフ1
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowDialogue("王様", "勇者よ、よく来た");
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    return IsDialogueComplete() ? NodeStatus.Success : NodeStatus.Running;
+                })
+            .End()
+            // キャラクターアニメーション
+            .Action(s =>
+            {
+                return PlayCharacterAnimation("hero", "kneel")
+                    ? NodeStatus.Success : NodeStatus.Running;
+            })
+            // セリフ2
+            .Sequence()
+                .Action(s =>
+                {
+                    ShowDialogue("勇者", "お任せください");
+                    return NodeStatus.Success;
+                })
+                .Action(s =>
+                {
+                    return IsDialogueComplete() ? NodeStatus.Success : NodeStatus.Running;
+                })
+            .End()
+            // スキップ可能な待機
+            .Race()
+                .Wait(2.0f)
+                .Condition(s => s.SkipRequested)
+            .End()
+            // フェードアウト
+            .Action(s =>
+            {
+                return FadeToBlack() ? NodeStatus.Success : NodeStatus.Running;
             })
         .End()
         .Complete();
@@ -1082,7 +1869,7 @@ public static FlowTree CreateTutorialFlow()
 |------|------|
 | ノード配列 | ビルド時に固定 |
 | 深度別状態 | List（初期容量4） |
-| Blackboard | Dictionary事前確保 |
+| 状態オブジェクト | ユーザー管理 |
 | CallStack | 固定サイズ配列 |
 
 ### GC発生条件
@@ -1118,7 +1905,7 @@ var tree = new FlowTree();
 tree.Build()
     .Selector()
         .Sequence()
-            .Action((ref FlowContext ctx) =>
+            .Action(() =>
             {
                 sharedCounter++;  // 全深度で共有される！
                 return NodeStatus.Success;
@@ -1128,17 +1915,18 @@ tree.Build()
     .End()
     .Complete();
 
-// 良い例：Blackboardを使う
-var counterKey = new BlackboardKey<int>(1);
+// 良い例：状態オブジェクトを使う
+public class CounterState { public int Counter { get; set; } }
+
+var state = new CounterState();
 var tree = new FlowTree();
-tree.Build()
+tree.Build(state)
     .Selector()
         .Sequence()
-            .Action((ref FlowContext ctx) =>
+            .Action(s =>
             {
-                // Blackboardは深度間で共有されるが、明示的な設計
-                var counter = ctx.Blackboard.GetInt(counterKey);
-                ctx.Blackboard.SetInt(counterKey, counter + 1);
+                // 状態オブジェクト経由でアクセス（明示的な設計）
+                s.Counter++;
                 return NodeStatus.Success;
             })
             .SubTree(tree)
@@ -1173,6 +1961,9 @@ libs/foundation/FlowTree/
         RaceNode.cs
         JoinNode.cs
         RandomSelectorNode.cs
+        ShuffledSelectorNode.cs
+        WeightedRandomSelectorNode.cs
+        RoundRobinSelectorNode.cs
       Decorator/
         InverterNode.cs
         SucceederNode.cs
@@ -1184,22 +1975,19 @@ libs/foundation/FlowTree/
         TimeoutNode.cs
         DelayNode.cs
         GuardNode.cs
+        EventNode.cs
       Leaf/
         ActionNode.cs
         ConditionNode.cs
         SubTreeNode.cs
+        DynamicSubTreeNode.cs
         WaitNode.cs
         YieldNode.cs
         SuccessNode.cs
         FailureNode.cs
 
     Context/
-      FlowContext.cs             # 実行コンテキスト（struct）
-
-    Blackboard/
-      BlackboardKey.cs           # readonly struct キー
-      Blackboard.cs              # 型別ストレージ
-      ScopedBlackboard.cs        # スコープ付き
+      FlowContext.cs             # 実行コンテキスト（内部用struct）
 
     CallStack/
       CallFrame.cs               # readonly struct

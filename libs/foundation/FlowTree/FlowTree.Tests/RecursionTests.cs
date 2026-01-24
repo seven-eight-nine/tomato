@@ -11,16 +11,6 @@ namespace Tomato.FlowTree.Tests;
 /// </summary>
 public class RecursionTests
 {
-    private static FlowContext CreateContext(int maxDepth = 32)
-    {
-        return FlowContext.Create(
-            new Blackboard(64),
-            new FlowCallStack(maxDepth),
-            deltaTime: 0.016f,
-            maxCallDepth: maxDepth
-        );
-    }
-
     // =========================================================================
     // サブツリーチェーンテスト
     // =========================================================================
@@ -29,59 +19,55 @@ public class RecursionTests
     public void SubTreeChain_ExecutesInOrder()
     {
         // A → B → C のチェーン呼び出し
-        var orderKey = new BlackboardKey<string>(1);
+        var state = new OrderState { Order = "" };
 
         var treeC = new FlowTree("C");
         var treeB = new FlowTree("B");
         var treeA = new FlowTree("A");
 
-        treeC.Build()
-            .Action((ref FlowContext ctx) =>
+        treeC.Build(state)
+            .Action(s =>
             {
-                var order = ctx.Blackboard.GetString(orderKey, "") ?? "";
-                ctx.Blackboard.SetString(orderKey, order + "C");
+                s.Order += "C";
                 return NodeStatus.Success;
             })
             .Complete();
 
-        treeB.Build()
+        treeB.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var order = ctx.Blackboard.GetString(orderKey, "") ?? "";
-                    ctx.Blackboard.SetString(orderKey, order + "B");
+                    s.Order += "B";
                     return NodeStatus.Success;
                 })
                 .SubTree(treeC)
             .End()
             .Complete();
 
-        treeA.Build()
+        treeA
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var order = ctx.Blackboard.GetString(orderKey, "") ?? "";
-                    ctx.Blackboard.SetString(orderKey, order + "A");
+                    s.Order += "A";
                     return NodeStatus.Success;
                 })
                 .SubTree(treeB)
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetString(orderKey, "");
-
-        var status = treeA.Tick(ref ctx);
+        var status = treeA.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal("ABC", ctx.Blackboard.GetString(orderKey));
+        Assert.Equal("ABC", state.Order);
     }
 
     [Fact]
     public void SubTreeChain_DeepNesting()
     {
         // 10段階のチェーン呼び出し
-        var counterKey = new BlackboardKey<int>(1);
+        var state = new CounterState { Counter = 0 };
         const int depth = 10;
 
         var trees = new FlowTree[depth];
@@ -89,11 +75,10 @@ public class RecursionTests
             trees[i] = new FlowTree($"Tree{i + 1}");
 
         // 最深部のツリー
-        trees[depth - 1].Build()
-            .Action((ref FlowContext ctx) =>
+        trees[depth - 1].Build(state)
+            .Action(s =>
             {
-                var counter = ctx.Blackboard.GetInt(counterKey);
-                ctx.Blackboard.SetInt(counterKey, counter + 1);
+                s.Counter++;
                 return NodeStatus.Success;
             })
             .Complete();
@@ -102,12 +87,11 @@ public class RecursionTests
         for (int i = depth - 2; i >= 0; i--)
         {
             var next = trees[i + 1];
-            trees[i].Build()
+            trees[i].Build(state)
                 .Sequence()
-                    .Action((ref FlowContext ctx) =>
+                    .Action(s =>
                     {
-                        var counter = ctx.Blackboard.GetInt(counterKey);
-                        ctx.Blackboard.SetInt(counterKey, counter + 1);
+                        s.Counter++;
                         return NodeStatus.Success;
                     })
                     .SubTree(next)
@@ -115,13 +99,11 @@ public class RecursionTests
                 .Complete();
         }
 
-        var ctx = CreateContext(maxDepth: 32);
-        ctx.Blackboard.SetInt(counterKey, 0);
-
-        var status = trees[0].Tick(ref ctx);
+        trees[0].WithCallStack(new FlowCallStack(32));
+        var status = trees[0].Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal(depth, ctx.Blackboard.GetInt(counterKey));
+        Assert.Equal(depth, state.Counter);
     }
 
     // =========================================================================
@@ -132,32 +114,32 @@ public class RecursionTests
     public void SelfRecursion_Factorial_WorksCorrectly()
     {
         // 階乗計算パターン: n! = n * (n-1)!、終了条件: n <= 1
-        var counterKey = new BlackboardKey<int>(1);
-        var resultKey = new BlackboardKey<int>(2);
+        var state = new FactorialState { Counter = 5, Result = 0 };
 
         var factorialTree = new FlowTree("Factorial");
-        factorialTree.Build()
+        factorialTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Selector()
                 // 終了条件: counter <= 0 なら Success
                 .Sequence()
-                    .Condition((ref FlowContext ctx) =>
-                        ctx.Blackboard.GetInt(counterKey) <= 0)
-                    .Action((ref FlowContext ctx) =>
+                    .Condition(s => s.Counter <= 0)
+                    .Action(s =>
                     {
-                        if (ctx.Blackboard.GetInt(resultKey) == 0)
-                            ctx.Blackboard.SetInt(resultKey, 1);
+                        if (s.Result == 0)
+                            s.Result = 1;
                         return NodeStatus.Success;
                     })
                 .End()
                 // 再帰: counter-- して自己呼び出し
                 .Sequence()
-                    .Action((ref FlowContext ctx) =>
+                    .Action(s =>
                     {
-                        var counter = ctx.Blackboard.GetInt(counterKey);
-                        var result = ctx.Blackboard.GetInt(resultKey);
+                        var counter = s.Counter;
+                        var result = s.Result;
                         if (result == 0) result = 1;
-                        ctx.Blackboard.SetInt(resultKey, result * counter);
-                        ctx.Blackboard.SetInt(counterKey, counter - 1);
+                        s.Result = result * counter;
+                        s.Counter = counter - 1;
                         return NodeStatus.Success;
                     })
                     .SubTree(factorialTree)
@@ -165,45 +147,38 @@ public class RecursionTests
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 5); // 5!
-        ctx.Blackboard.SetInt(resultKey, 0);
-
-        var status = factorialTree.Tick(ref ctx);
+        var status = factorialTree.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal(120, ctx.Blackboard.GetInt(resultKey)); // 5! = 120
+        Assert.Equal(120, state.Result); // 5! = 120
     }
 
     [Fact]
     public void SelfRecursion_CountDown_TerminatesCorrectly()
     {
         // シンプルなカウントダウン再帰: counter > 0 なら counter-- して再帰
-        var counterKey = new BlackboardKey<int>(1);
-        var logKey = new BlackboardKey<string>(2);
+        var state = new CountdownState { Counter = 3, Log = "" };
 
         var countdownTree = new FlowTree("Countdown");
-        countdownTree.Build()
+        countdownTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Selector()
                 // 終了条件
                 .Sequence()
-                    .Condition((ref FlowContext ctx) =>
-                        ctx.Blackboard.GetInt(counterKey) <= 0)
-                    .Action((ref FlowContext ctx) =>
+                    .Condition(s => s.Counter <= 0)
+                    .Action(s =>
                     {
-                        var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                        ctx.Blackboard.SetString(logKey, log + "Done");
+                        s.Log += "Done";
                         return NodeStatus.Success;
                     })
                 .End()
                 // 再帰
                 .Sequence()
-                    .Action((ref FlowContext ctx) =>
+                    .Action(s =>
                     {
-                        var counter = ctx.Blackboard.GetInt(counterKey);
-                        var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                        ctx.Blackboard.SetString(logKey, log + counter.ToString());
-                        ctx.Blackboard.SetInt(counterKey, counter - 1);
+                        s.Log += s.Counter.ToString();
+                        s.Counter--;
                         return NodeStatus.Success;
                     })
                     .SubTree(countdownTree)
@@ -211,78 +186,65 @@ public class RecursionTests
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 3);
-        ctx.Blackboard.SetString(logKey, "");
-
-        var status = countdownTree.Tick(ref ctx);
+        var status = countdownTree.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal("321Done", ctx.Blackboard.GetString(logKey));
+        Assert.Equal("321Done", state.Log);
     }
 
     [Fact]
     public void MutualRecursion_PingPong_WorksCorrectly()
     {
         // A → B → A → B ... の相互再帰パターン
-        var counterKey = new BlackboardKey<int>(1);
-        var logKey = new BlackboardKey<string>(2);
+        var state = new PingPongState { Counter = 6, Log = "" };
 
         var treeA = new FlowTree("A");
         var treeB = new FlowTree("B");
 
         // TreeA: "A" を記録してカウンタデクリメント、counter > 0 なら TreeB を呼ぶ
-        treeA.Build()
+        treeA
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                    ctx.Blackboard.SetString(logKey, log + "A");
-                    var counter = ctx.Blackboard.GetInt(counterKey);
-                    ctx.Blackboard.SetInt(counterKey, counter - 1);
+                    s.Log += "A";
+                    s.Counter--;
                     return NodeStatus.Success;
                 })
                 .Selector()
                     .Sequence()
-                        .Condition((ref FlowContext ctx) =>
-                            ctx.Blackboard.GetInt(counterKey) > 0)
+                        .Condition(s => s.Counter > 0)
                         .SubTree(treeB)
                     .End()
-                    .Action(static (ref FlowContext _) => NodeStatus.Success)
+                    .Action(static () => NodeStatus.Success)
                 .End()
             .End()
             .Complete();
 
         // TreeB: "B" を記録してカウンタデクリメント、counter > 0 なら TreeA を呼ぶ
-        treeB.Build()
+        treeB.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var log = ctx.Blackboard.GetString(logKey, "") ?? "";
-                    ctx.Blackboard.SetString(logKey, log + "B");
-                    var counter = ctx.Blackboard.GetInt(counterKey);
-                    ctx.Blackboard.SetInt(counterKey, counter - 1);
+                    s.Log += "B";
+                    s.Counter--;
                     return NodeStatus.Success;
                 })
                 .Selector()
                     .Sequence()
-                        .Condition((ref FlowContext ctx) =>
-                            ctx.Blackboard.GetInt(counterKey) > 0)
+                        .Condition(s => s.Counter > 0)
                         .SubTree(treeA)
                     .End()
-                    .Action(static (ref FlowContext _) => NodeStatus.Success)
+                    .Action(static () => NodeStatus.Success)
                 .End()
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 6);
-        ctx.Blackboard.SetString(logKey, "");
-
-        var status = treeA.Tick(ref ctx);
+        var status = treeA.Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal("ABABAB", ctx.Blackboard.GetString(logKey));
+        Assert.Equal("ABABAB", state.Log);
     }
 
     // =========================================================================
@@ -302,7 +264,7 @@ public class RecursionTests
 
         // 最後のツリー
         trees[chainLength - 1].Build()
-            .Action(static (ref FlowContext _) => NodeStatus.Success)
+            .Action(static () => NodeStatus.Success)
             .Complete();
 
         // チェーンを作成
@@ -313,8 +275,11 @@ public class RecursionTests
                 .Complete();
         }
 
-        var ctx = CreateContext(maxDepth: maxDepth);
-        var status = trees[0].Tick(ref ctx);
+        trees[0]
+            .WithCallStack(new FlowCallStack(maxDepth))
+            .WithMaxCallDepth(maxDepth);
+
+        var status = trees[0].Tick(0.016f);
 
         // 深度制限によりFailure
         Assert.Equal(NodeStatus.Failure, status);
@@ -332,7 +297,7 @@ public class RecursionTests
             trees[i] = new FlowTree($"Tree{i + 1}");
 
         trees[chainLength - 1].Build()
-            .Action(static (ref FlowContext _) => NodeStatus.Success)
+            .Action(static () => NodeStatus.Success)
             .Complete();
 
         for (int i = chainLength - 2; i >= 0; i--)
@@ -342,8 +307,11 @@ public class RecursionTests
                 .Complete();
         }
 
-        var ctx = CreateContext(maxDepth: maxDepth);
-        var status = trees[0].Tick(ref ctx);
+        trees[0]
+            .WithCallStack(new FlowCallStack(maxDepth))
+            .WithMaxCallDepth(maxDepth);
+
+        var status = trees[0].Tick(0.016f);
 
         Assert.Equal(NodeStatus.Success, status);
     }
@@ -356,75 +324,65 @@ public class RecursionTests
     public void IterativeRecursion_WithExternalLoop()
     {
         // 外部ループを使った擬似再帰パターン
-        var counterKey = new BlackboardKey<int>(1);
+        var state = new CounterState { Counter = 0 };
 
         var iterativeTree = new FlowTree("Iterative");
-        iterativeTree.Build()
+        iterativeTree.Build(state)
             .Node(new RepeatUntilSuccessNode(
                 new SequenceNode(
-                    new ActionNode((ref FlowContext ctx) =>
+                    new ActionNode<CounterState>(s =>
                     {
-                        var counter = ctx.Blackboard.GetInt(counterKey);
-                        ctx.Blackboard.SetInt(counterKey, counter + 1);
+                        s.Counter++;
                         return NodeStatus.Success;
                     }),
                     new YieldNode(),
-                    new ConditionNode((ref FlowContext ctx) =>
-                        ctx.Blackboard.GetInt(counterKey) >= 5)
+                    new ConditionNode<CounterState>(s => s.Counter >= 5)
                 )
             ))
             .Complete();
-
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 0);
 
         // 外部ループでTickを繰り返す
         NodeStatus status;
         int iterations = 0;
         do
         {
-            status = iterativeTree.Tick(ref ctx);
+            status = iterativeTree.Tick(0.016f);
             iterations++;
         } while (status == NodeStatus.Running && iterations < 100);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal(5, ctx.Blackboard.GetInt(counterKey));
+        Assert.Equal(5, state.Counter);
     }
 
     [Fact]
     public void IterativeRecursion_WithRetry()
     {
         // RetryNodeを使った擬似再帰パターン
-        var counterKey = new BlackboardKey<int>(1);
+        var state = new CounterState { Counter = 0 };
 
         var retryTree = new FlowTree("Retry");
-        retryTree.Build()
+        retryTree.Build(state)
             .Node(new RetryNode(10, new SequenceNode(
-                new ActionNode((ref FlowContext ctx) =>
+                new ActionNode<CounterState>(s =>
                 {
-                    var counter = ctx.Blackboard.GetInt(counterKey);
-                    ctx.Blackboard.SetInt(counterKey, counter + 1);
+                    s.Counter++;
                     return NodeStatus.Success;
                 }),
-                new ConditionNode((ref FlowContext ctx) =>
-                    ctx.Blackboard.GetInt(counterKey) >= 5)
+                new ConditionNode<CounterState>(s => s.Counter >= 5)
             )))
             .Complete();
-
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(counterKey, 0);
 
         // RetryNodeはRunningを返すので、外部ループが必要
         NodeStatus status;
         int iterations = 0;
         do
         {
-            status = retryTree.Tick(ref ctx);
+            status = retryTree.Tick(0.016f);
             iterations++;
         } while (status == NodeStatus.Running && iterations < 100);
 
         Assert.Equal(NodeStatus.Success, status);
-        Assert.Equal(5, ctx.Blackboard.GetInt(counterKey));
+        Assert.Equal(5, state.Counter);
     }
 
     // =========================================================================
@@ -435,124 +393,153 @@ public class RecursionTests
     public void SubTree_RunningContinuation_PreservesState()
     {
         // SubTreeがRunningを返した後、次のTickで継続される
-        var phaseKey = new BlackboardKey<int>(1);
+        var state = new PhaseState { Phase = 0 };
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build()
+        subTree.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var phase = ctx.Blackboard.GetInt(phaseKey);
-                    ctx.Blackboard.SetInt(phaseKey, phase + 1);
+                    s.Phase++;
                     return NodeStatus.Success;
                 })
                 .Yield()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var phase = ctx.Blackboard.GetInt(phaseKey);
-                    ctx.Blackboard.SetInt(phaseKey, phase + 1);
+                    s.Phase++;
                     return NodeStatus.Success;
                 })
             .End()
             .Complete();
 
         var mainTree = new FlowTree("Main");
-        mainTree.Build()
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .SubTree(subTree)
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(phaseKey, 0);
-
         // 1回目のTick: phase=1, YieldでRunning
-        var status1 = mainTree.Tick(ref ctx);
+        var status1 = mainTree.Tick(0.016f);
         Assert.Equal(NodeStatus.Running, status1);
-        Assert.Equal(1, ctx.Blackboard.GetInt(phaseKey));
+        Assert.Equal(1, state.Phase);
 
         // 2回目のTick: YieldNode完了後、phase=2, Success
-        var status2 = mainTree.Tick(ref ctx);
+        var status2 = mainTree.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status2);
-        Assert.Equal(2, ctx.Blackboard.GetInt(phaseKey));
+        Assert.Equal(2, state.Phase);
     }
 
     [Fact]
     public void SubTree_DeepRunningContinuation()
     {
         // 深いチェーンでRunningが正しく伝播される
-        var stageKey = new BlackboardKey<int>(1);
+        var state = new StageState { Stage = 0 };
 
         var treeC = new FlowTree("C");
         var treeB = new FlowTree("B");
         var treeA = new FlowTree("A");
 
         // TreeC: Yieldを含む
-        treeC.Build()
+        treeC.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
                 .Yield()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
             .End()
             .Complete();
 
         // TreeB: TreeCを呼ぶ
-        treeB.Build()
+        treeB.Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
                 .SubTree(treeC)
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
             .End()
             .Complete();
 
         // TreeA: TreeBを呼ぶ
-        treeA.Build()
+        treeA
+            .WithCallStack(new FlowCallStack(32))
+            .Build(state)
             .Sequence()
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
                 .SubTree(treeB)
-                .Action((ref FlowContext ctx) =>
+                .Action(s =>
                 {
-                    var stage = ctx.Blackboard.GetInt(stageKey);
-                    ctx.Blackboard.SetInt(stageKey, stage + 1);
+                    s.Stage++;
                     return NodeStatus.Success;
                 })
             .End()
             .Complete();
 
-        var ctx = CreateContext();
-        ctx.Blackboard.SetInt(stageKey, 0);
-
         // 1回目: A(1) → B(2) → C(3) → Yield → Running
-        var status1 = treeA.Tick(ref ctx);
+        var status1 = treeA.Tick(0.016f);
         Assert.Equal(NodeStatus.Running, status1);
-        Assert.Equal(3, ctx.Blackboard.GetInt(stageKey));
+        Assert.Equal(3, state.Stage);
 
         // 2回目: C(4) → B(5) → A(6) → Success
-        var status2 = treeA.Tick(ref ctx);
+        var status2 = treeA.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status2);
-        Assert.Equal(6, ctx.Blackboard.GetInt(stageKey));
+        Assert.Equal(6, state.Stage);
+    }
+
+    // State classes
+    private class OrderState
+    {
+        public string Order { get; set; } = "";
+    }
+
+    private class CounterState
+    {
+        public int Counter { get; set; }
+    }
+
+    private class FactorialState
+    {
+        public int Counter { get; set; }
+        public int Result { get; set; }
+    }
+
+    private class CountdownState
+    {
+        public int Counter { get; set; }
+        public string Log { get; set; } = "";
+    }
+
+    private class PingPongState
+    {
+        public int Counter { get; set; }
+        public string Log { get; set; } = "";
+    }
+
+    private class PhaseState
+    {
+        public int Phase { get; set; }
+    }
+
+    private class StageState
+    {
+        public int Stage { get; set; }
     }
 }
