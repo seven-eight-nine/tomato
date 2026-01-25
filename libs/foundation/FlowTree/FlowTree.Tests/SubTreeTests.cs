@@ -1,4 +1,5 @@
 using Xunit;
+using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
 
@@ -8,16 +9,12 @@ public class SubTreeTests
     public void SubTreeNode_DirectReference()
     {
         var childTree = new FlowTree();
-        childTree.Build()
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        childTree.Build(Action(static () => NodeStatus.Success));
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build()
-            .SubTree(childTree)
-            .Complete();
+            .Build(SubTree(childTree));
 
         Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
     }
@@ -25,14 +22,12 @@ public class SubTreeTests
     [Fact]
     public void SubTreeNode_UnbuiltTree()
     {
-        var childTree = new FlowTree(); // Build()呼び出しなし
+        var childTree = new FlowTree(); // SetRoot()呼び出しなし
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build()
-            .SubTree(childTree)
-            .Complete();
+            .Build(SubTree(childTree));
 
         // 構築されていないツリーはFailure
         Assert.Equal(NodeStatus.Failure, mainTree.Tick(0.016f));
@@ -44,20 +39,18 @@ public class SubTreeTests
         int callCount = 0;
 
         var childTree = new FlowTree();
-        childTree.Build()
-            .Sequence()
-                .Action(() => { callCount++; return NodeStatus.Success; })
-                .Action(() => { callCount++; return NodeStatus.Running; })
-                .Action(() => { callCount++; return NodeStatus.Success; })
-            .End()
-            .Complete();
+        childTree.Build(
+            Sequence(
+                Action(() => { callCount++; return NodeStatus.Success; }),
+                Action(() => { callCount++; return NodeStatus.Running; }),
+                Action(() => { callCount++; return NodeStatus.Success; })
+            )
+        );
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build()
-            .SubTree(childTree)
-            .Complete();
+            .Build(SubTree(childTree));
 
         // 1回目: Running
         Assert.Equal(NodeStatus.Running, mainTree.Tick(0.016f));
@@ -75,29 +68,27 @@ public class SubTreeTests
 
         // Tree 3: 葉ノード
         var tree3 = new FlowTree();
-        tree3.Build()
-            .Action(() => { executed[2] = true; return NodeStatus.Success; })
-            .Complete();
+        tree3.Build(Action(() => { executed[2] = true; return NodeStatus.Success; }));
 
         // Tree 2: Tree 3を呼ぶ
         var tree2 = new FlowTree();
-        tree2.Build()
-            .Sequence()
-                .Action(() => { executed[1] = true; return NodeStatus.Success; })
-                .SubTree(tree3)
-            .End()
-            .Complete();
+        tree2.Build(
+            Sequence(
+                Action(() => { executed[1] = true; return NodeStatus.Success; }),
+                SubTree(tree3)
+            )
+        );
 
         // Tree 1: Tree 2を呼ぶ
         var tree1 = new FlowTree();
         tree1
             .WithCallStack(new FlowCallStack(32))
-            .Build()
-            .Sequence()
-                .Action(() => { executed[0] = true; return NodeStatus.Success; })
-                .SubTree(tree2)
-            .End()
-            .Complete();
+            .Build(
+                Sequence(
+                    Action(() => { executed[0] = true; return NodeStatus.Success; }),
+                    SubTree(tree2)
+                )
+            );
 
         Assert.Equal(NodeStatus.Success, tree1.Tick(0.016f));
 
@@ -114,12 +105,12 @@ public class SubTreeTests
         recursiveTree
             .WithCallStack(new FlowCallStack(5))
             .WithMaxCallDepth(5)
-            .Build()
-            .Sequence()
-                .Action(static () => NodeStatus.Success)
-                .SubTree(recursiveTree) // 自己呼び出し
-            .End()
-            .Complete();
+            .Build(
+                Sequence(
+                    Action(static () => NodeStatus.Success),
+                    SubTree(recursiveTree) // 自己呼び出し
+                )
+            );
 
         // スタックオーバーフローでFailure
         Assert.Equal(NodeStatus.Failure, recursiveTree.Tick(0.016f));
@@ -134,24 +125,24 @@ public class SubTreeTests
         var countdown = new FlowTree();
         countdown
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                // 終了条件: counter <= 0
-                .Sequence()
-                    .Condition(s => s.Counter <= 0)
-                    .Success()
-                .End()
-                // 再帰: counter-- して自己呼び出し
-                .Sequence()
-                    .Action(s =>
-                    {
-                        s.Counter--;
-                        return NodeStatus.Success;
-                    })
-                    .SubTree(countdown)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    // 終了条件: counter <= 0
+                    Sequence(
+                        Condition<CounterState>(s => s.Counter <= 0),
+                        Success
+                    ),
+                    // 再帰: counter-- して自己呼び出し
+                    Sequence(
+                        Action<CounterState>(s =>
+                        {
+                            s.Counter--;
+                            return NodeStatus.Success;
+                        }),
+                        SubTree(countdown)
+                    )
+                )
+            );
 
         var status = countdown.Tick(0.016f);
 
@@ -170,41 +161,41 @@ public class SubTreeTests
 
         ping
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Log += "P";
-                    s.Counter--;
-                    return NodeStatus.Success;
-                })
-                .Selector()
-                    .Sequence()
-                        .Condition(s => s.Counter > 0)
-                        .SubTree(pong)
-                    .End()
-                    .Success()
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    Action<PingPongState>(s =>
+                    {
+                        s.Log += "P";
+                        s.Counter--;
+                        return NodeStatus.Success;
+                    }),
+                    Selector(
+                        Sequence(
+                            Condition<PingPongState>(s => s.Counter > 0),
+                            SubTree(pong)
+                        ),
+                        Success
+                    )
+                )
+            );
 
-        pong.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Log += "O";
-                    s.Counter--;
-                    return NodeStatus.Success;
-                })
-                .Selector()
-                    .Sequence()
-                        .Condition(s => s.Counter > 0)
-                        .SubTree(ping)
-                    .End()
-                    .Success()
-                .End()
-            .End()
-            .Complete();
+        pong.Build(state, 
+                Sequence(
+                    Action<PingPongState>(s =>
+                    {
+                        s.Log += "O";
+                        s.Counter--;
+                        return NodeStatus.Success;
+                    }),
+                    Selector(
+                        Sequence(
+                            Condition<PingPongState>(s => s.Counter > 0),
+                            SubTree(ping)
+                        ),
+                        Success
+                    )
+                )
+            );
 
         var status = ping.Tick(0.016f);
 
@@ -221,8 +212,8 @@ public class SubTreeTests
     {
         var parentState = new ParentState { ParentValue = 10 };
         var childTree = new FlowTree();
-        childTree.Build(new ChildState())
-            .Action(s =>
+        childTree.Build(new ChildState(),
+            Action<ChildState>(s =>
             {
                 // 子のStateを使用
                 s.ChildValue = 42;
@@ -231,14 +222,14 @@ public class SubTreeTests
                 parent.ParentValue += s.ChildValue;
                 return NodeStatus.Success;
             })
-            .Complete();
+        );
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(parentState)
-            .SubTree<ChildState>(childTree, p => new ChildState())
-            .Complete();
+            .Build(parentState, 
+                SubTree<ParentState, ChildState>(childTree, p => new ChildState())
+            );
 
         var status = mainTree.Tick(0.016f);
 
@@ -253,20 +244,20 @@ public class SubTreeTests
         IFlowState? capturedParent = null;
 
         var childTree = new FlowTree();
-        childTree.Build(new ChildState())
-            .Action(s =>
+        childTree.Build(new ChildState(),
+            Action<ChildState>(s =>
             {
                 capturedParent = s.Parent;
                 return NodeStatus.Success;
             })
-            .Complete();
+        );
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(parentState)
-            .SubTree<ChildState>(childTree, p => new ChildState())
-            .Complete();
+            .Build(parentState, 
+                SubTree<ParentState, ChildState>(childTree, p => new ChildState())
+            );
 
         mainTree.Tick(0.016f);
 
@@ -279,24 +270,24 @@ public class SubTreeTests
     {
         var parentState = new ParentState { ParentValue = 5 };
         var childTree = new FlowTree();
-        childTree.Build(new ChildState())
-            .Action(s =>
+        childTree.Build(new ChildState(),
+            Action<ChildState>(s =>
             {
                 var parent = (ParentState)s.Parent!;
                 parent.ParentValue *= 2;
                 return NodeStatus.Success;
             })
-            .Complete();
+        );
 
         var mainTree = new FlowTree();
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(parentState)
-            .SubTree<ChildState>(
-                p => childTree,  // 動的ツリー
-                p => new ChildState { ChildValue = p.ParentValue }  // 親の値を使って子を初期化
-            )
-            .Complete();
+            .Build(parentState, 
+                SubTree<ParentState, ChildState>(
+                    p => childTree,  // 動的ツリー
+                    p => new ChildState { ChildValue = p.ParentValue }  // 親の値を使って子を初期化
+                )
+            );
 
         mainTree.Tick(0.016f);
 

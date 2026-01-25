@@ -15,5 +15,6 @@ public interface IFlowNode
     /// <summary>
     /// 状態をリセットする。
     /// </summary>
-    void Reset();
+    /// <param name="fireExitEvents">trueの場合、Running中のEventNodeでOnExitを発火する</param>
+    void Reset(bool fireExitEvents = true);
 }

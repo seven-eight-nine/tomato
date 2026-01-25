@@ -46,10 +46,10 @@ public sealed class GuardNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         _isRunning = false;
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 }
 
@@ -98,9 +98,9 @@ public sealed class GuardNode<T> : IFlowNode where T : class, IFlowState
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         _isRunning = false;
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 }

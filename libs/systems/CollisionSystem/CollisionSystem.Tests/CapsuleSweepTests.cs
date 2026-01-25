@@ -11,7 +11,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_HitsSphere_ReturnsTOI()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(5, 0, 0), 1f);
 
         var query = new CapsuleSweepQuery(
@@ -28,7 +28,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_StartingInContact_ReturnsTOI0()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(0, 0, 0), 2f);
 
         var query = new CapsuleSweepQuery(
@@ -45,7 +45,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_MissesWhenNoObstacle()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(10, 10, 10), 1f);
 
         var query = new CapsuleSweepQuery(
@@ -61,7 +61,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_FastMovement_StillHits()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(50, 0, 0), 1f);
 
         var query = new CapsuleSweepQuery(
@@ -78,7 +78,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_ReturnsEarliestHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(10, 0, 0), 1f);
         var near = world.AddSphere(new Vector3(5, 0, 0), 1f);
 
@@ -96,7 +96,7 @@ public class CapsuleSweepTests
     [Fact]
     public void CapsuleSweep_WithCapsuleTarget()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddCapsule(new Vector3(5, 0, 0), new Vector3(5, 5, 0), 0.5f);
 
         var query = new CapsuleSweepQuery(

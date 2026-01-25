@@ -6,9 +6,10 @@ using Tomato.Math;
 namespace Tomato.CollisionSystem;
 
 /// <summary>
-/// ワールド空間分割。固定サイズのゾーンに分割する。
+/// Grid + SAP (Sweep and Prune) による Broad Phase 実装。
+/// 空間を固定サイズのゾーンに分割し、各ゾーン内で SAP を適用する。
 /// </summary>
-public sealed class WorldPartition
+public sealed class GridSAPBroadPhase : IBroadPhase
 {
     private readonly float _gridSize;
     private readonly float _invGridSize;
@@ -23,7 +24,21 @@ public sealed class WorldPartition
     // 愚直検索のしきい値
     private const int BruteForceThreshold = 32;
 
-    public WorldPartition(float gridSize, SAPAxisMode axisMode = SAPAxisMode.X)
+    // ゾーン数制限（大きいオブジェクトがグリッドを溢れないようにする）
+    private const int MaxZonesPerShape = 64;
+
+    // クエリ時のゾーン走査上限（これを超えると愚直検索にフォールバック）
+    private const int MaxZonesToQuery = 2048;
+
+    // 重複排除用マーカー
+    private int[] _queryMarker;
+    private int _currentQueryId;
+    private int _maxShapeIndex;
+
+    // 大オブジェクトリスト（ゾーン制限を超えるオブジェクト）
+    private readonly List<int> _largeObjects = new List<int>();
+
+    public GridSAPBroadPhase(float gridSize, SAPAxisMode axisMode = SAPAxisMode.X)
     {
         if (gridSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(gridSize));
@@ -33,6 +48,10 @@ public sealed class WorldPartition
         _axisMode = axisMode;
         _zones = new Dictionary<long, Zone>();
         _shapeToZones = new Dictionary<int, List<long>>();
+
+        _queryMarker = new int[1024];
+        _currentQueryId = 0;
+        _maxShapeIndex = 0;
     }
 
     /// <summary>
@@ -55,22 +74,62 @@ public sealed class WorldPartition
     /// </summary>
     public void Add(int shapeIndex, in AABB aabb)
     {
-        var zoneCoords = GetZoneCoordinates(aabb);
+        // マーカー配列を必要に応じて拡張
+        EnsureMarkerCapacity(shapeIndex);
 
         if (!_shapeToZones.TryGetValue(shapeIndex, out var zoneList))
         {
             zoneList = new List<long>(4);
             _shapeToZones[shapeIndex] = zoneList;
         }
+        else
+        {
+            zoneList.Clear();
+        }
 
         GetAxisValues(aabb, out float minPrimary, out float maxPrimary, out float minSecondary, out float maxSecondary);
 
-        foreach (var coord in zoneCoords)
+        // ゾーン範囲を計算
+        int minZx = (int)MathF.Floor(aabb.Min.X * _invGridSize);
+        int minZy = (int)MathF.Floor(aabb.Min.Y * _invGridSize);
+        int minZz = (int)MathF.Floor(aabb.Min.Z * _invGridSize);
+        int maxZx = (int)MathF.Floor(aabb.Max.X * _invGridSize);
+        int maxZy = (int)MathF.Floor(aabb.Max.Y * _invGridSize);
+        int maxZz = (int)MathF.Floor(aabb.Max.Z * _invGridSize);
+
+        int zoneCount = (maxZx - minZx + 1) * (maxZy - minZy + 1) * (maxZz - minZz + 1);
+
+        // ゾーン数が多すぎる場合は大オブジェクトリストに追加
+        if (zoneCount > MaxZonesPerShape)
         {
-            var zone = GetOrCreateZone(coord);
-            zone.Add(shapeIndex, minPrimary, maxPrimary, minSecondary, maxSecondary);
-            zoneList.Add(coord);
+            _largeObjects.Add(shapeIndex);
+            return;
         }
+
+        for (int zx = minZx; zx <= maxZx; zx++)
+        {
+            for (int zy = minZy; zy <= maxZy; zy++)
+            {
+                for (int zz = minZz; zz <= maxZz; zz++)
+                {
+                    long coord = PackZoneCoord(zx, zy, zz);
+                    var zone = GetOrCreateZone(coord);
+                    zone.Add(shapeIndex, minPrimary, maxPrimary, minSecondary, maxSecondary);
+                    zoneList.Add(coord);
+                }
+            }
+        }
+    }
+
+    private void EnsureMarkerCapacity(int shapeIndex)
+    {
+        if (shapeIndex >= _queryMarker.Length)
+        {
+            int newSize = System.Math.Max(_queryMarker.Length * 2, shapeIndex + 1);
+            Array.Resize(ref _queryMarker, newSize);
+        }
+        if (shapeIndex > _maxShapeIndex)
+            _maxShapeIndex = shapeIndex;
     }
 
     /// <summary>
@@ -78,8 +137,11 @@ public sealed class WorldPartition
     /// </summary>
     public bool Remove(int shapeIndex)
     {
+        // 大オブジェクトリストからの削除を試行
+        _largeObjects.Remove(shapeIndex);
+
         if (!_shapeToZones.TryGetValue(shapeIndex, out var zoneList))
-            return false;
+            return _largeObjects.Contains(shapeIndex) == false;
 
         foreach (var coord in zoneList)
         {
@@ -133,8 +195,6 @@ public sealed class WorldPartition
     /// <returns>候補数</returns>
     public int Query(in AABB queryAABB, Span<int> candidates, ReadOnlySpan<AABB> allAABBs)
     {
-        var zoneCoords = GetZoneCoordinates(queryAABB);
-
         // 総数が少ない場合は愚直検索
         int totalShapes = CountTotalShapes();
         if (totalShapes <= BruteForceThreshold)
@@ -142,46 +202,80 @@ public sealed class WorldPartition
             return QueryBruteForce(queryAABB, candidates, allAABBs);
         }
 
+        // クエリIDをインクリメント（重複排除用）
+        _currentQueryId++;
+        if (_currentQueryId == 0)
+        {
+            Array.Clear(_queryMarker, 0, _queryMarker.Length);
+            _currentQueryId = 1;
+        }
+
         GetAxisValues(queryAABB, out float minPrimary, out float maxPrimary, out float minSecondary, out float maxSecondary);
+
+        // ゾーン範囲を計算
+        int minZx = (int)MathF.Floor(queryAABB.Min.X * _invGridSize);
+        int minZy = (int)MathF.Floor(queryAABB.Min.Y * _invGridSize);
+        int minZz = (int)MathF.Floor(queryAABB.Min.Z * _invGridSize);
+        int maxZx = (int)MathF.Floor(queryAABB.Max.X * _invGridSize);
+        int maxZy = (int)MathF.Floor(queryAABB.Max.Y * _invGridSize);
+        int maxZz = (int)MathF.Floor(queryAABB.Max.Z * _invGridSize);
+
+        // ゾーン数が多すぎる場合は愚直検索にフォールバック
+        int zoneCount = (maxZx - minZx + 1) * (maxZy - minZy + 1) * (maxZz - minZz + 1);
+        if (zoneCount > MaxZonesToQuery)
+        {
+            return QueryBruteForce(queryAABB, candidates, allAABBs);
+        }
 
         Span<int> tempBuffer = stackalloc int[256];
         int count = 0;
 
-        // 重複排除用
-        Span<int> seen = stackalloc int[candidates.Length];
-        int seenCount = 0;
-
-        foreach (var coord in zoneCoords)
+        for (int zx = minZx; zx <= maxZx; zx++)
         {
-            if (!_zones.TryGetValue(coord, out var zone))
-                continue;
-
-            int zoneCount = zone.QueryOverlap(minPrimary, maxPrimary, minSecondary, maxSecondary, tempBuffer);
-
-            for (int i = 0; i < zoneCount && count < candidates.Length; i++)
+            for (int zy = minZy; zy <= maxZy; zy++)
             {
-                int shapeIndex = tempBuffer[i];
-
-                // 重複チェック
-                bool isDuplicate = false;
-                for (int j = 0; j < seenCount; j++)
+                for (int zz = minZz; zz <= maxZz; zz++)
                 {
-                    if (seen[j] == shapeIndex)
+                    long coord = PackZoneCoord(zx, zy, zz);
+                    if (!_zones.TryGetValue(coord, out var zone))
+                        continue;
+
+                    int zoneResultCount = zone.QueryOverlap(minPrimary, maxPrimary, minSecondary, maxSecondary, tempBuffer);
+
+                    for (int i = 0; i < zoneResultCount && count < candidates.Length; i++)
                     {
-                        isDuplicate = true;
-                        break;
+                        int shapeIndex = tempBuffer[i];
+
+                        // O(1)重複チェック
+                        if (shapeIndex < _queryMarker.Length && _queryMarker[shapeIndex] == _currentQueryId)
+                            continue;
+                        if (shapeIndex < _queryMarker.Length)
+                            _queryMarker[shapeIndex] = _currentQueryId;
+
+                        // 3軸 AABB オーバーラップ確認
+                        if (allAABBs[shapeIndex].Intersects(queryAABB))
+                        {
+                            candidates[count++] = shapeIndex;
+                        }
                     }
                 }
-                if (isDuplicate)
-                    continue;
+            }
+        }
 
-                // 3軸 AABB オーバーラップ確認
-                if (allAABBs[shapeIndex].Intersects(queryAABB))
-                {
-                    candidates[count++] = shapeIndex;
-                    if (seenCount < seen.Length)
-                        seen[seenCount++] = shapeIndex;
-                }
+        // 大オブジェクトリストもチェック
+        foreach (int shapeIndex in _largeObjects)
+        {
+            if (count >= candidates.Length)
+                break;
+
+            if (shapeIndex < _queryMarker.Length && _queryMarker[shapeIndex] == _currentQueryId)
+                continue;
+            if (shapeIndex < _queryMarker.Length)
+                _queryMarker[shapeIndex] = _currentQueryId;
+
+            if (allAABBs[shapeIndex].Intersects(queryAABB))
+            {
+                candidates[count++] = shapeIndex;
             }
         }
 
@@ -196,6 +290,18 @@ public sealed class WorldPartition
         int count = 0;
 
         foreach (var shapeIndex in _shapeToZones.Keys)
+        {
+            if (count >= candidates.Length)
+                break;
+
+            if (allAABBs[shapeIndex].Intersects(queryAABB))
+            {
+                candidates[count++] = shapeIndex;
+            }
+        }
+
+        // 大オブジェクトもチェック
+        foreach (int shapeIndex in _largeObjects)
         {
             if (count >= candidates.Length)
                 break;
@@ -221,11 +327,12 @@ public sealed class WorldPartition
     {
         _zones.Clear();
         _shapeToZones.Clear();
+        _largeObjects.Clear();
     }
 
     private int CountTotalShapes()
     {
-        return _shapeToZones.Count;
+        return _shapeToZones.Count + _largeObjects.Count;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

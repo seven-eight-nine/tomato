@@ -40,8 +40,8 @@ public sealed class RepeatUntilFailNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 }

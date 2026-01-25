@@ -113,7 +113,7 @@ public sealed class JoinNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int d = 0; d < _statusesStack.Count; d++)
         {
@@ -121,7 +121,7 @@ public sealed class JoinNode : IFlowNode
         }
         for (int i = 0; i < _children.Length; i++)
         {
-            _children[i].Reset();
+            _children[i].Reset(fireExitEvents);
         }
     }
 

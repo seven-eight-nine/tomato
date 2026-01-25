@@ -31,8 +31,8 @@ public sealed class FailerNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 }

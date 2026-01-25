@@ -20,7 +20,7 @@ public class PerformanceTests
     [Fact]
     public void LargeScale_AddShapes_Performance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(42);
 
         var sw = Stopwatch.StartNew();
@@ -214,7 +214,7 @@ public class PerformanceTests
     [Fact]
     public void LargeScale_MixedShapes_Performance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(161718);
 
         var sw = Stopwatch.StartNew();
@@ -276,7 +276,7 @@ public class PerformanceTests
     [Fact]
     public void LargeScale_UpdatePositions_Performance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(192021);
         var handles = new ShapeHandle[ShapeCount];
 
@@ -312,7 +312,7 @@ public class PerformanceTests
     [Fact]
     public void LargeScale_RemoveShapes_Performance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(222324);
         var handles = new ShapeHandle[ShapeCount];
 
@@ -346,7 +346,7 @@ public class PerformanceTests
     public void LargeScale_DenseArea_Raycast_Performance()
     {
         // 密集エリアでのレイキャストテスト
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(252627);
 
         // 小さなエリアに密集配置（10x10x10の空間に10万個）
@@ -384,8 +384,8 @@ public class PerformanceTests
     [Fact]
     public void LargeScale_SparseArea_Raycast_Performance()
     {
-        // 広大なエリアでのレイキャストテスト
-        var world = new SpatialWorld();
+        // 広大なエリアでのレイキャストテスト（大きなグリッドサイズで最適化）
+        var world = new SpatialWorld(new GridSAPBroadPhase(156f)); // 10000/64 ≈ 156
         var random = new Random(282930);
 
         // 大きなエリアに分散配置（10000x10000x10000の空間に10万個）
@@ -398,13 +398,6 @@ public class PerformanceTests
         }
 
         _output.WriteLine($"Created sparse world with {ShapeCount:N0} spheres in 10000x10000x10000 area");
-        _output.WriteLine($"Initial grid size: {world.CurrentGridSize}m, cell count: {world.CellCount:N0}");
-
-        // 動的グリッドサイズ最適化
-        var rebuildSw = Stopwatch.StartNew();
-        world.RebuildWithOptimalGridSize();
-        rebuildSw.Stop();
-        _output.WriteLine($"Rebuilt with optimal grid size: {world.CurrentGridSize}m, cell count: {world.CellCount:N0} ({rebuildSw.ElapsedMilliseconds} ms)");
 
         var sw = Stopwatch.StartNew();
         int hitCount = 0;
@@ -424,10 +417,10 @@ public class PerformanceTests
     }
 
     [Fact]
-    public void LargeScale_SparseArea_WithoutOptimization_Performance()
+    public void LargeScale_SparseArea_SmallGrid_Performance()
     {
-        // 比較用: 最適化なしの疎エリアテスト
-        var world = new SpatialWorld();
+        // 比較用: 小さいグリッドサイズでの疎エリアテスト
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(282930);
 
         for (int i = 0; i < ShapeCount; i++)
@@ -438,7 +431,7 @@ public class PerformanceTests
             world.AddSphere(new Vector3(x, y, z), 5f);
         }
 
-        _output.WriteLine($"[No optimization] Grid size: {world.CurrentGridSize}m, cell count: {world.CellCount:N0}");
+        _output.WriteLine($"[Small grid] Testing with gridSize=8m");
 
         var sw = Stopwatch.StartNew();
         int hitCount = 0;
@@ -452,16 +445,16 @@ public class PerformanceTests
 
         sw.Stop();
 
-        _output.WriteLine($"[No optimization] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
+        _output.WriteLine($"[Small grid] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
         _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
     }
 
     [Fact]
-    public void LargeScale_SparseArea_PreEstimated_Performance()
+    public void LargeScale_SparseArea_LargeGrid_Performance()
     {
-        // 事前にワールドサイズを指定して最適化
-        var world = new SpatialWorld(10000f, true); // 10000mワールド
+        // 大きなグリッドサイズでの疎エリアテスト（10000m / 64 ≈ 156m）
+        var world = new SpatialWorld(new GridSAPBroadPhase(156f));
         var random = new Random(282930);
 
         for (int i = 0; i < ShapeCount; i++)
@@ -472,7 +465,7 @@ public class PerformanceTests
             world.AddSphere(new Vector3(x, y, z), 5f);
         }
 
-        _output.WriteLine($"[Pre-estimated] Grid size: {world.CurrentGridSize}m, cell count: {world.CellCount:N0}");
+        _output.WriteLine($"[Large grid] Testing with gridSize=156m");
 
         var sw = Stopwatch.StartNew();
         int hitCount = 0;
@@ -486,7 +479,7 @@ public class PerformanceTests
 
         sw.Stop();
 
-        _output.WriteLine($"[Pre-estimated] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
+        _output.WriteLine($"[Large grid] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
         _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
     }
@@ -495,7 +488,7 @@ public class PerformanceTests
 
     private SpatialWorld CreateLargeWorld(int count)
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var random = new Random(42);
 
         for (int i = 0; i < count; i++)

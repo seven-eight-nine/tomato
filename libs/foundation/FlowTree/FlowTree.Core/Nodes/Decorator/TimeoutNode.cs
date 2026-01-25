@@ -55,13 +55,13 @@ public sealed class TimeoutNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _elapsedStack.Count; i++)
         {
             _elapsedStack[i] = 0;
         }
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 
     private void EnsureDepth(int depth)

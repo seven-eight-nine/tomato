@@ -11,7 +11,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_HitsSphere_ReturnsCorrectDistance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(5, 0, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 100f);
@@ -24,7 +24,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_MissesSphere_ReturnsNoHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(5, 5, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 100f);
@@ -37,7 +37,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_FromInsideSphere_ReturnsImmediateHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(0, 0, 0), 5f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 100f);
@@ -50,7 +50,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_ReturnsClosestHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var far = world.AddSphere(new Vector3(10, 0, 0), 1f);
         var near = world.AddSphere(new Vector3(5, 0, 0), 1f);
 
@@ -64,7 +64,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_TangentHit_Succeeds()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(5, 1, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 100f);
@@ -76,7 +76,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_HitsCapsule()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddCapsule(new Vector3(5, 0, 0), new Vector3(5, 5, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 2.5f, 0), new Vector3(1, 0, 0), 100f);
@@ -89,7 +89,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_HitsCylinder()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddCylinder(new Vector3(5, 0, 0), height: 3f, radius: 1f);
 
         var query = new RayQuery(new Vector3(0, 1.5f, 0), new Vector3(1, 0, 0), 100f);
@@ -101,7 +101,7 @@ public class RaycastTests
     [Fact]
     public void RaycastAll_ReturnsSortedByDistance()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(15, 0, 0), 1f);
         world.AddSphere(new Vector3(5, 0, 0), 1f);
         world.AddSphere(new Vector3(10, 0, 0), 1f);
@@ -118,7 +118,7 @@ public class RaycastTests
     [Fact]
     public void Raycast_MaxDistanceRespected()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(10, 0, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 5f);

@@ -47,10 +47,10 @@ public sealed class EventNode : IFlowNode
     /// <summary>
     /// EventNodeを作成する。
     /// </summary>
-    /// <param name="child">子ノード</param>
     /// <param name="onEnter">入った瞬間に発火するイベント（nullも可）</param>
     /// <param name="onExit">出た瞬間に発火するイベント（nullも可）</param>
-    public EventNode(IFlowNode child, FlowEventHandler? onEnter = null, FlowExitEventHandler? onExit = null)
+    /// <param name="child">子ノード</param>
+    public EventNode(FlowEventHandler? onEnter, FlowExitEventHandler? onExit, IFlowNode child)
     {
         _child = child ?? throw new ArgumentNullException(nameof(child));
         _onEnter = onEnter;
@@ -84,13 +84,17 @@ public sealed class EventNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int d = 0; d < _hasStartedStack.Count; d++)
         {
+            if (fireExitEvents && _hasStartedStack[d])
+            {
+                _onExit?.Invoke(NodeStatus.Failure);
+            }
             _hasStartedStack[d] = false;
         }
-        _child.Reset();
+        _child.Reset(fireExitEvents);
     }
 
     private void EnsureDepth(int depth)
@@ -114,14 +118,15 @@ public sealed class EventNode<T> : IFlowNode where T : class, IFlowState
     private readonly FlowEventHandler<T>? _onEnter;
     private readonly FlowExitEventHandler<T>? _onExit;
     private readonly List<bool> _hasStartedStack;
+    private T? _lastState;
 
     /// <summary>
     /// EventNodeを作成する。
     /// </summary>
-    /// <param name="child">子ノード</param>
     /// <param name="onEnter">入った瞬間に発火するイベント（nullも可）</param>
     /// <param name="onExit">出た瞬間に発火するイベント（nullも可）</param>
-    public EventNode(IFlowNode child, FlowEventHandler<T>? onEnter = null, FlowExitEventHandler<T>? onExit = null)
+    /// <param name="child">子ノード</param>
+    public EventNode(FlowEventHandler<T>? onEnter, FlowExitEventHandler<T>? onExit, IFlowNode child)
     {
         _child = child ?? throw new ArgumentNullException(nameof(child));
         _onEnter = onEnter;
@@ -136,6 +141,7 @@ public sealed class EventNode<T> : IFlowNode where T : class, IFlowState
         EnsureDepth(depth);
 
         var state = (T)context.State!;
+        _lastState = state;
 
         // 初回Tick時にOnEnterを発火
         if (!_hasStartedStack[depth])
@@ -157,13 +163,18 @@ public sealed class EventNode<T> : IFlowNode where T : class, IFlowState
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int d = 0; d < _hasStartedStack.Count; d++)
         {
+            if (fireExitEvents && _hasStartedStack[d] && _lastState != null)
+            {
+                _onExit?.Invoke(_lastState, NodeStatus.Failure);
+            }
             _hasStartedStack[d] = false;
         }
-        _child.Reset();
+        _lastState = null;
+        _child.Reset(fireExitEvents);
     }
 
     private void EnsureDepth(int depth)

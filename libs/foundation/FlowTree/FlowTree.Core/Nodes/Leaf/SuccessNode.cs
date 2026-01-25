@@ -24,7 +24,7 @@ public sealed class SuccessNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         // 状態なし
     }

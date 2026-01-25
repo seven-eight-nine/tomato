@@ -37,4 +37,16 @@ public struct FlowContext
     /// 再帰呼び出し時のノード状態管理に使用。
     /// </summary>
     public readonly int CurrentCallDepth => CallStack?.Count ?? 0;
+
+    /// <summary>
+    /// Returnが要求されたかどうか。
+    /// ReturnNodeによって設定される。
+    /// </summary>
+    public bool ReturnRequested;
+
+    /// <summary>
+    /// Returnで返すステータス。
+    /// ReturnRequestedがtrueの場合に使用される。
+    /// </summary>
+    public NodeStatus ReturnStatus;
 }

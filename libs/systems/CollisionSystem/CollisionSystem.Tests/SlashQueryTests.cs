@@ -9,7 +9,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_HitsSphere_DirectIntersection()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(0, 0, 0), 1f);
 
         // 球の中心を通る斬撃
@@ -28,7 +28,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_MissesSphere_Parallel()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(0, 0, 0), 1f);
 
         // 球の上を通過
@@ -47,7 +47,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_EdgeHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(0, 0, 0), 1f);
 
         // エッジがかする
@@ -66,7 +66,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_HitsCapsule()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddCapsule(new Vector3(0, 0, 0), new Vector3(0, 3, 0), 0.5f);
 
         var query = new SlashQuery(
@@ -84,7 +84,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_HitsCylinder()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddCylinder(new Vector3(0, 0, 0), height: 2f, radius: 0.5f);
 
         var query = new SlashQuery(
@@ -102,7 +102,7 @@ public class SlashQueryTests
     [Fact]
     public void Slash_MultipleTargets()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         world.AddSphere(new Vector3(-1, 0, 0), 0.5f);
         world.AddSphere(new Vector3(1, 0, 0), 0.5f);
         world.AddSphere(new Vector3(0, 10, 0), 0.5f); // 離れてる

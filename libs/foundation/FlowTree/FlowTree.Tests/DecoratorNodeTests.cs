@@ -1,4 +1,5 @@
 using Xunit;
+using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
 
@@ -298,8 +299,9 @@ public class DecoratorNodeTests
     {
         int enterCount = 0;
         var eventNode = new EventNode(
-            new ActionNode(static () => NodeStatus.Success),
-            onEnter: () => { enterCount++; }
+            () => { enterCount++; },
+            null,
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var ctx = new FlowContext { DeltaTime = 0.1f };
@@ -319,12 +321,13 @@ public class DecoratorNodeTests
         int enterCount = 0;
         int tickCount = 0;
         var eventNode = new EventNode(
+            () => { enterCount++; },
+            null,
             new ActionNode(() =>
             {
                 tickCount++;
                 return tickCount < 3 ? NodeStatus.Running : NodeStatus.Success;
-            }),
-            onEnter: () => { enterCount++; }
+            })
         );
 
         var ctx = new FlowContext { DeltaTime = 0.1f };
@@ -348,8 +351,9 @@ public class DecoratorNodeTests
         int exitCount = 0;
         NodeStatus? exitResult = null;
         var eventNode = new EventNode(
-            new ActionNode(static () => NodeStatus.Success),
-            onExit: result => { exitCount++; exitResult = result; }
+            null,
+            result => { exitCount++; exitResult = result; },
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var ctx = new FlowContext { DeltaTime = 0.1f };
@@ -365,12 +369,13 @@ public class DecoratorNodeTests
         int exitCount = 0;
         int tickCount = 0;
         var eventNode = new EventNode(
+            null,
+            _ => { exitCount++; },
             new ActionNode(() =>
             {
                 tickCount++;
                 return tickCount < 2 ? NodeStatus.Running : NodeStatus.Failure;
-            }),
-            onExit: _ => { exitCount++; }
+            })
         );
 
         var ctx = new FlowContext { DeltaTime = 0.1f };
@@ -390,9 +395,9 @@ public class DecoratorNodeTests
         int enterCount = 0;
         int exitCount = 0;
         var eventNode = new EventNode(
-            new ActionNode(static () => NodeStatus.Success),
-            onEnter: () => { enterCount++; },
-            onExit: _ => { exitCount++; }
+            () => { enterCount++; },
+            _ => { exitCount++; },
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var ctx = new FlowContext { DeltaTime = 0.1f };
@@ -406,6 +411,8 @@ public class DecoratorNodeTests
     public void EventNode_PassesThroughChildStatus()
     {
         var eventNode = new EventNode(
+            null,
+            null,
             new ActionNode(static () => NodeStatus.Failure)
         );
 
@@ -414,22 +421,23 @@ public class DecoratorNodeTests
     }
 
     // =====================================================
-    // Event DSL (Fluent) Tests
+    // Event DSL Tests
     // =====================================================
 
     [Fact]
-    public void EventDsl_WrapsNextNode()
+    public void EventDsl_WrapsNode()
     {
         int enterCount = 0;
         int exitCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Event(
-                onEnter: () => { enterCount++; },
-                onExit: _ => { exitCount++; })
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        tree.Build(
+            Event(
+                () => { enterCount++; },
+                _ => { exitCount++; },
+                Action(static () => NodeStatus.Success)
+            )
+        );
 
         tree.Tick(0.016f);
 
@@ -444,13 +452,16 @@ public class DecoratorNodeTests
         int actionCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Event(onEnter: () => { enterCount++; })
-            .Sequence()
-                .Action(() => { actionCount++; return NodeStatus.Success; })
-                .Action(() => { actionCount++; return NodeStatus.Success; })
-            .End()
-            .Complete();
+        tree.Build(
+            Event(
+                () => { enterCount++; },
+                null,
+                Sequence(
+                    Action(() => { actionCount++; return NodeStatus.Success; }),
+                    Action(() => { actionCount++; return NodeStatus.Success; })
+                )
+            )
+        );
 
         tree.Tick(0.016f);
 
@@ -466,16 +477,17 @@ public class DecoratorNodeTests
         int tickCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Event(
-                onEnter: () => { enterCount++; },
-                onExit: _ => { exitCount++; })
-            .Action(() =>
-            {
-                tickCount++;
-                return tickCount < 3 ? NodeStatus.Running : NodeStatus.Success;
-            })
-            .Complete();
+        tree.Build(
+            Event(
+                () => { enterCount++; },
+                _ => { exitCount++; },
+                Action(() =>
+                {
+                    tickCount++;
+                    return tickCount < 3 ? NodeStatus.Running : NodeStatus.Success;
+                })
+            )
+        );
 
         // 1回目: Running、OnEnter発火
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
@@ -502,8 +514,9 @@ public class DecoratorNodeTests
     {
         var state = new TestState { Counter = 0 };
         var eventNode = new EventNode<TestState>(
-            new ActionNode(static () => NodeStatus.Success),
-            onEnter: s => { s.Counter++; }
+            s => { s.Counter++; },
+            null,
+            new ActionNode(static () => NodeStatus.Success)
         );
 
         var ctx = new FlowContext { State = state, DeltaTime = 0.1f };
@@ -521,12 +534,13 @@ public class DecoratorNodeTests
         var state = new TestState { Counter = 0 };
 
         var tree = new FlowTree();
-        tree.Build(state)
-            .Event(
-                onEnter: s => { s.Counter++; },
-                onExit: (s, _) => { s.Counter += 10; })
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        tree.Build(state,
+                Event<TestState>(
+                    s => { s.Counter++; },
+                    (s, _) => { s.Counter += 10; },
+                    Action(static () => NodeStatus.Success)
+                )
+            );
 
         tree.Tick(0.016f);
 

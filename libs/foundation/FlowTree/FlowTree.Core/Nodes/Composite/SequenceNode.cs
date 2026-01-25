@@ -60,7 +60,7 @@ public sealed class SequenceNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _currentIndexStack.Count; i++)
         {
@@ -68,7 +68,7 @@ public sealed class SequenceNode : IFlowNode
         }
         for (int i = 0; i < _children.Length; i++)
         {
-            _children[i].Reset();
+            _children[i].Reset(fireExitEvents);
         }
     }
 

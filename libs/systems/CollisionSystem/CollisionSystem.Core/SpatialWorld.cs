@@ -10,42 +10,16 @@ namespace Tomato.CollisionSystem;
 public sealed class SpatialWorld
 {
     private readonly ShapeRegistry _registry;
-    private WorldPartition _partition;
-
-    // ワールド境界追跡
-    private AABB _worldBounds;
-    private bool _hasBounds;
-
-    // グリッドサイズ設定
-    private const float MinGridSize = 8f;
-    private const float MaxGridSize = 512f;
-    private const int TargetCellsPerAxis = 64;
+    private readonly IBroadPhase _broadPhase;
 
     /// <summary>
     /// SpatialWorld を作成する。
     /// </summary>
-    /// <param name="gridSize">グリッドサイズ（1セルの辺の長さ、メートル）。0以下でデフォルト値。</param>
-    /// <param name="axisMode">SAP軸モード。</param>
-    public SpatialWorld(float gridSize = 0f, SAPAxisMode axisMode = SAPAxisMode.X)
+    /// <param name="broadPhase">Broad Phase 戦略</param>
+    public SpatialWorld(IBroadPhase broadPhase)
     {
+        _broadPhase = broadPhase ?? throw new ArgumentNullException(nameof(broadPhase));
         _registry = new ShapeRegistry();
-        _partition = new WorldPartition(gridSize > 0 ? gridSize : MinGridSize, axisMode);
-        _worldBounds = default;
-        _hasBounds = false;
-    }
-
-    /// <summary>
-    /// 推定ワールドサイズから最適なグリッドサイズで初期化する。
-    /// </summary>
-    /// <param name="estimatedWorldSize">推定ワールドサイズ（1軸あたりのメートル）</param>
-    /// <param name="axisMode">SAP軸モード。</param>
-    public SpatialWorld(float estimatedWorldSize, bool _, SAPAxisMode axisMode = SAPAxisMode.X)
-    {
-        _registry = new ShapeRegistry();
-        float gridSize = CalculateOptimalGridSize(estimatedWorldSize);
-        _partition = new WorldPartition(gridSize, axisMode);
-        _worldBounds = default;
-        _hasBounds = false;
     }
 
     /// <summary>
@@ -53,59 +27,38 @@ public sealed class SpatialWorld
     /// </summary>
     public int ShapeCount => _registry.Count;
 
-    /// <summary>
-    /// 現在のグリッドサイズ。
-    /// </summary>
-    public float CurrentGridSize => _partition.GridSize;
-
-    /// <summary>
-    /// 現在のワールド境界。
-    /// </summary>
-    public AABB WorldBounds => _worldBounds;
-
-    /// <summary>
-    /// アクティブなセル数。
-    /// </summary>
-    public int CellCount => _partition.ZoneCount;
-
     #region Registration
 
     /// <summary>
     /// 球を追加する。
     /// </summary>
-    public ShapeHandle AddSphere(in Vector3 center, float radius, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddSphere(in Vector3 center, float radius, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         var data = new SphereData(center, radius);
-        var handle = _registry.AddSphere(data, isStatic, userData);
-        var aabb = _registry.GetAABB(handle.Index);
-        ExpandWorldBounds(aabb);
-        _partition.Add(handle.Index, aabb);
+        var handle = _registry.AddSphere(data, isStatic, userData, layerMask);
+        _broadPhase.Add(handle.Index, _registry.GetAABB(handle.Index));
         return handle;
     }
 
     /// <summary>
     /// カプセルを追加する。
     /// </summary>
-    public ShapeHandle AddCapsule(in Vector3 p1, in Vector3 p2, float radius, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddCapsule(in Vector3 p1, in Vector3 p2, float radius, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         var data = new CapsuleData(p1, p2, radius);
-        var handle = _registry.AddCapsule(data, isStatic, userData);
-        var aabb = _registry.GetAABB(handle.Index);
-        ExpandWorldBounds(aabb);
-        _partition.Add(handle.Index, aabb);
+        var handle = _registry.AddCapsule(data, isStatic, userData, layerMask);
+        _broadPhase.Add(handle.Index, _registry.GetAABB(handle.Index));
         return handle;
     }
 
     /// <summary>
     /// 円柱を追加する。
     /// </summary>
-    public ShapeHandle AddCylinder(in Vector3 baseCenter, float height, float radius, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddCylinder(in Vector3 baseCenter, float height, float radius, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         var data = new CylinderData(baseCenter, height, radius);
-        var handle = _registry.AddCylinder(data, isStatic, userData);
-        var aabb = _registry.GetAABB(handle.Index);
-        ExpandWorldBounds(aabb);
-        _partition.Add(handle.Index, aabb);
+        var handle = _registry.AddCylinder(data, isStatic, userData, layerMask);
+        _broadPhase.Add(handle.Index, _registry.GetAABB(handle.Index));
         return handle;
     }
 
@@ -117,13 +70,12 @@ public sealed class SpatialWorld
     /// <param name="yaw">Y軸回転（ラジアン）</param>
     /// <param name="isStatic">静的フラグ</param>
     /// <param name="userData">ユーザーデータ</param>
-    public ShapeHandle AddBox(in Vector3 center, in Vector3 halfExtents, float yaw = 0f, bool isStatic = false, int userData = 0)
+    /// <param name="layerMask">レイヤーマスク</param>
+    public ShapeHandle AddBox(in Vector3 center, in Vector3 halfExtents, float yaw = 0f, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         var data = new BoxData(center, halfExtents, yaw);
-        var handle = _registry.AddBox(data, isStatic, userData);
-        var aabb = _registry.GetAABB(handle.Index);
-        ExpandWorldBounds(aabb);
-        _partition.Add(handle.Index, aabb);
+        var handle = _registry.AddBox(data, isStatic, userData, layerMask);
+        _broadPhase.Add(handle.Index, _registry.GetAABB(handle.Index));
         return handle;
     }
 
@@ -135,7 +87,7 @@ public sealed class SpatialWorld
         if (!_registry.IsValid(handle))
             return false;
 
-        _partition.Remove(handle.Index);
+        _broadPhase.Remove(handle.Index);
         return _registry.Remove(handle);
     }
 
@@ -157,7 +109,7 @@ public sealed class SpatialWorld
         if (_registry.UpdateSphere(handle, newData))
         {
             var newAABB = _registry.GetAABB(handle.Index);
-            _partition.Update(handle.Index, oldAABB, newAABB);
+            _broadPhase.Update(handle.Index, oldAABB, newAABB);
         }
     }
 
@@ -175,7 +127,7 @@ public sealed class SpatialWorld
         if (_registry.UpdateCapsule(handle, newData))
         {
             var newAABB = _registry.GetAABB(handle.Index);
-            _partition.Update(handle.Index, oldAABB, newAABB);
+            _broadPhase.Update(handle.Index, oldAABB, newAABB);
         }
     }
 
@@ -193,7 +145,7 @@ public sealed class SpatialWorld
         if (_registry.UpdateCylinder(handle, newData))
         {
             var newAABB = _registry.GetAABB(handle.Index);
-            _partition.Update(handle.Index, oldAABB, newAABB);
+            _broadPhase.Update(handle.Index, oldAABB, newAABB);
         }
     }
 
@@ -215,7 +167,7 @@ public sealed class SpatialWorld
         if (_registry.UpdateBox(handle, newData))
         {
             var newAABB = _registry.GetAABB(handle.Index);
-            _partition.Update(handle.Index, oldAABB, newAABB);
+            _broadPhase.Update(handle.Index, oldAABB, newAABB);
         }
     }
 
@@ -226,7 +178,8 @@ public sealed class SpatialWorld
     /// <summary>
     /// 点クエリ。
     /// </summary>
-    public int QueryPoint(in Vector3 point, Span<HitResult> results)
+    public int QueryPoint(in Vector3 point, Span<HitResult> results,
+                          uint includeMask = 0xFFFFFFFF, uint excludeMask = 0)
     {
         if (results.IsEmpty)
             return 0;
@@ -236,12 +189,18 @@ public sealed class SpatialWorld
         var queryAABB = new AABB(point - epsilon, point + epsilon);
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         int hitCount = 0;
         for (int i = 0; i < candidateCount && hitCount < results.Length; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            uint shapeMask = _registry.GetLayerMask(shapeIndex);
+            if ((shapeMask & includeMask) == 0 || (shapeMask & excludeMask) != 0)
+                continue;
+
             if (TestPointShape(point, shapeIndex, out var hit))
             {
                 results[hitCount++] = hit;
@@ -260,13 +219,18 @@ public sealed class SpatialWorld
         var queryAABB = query.GetAABB();
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         float bestT = query.MaxDistance;
 
         for (int i = 0; i < candidateCount; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            if (!query.PassesMask(_registry.GetLayerMask(shapeIndex)))
+                continue;
+
             if (TestRayShape(query.Origin, query.Direction, bestT, shapeIndex,
                 out var t, out var point, out var normal))
             {
@@ -292,13 +256,18 @@ public sealed class SpatialWorld
         var queryAABB = query.GetAABB();
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         int hitCount = 0;
 
         for (int i = 0; i < candidateCount && hitCount < results.Length; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            if (!query.PassesMask(_registry.GetLayerMask(shapeIndex)))
+                continue;
+
             if (TestRayShape(query.Origin, query.Direction, query.MaxDistance, shapeIndex,
                 out var t, out var point, out var normal))
             {
@@ -323,7 +292,7 @@ public sealed class SpatialWorld
         var queryAABB = query.GetAABB();
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         int hitCount = 0;
         var querySphere = new SphereData(query.Center, query.Radius);
@@ -331,6 +300,11 @@ public sealed class SpatialWorld
         for (int i = 0; i < candidateCount && hitCount < results.Length; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            if (!query.PassesMask(_registry.GetLayerMask(shapeIndex)))
+                continue;
+
             if (TestSphereShape(querySphere, shapeIndex, out var point, out var normal, out var distance))
             {
                 results[hitCount++] = new HitResult(shapeIndex, distance, point, normal);
@@ -349,13 +323,18 @@ public sealed class SpatialWorld
         var queryAABB = query.GetAABB();
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         float bestTOI = 1f;
 
         for (int i = 0; i < candidateCount; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            if (!query.PassesMask(_registry.GetLayerMask(shapeIndex)))
+                continue;
+
             if (TestCapsuleSweepShape(query.Start, query.End, query.Radius, shapeIndex,
                 out var toi, out var point, out var normal))
             {
@@ -381,13 +360,18 @@ public sealed class SpatialWorld
         var queryAABB = query.GetAABB();
 
         Span<int> candidates = stackalloc int[256];
-        int candidateCount = _partition.Query(queryAABB, candidates, _registry.AABBs);
+        int candidateCount = _broadPhase.Query(queryAABB, candidates, _registry.AABBs);
 
         int hitCount = 0;
 
         for (int i = 0; i < candidateCount && hitCount < results.Length; i++)
         {
             int shapeIndex = candidates[i];
+
+            // マスクフィルタリング
+            if (!query.PassesMask(_registry.GetLayerMask(shapeIndex)))
+                continue;
+
             if (TestSlashShape(query.StartBase, query.StartTip, query.EndBase, query.EndTip, shapeIndex,
                 out var point, out var normal, out var distance))
             {
@@ -429,6 +413,33 @@ public sealed class SpatialWorld
         if (!_registry.IsValid(handle))
             return -1;
         return _registry.GetUserData(handle.Index);
+    }
+
+    /// <summary>
+    /// レイヤーマスクを取得する。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public uint GetLayerMask(int shapeIndex) => _registry.GetLayerMask(shapeIndex);
+
+    /// <summary>
+    /// レイヤーマスクを取得する。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public uint GetLayerMask(ShapeHandle handle)
+    {
+        if (!_registry.IsValid(handle))
+            return 0;
+        return _registry.GetLayerMask(handle.Index);
+    }
+
+    /// <summary>
+    /// レイヤーマスクを設定する。
+    /// </summary>
+    public void SetLayerMask(ShapeHandle handle, uint layerMask)
+    {
+        if (!_registry.IsValid(handle))
+            return;
+        _registry.SetLayerMask(handle.Index, layerMask);
     }
 
     #endregion
@@ -657,76 +668,6 @@ public sealed class SpatialWorld
             }
             results[j + 1] = key;
         }
-    }
-
-    #endregion
-
-    #region Zone Management
-
-    /// <summary>
-    /// ワールド境界を拡張する。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ExpandWorldBounds(in AABB aabb)
-    {
-        if (!_hasBounds)
-        {
-            _worldBounds = aabb;
-            _hasBounds = true;
-        }
-        else
-        {
-            _worldBounds = AABB.Merge(_worldBounds, aabb);
-        }
-    }
-
-    /// <summary>
-    /// 最適なグリッドサイズを計算する。
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float CalculateOptimalGridSize(float worldSize)
-    {
-        float optimal = worldSize / TargetCellsPerAxis;
-        return MathF.Max(MinGridSize, MathF.Min(MaxGridSize, optimal));
-    }
-
-    /// <summary>
-    /// 現在のワールド境界に基づいて最適なグリッドサイズで再構築する。
-    /// Shape追加完了後に呼び出すと性能が向上する。
-    /// </summary>
-    public void RebuildWithOptimalGridSize()
-    {
-        if (!_hasBounds || _registry.Count == 0)
-            return;
-
-        var size = _worldBounds.Size;
-        float maxComponent = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
-        float optimalGridSize = CalculateOptimalGridSize(maxComponent);
-
-        // 現在のグリッドサイズと大きく変わらない場合はスキップ
-        if (MathF.Abs(optimalGridSize - _partition.GridSize) < _partition.GridSize * 0.5f)
-            return;
-
-        RebuildPartition(optimalGridSize);
-    }
-
-    /// <summary>
-    /// 指定したグリッドサイズでパーティションを再構築する。
-    /// </summary>
-    public void RebuildPartition(float newGridSize)
-    {
-        var newPartition = new WorldPartition(newGridSize, _partition.AxisMode);
-
-        // 全Shapeを新しいパーティションに登録し直す
-        for (int i = 0; i < _registry.Capacity; i++)
-        {
-            if (_registry.IsValidIndex(i))
-            {
-                newPartition.Add(i, _registry.GetAABB(i));
-            }
-        }
-
-        _partition = newPartition;
     }
 
     #endregion

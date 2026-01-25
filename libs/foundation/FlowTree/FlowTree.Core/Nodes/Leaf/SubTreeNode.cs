@@ -130,11 +130,12 @@ public sealed class SubTreeNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _hasStartedStack.Count; i++)
         {
             _hasStartedStack[i] = false;
+            _currentTreeStack[i]?.Reset(fireExitEvents);
             _currentTreeStack[i] = null;
         }
     }
@@ -260,11 +261,12 @@ public sealed class SubTreeNode<TParent> : IFlowNode where TParent : class, IFlo
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _hasStartedStack.Count; i++)
         {
             _hasStartedStack[i] = false;
+            _currentTreeStack[i]?.Reset(fireExitEvents);
             _currentTreeStack[i] = null;
         }
     }
@@ -420,11 +422,12 @@ public sealed class SubTreeNode<TParent, TChild> : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _hasStartedStack.Count; i++)
         {
             _hasStartedStack[i] = false;
+            _currentTreeStack[i]?.Reset(fireExitEvents);
             _currentTreeStack[i] = null;
             _currentStateStack[i] = null;
         }

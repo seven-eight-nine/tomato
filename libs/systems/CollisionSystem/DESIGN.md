@@ -11,7 +11,7 @@ namespace: `Tomato.CollisionSystem`
 1. [用語定義](#用語定義)
 2. [設計哲学](#設計哲学)
 3. [アーキテクチャ概要](#アーキテクチャ概要)
-4. [Broad Phase詳細](#broad-phase詳細)
+4. [Broad Phase 戦略](#broad-phase-戦略)
 5. [Narrow Phase詳細](#narrow-phase詳細)
 6. [クエリ詳細](#クエリ詳細)
 7. [パフォーマンス設計](#パフォーマンス設計)
@@ -26,7 +26,7 @@ namespace: `Tomato.CollisionSystem`
 
 | 用語 | 英語 | 定義 |
 |------|------|------|
-| **Shape** | Shape | 3D空間内の幾何学的形状。Sphere、Capsule、Cylinderがある。 |
+| **Shape** | Shape | 3D空間内の幾何学的形状。Sphere、Capsule、Cylinder、Boxがある。 |
 | **クエリ** | Query | 空間に対する問い合わせ。レイキャスト、オーバーラップなど。 |
 | **ヒット** | Hit | クエリの結果、形状との交差が検出されたこと。 |
 | **AABB** | Axis-Aligned Bounding Box | 軸平行境界ボックス。形状を囲む最小の直方体。 |
@@ -39,16 +39,24 @@ namespace: `Tomato.CollisionSystem`
 | **Narrow Phase** | Narrow Phase | 幾何学的な詳細判定。候補に対してのみ実行。 |
 | **候補** | Candidate | Broad Phaseで絞り込まれた形状。Narrow Phaseで判定される。 |
 
-### ゾーン分割
+### レイヤーマスク
 
 | 用語 | 英語 | 定義 |
 |------|------|------|
-| **ゾーン** | Zone | ワールドを固定サイズで区切った領域。 |
-| **グリッドサイズ** | Grid Size | ゾーン1辺の長さ（メートル）。 |
-| **SAP** | Sweep and Prune | 1軸ソートによる高速オーバーラップ判定。 |
-| **SAP軸モード** | SAP Axis Mode | SAPのソート軸の選択。X軸、Z軸、XZ軸（2軸）。 |
-| **主軸** | Primary Axis | SAPでソート・絞り込みを行う軸。 |
-| **副軸** | Secondary Axis | XZモード時にフィルタリングに使用する追加軸。 |
+| **レイヤーマスク** | Layer Mask | 形状に割り当てる32ビットのビットマスク。フィルタリングに使用。 |
+| **IncludeMask** | Include Mask | クエリで判定対象とするレイヤー。いずれかのビットが一致すれば候補。 |
+| **ExcludeMask** | Exclude Mask | クエリで除外するレイヤー。いずれかのビットが一致すれば除外。 |
+
+### Broad Phase 戦略
+
+| 用語 | 英語 | 定義 |
+|------|------|------|
+| **BVH** | Bounding Volume Hierarchy | バウンディングボリューム階層。再帰的に空間を二分割。 |
+| **DBVT** | Dynamic Bounding Volume Tree | 動的BVH。増分更新に最適化。 |
+| **Octree** | Octree | 8分木。空間を再帰的に8分割。 |
+| **MBP** | Multi-Box Pruning | 複数リージョンによる枝刈り。固定境界向け。 |
+| **GridSAP** | Grid + Sweep and Prune | グリッド分割 + 1軸ソート。 |
+| **SpatialHash** | Spatial Hash | 空間ハッシュ。O(1)の追加・削除。 |
 
 ---
 
@@ -61,7 +69,7 @@ Broad Phaseでおおまかな候補を絞り込み、Narrow Phaseで詳細判定
 ```
 全Shape（数千個）
     │
-    ▼ Broad Phase（空間分割 + SAP）
+    ▼ Broad Phase（空間分割）
 候補Shape（数十個）
     │
     ▼ Narrow Phase（幾何学的判定）
@@ -78,11 +86,11 @@ Broad Phaseでおおまかな候補を絞り込み、Narrow Phaseで詳細判定
 毎フレームのクエリでヒープアロケーションを発生させない。
 
 ```csharp
-// ✓ 良い: スタックアロケーション
+// 良い: スタックアロケーション
 Span<HitResult> results = stackalloc HitResult[32];
 int count = world.QuerySphereOverlap(query, results);
 
-// ✗ 悪い: ヒープアロケーション（このライブラリでは使わない）
+// 悪い: ヒープアロケーション（このライブラリでは使わない）
 List<HitResult> results = world.QuerySphereOverlap(query);
 ```
 
@@ -107,19 +115,47 @@ bool valid = world.IsValid(handle);  // false
 - Index: 内部配列のインデックス
 - Generation: 削除・再利用の追跡番号
 
-### 原則4: 動的ワールドへの対応
+### 原則4: 戦略パターン
 
-形状の追加・削除・移動が毎フレーム発生しても効率的に動作する。
+用途に応じて最適な Broad Phase を選択可能。
 
 ```csharp
-// 毎フレーム位置更新（差分ソートで高速）
-world.UpdateSphere(handle, newCenter, radius);
+// 動的シーン向け
+var world = new SpatialWorld(new BVHBroadPhase(maxShapes: 10000));
+
+// オープンワールド向け
+var world = new SpatialWorld(new DBVTBroadPhase(maxShapes: 50000));
+
+// 固定マップ向け
+var world = new SpatialWorld(new MBPBroadPhase(bounds, 8, 8, maxShapes: 10000));
 ```
 
-**最適化:**
-- ゾーン移動は AABB 変化時のみ
-- SAP配列はインサーションソートで差分更新
-- 32個以下は愚直検索にフォールバック
+### 原則5: レイヤーマスクフィルタリング
+
+Narrow Phase前にビットマスクで候補をフィルタリング。
+
+```csharp
+// 判定ロジック
+bool shouldTest = (shapeMask & includeMask) != 0 && (shapeMask & excludeMask) == 0;
+```
+
+**メリット:**
+- Narrow Phaseの計算をスキップできる（パフォーマンス向上）
+- ゲームロジックと衝突判定を分離
+- 複数レイヤーの組み合わせが簡単
+
+```csharp
+// レイヤー定義
+const uint LayerPlayer = 0x01;
+const uint LayerEnemy = 0x02;
+const uint LayerEnvironment = 0x04;
+
+// 敵レイヤーのみ攻撃対象
+var attackRay = new RayQuery(origin, dir, 10f, includeMask: LayerEnemy);
+
+// 環境のみ衝突（キャラクターは通過）
+var moveSweep = new CapsuleSweepQuery(start, end, 0.4f, includeMask: LayerEnvironment);
+```
 
 ---
 
@@ -130,23 +166,28 @@ world.UpdateSphere(handle, newCenter, radius);
 │                        SpatialWorld                             │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │                    Public API                              │  │
-│  │  AddSphere/AddCapsule/AddCylinder                         │  │
-│  │  UpdateSphere/UpdateCapsule/UpdateCylinder                │  │
-│  │  Remove                                                    │  │
+│  │  AddSphere/AddCapsule/AddCylinder/AddBox (+ layerMask)    │  │
+│  │  UpdateSphere/UpdateCapsule/UpdateCylinder/UpdateBox      │  │
+│  │  Remove, GetLayerMask, SetLayerMask                        │  │
 │  │  Raycast/QuerySphereOverlap/CapsuleSweep/QuerySlash       │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                              │                                   │
 │  ┌───────────────────────────┼───────────────────────────────┐  │
 │  │                           ▼                                │  │
 │  │  ┌─────────────────┐    ┌─────────────────────────────┐   │  │
-│  │  │  ShapeRegistry  │    │      WorldPartition         │   │  │
+│  │  │  ShapeRegistry  │    │       IBroadPhase           │   │  │
 │  │  │                 │    │                             │   │  │
-│  │  │  Shape データ   │    │  ┌─────┐ ┌─────┐ ┌─────┐   │   │  │
-│  │  │  AABB           │    │  │Zone │ │Zone │ │Zone │   │   │  │
-│  │  │  Type           │    │  │ SAP │ │ SAP │ │ SAP │   │   │  │
-│  │  │  UserData       │    │  └─────┘ └─────┘ └─────┘   │   │  │
-│  │  └─────────────────┘    └─────────────────────────────┘   │  │
-│  │            Data Layer             Broad Phase              │  │
+│  │  │  Shape データ   │    │  ┌─────────────────────┐   │   │  │
+│  │  │  AABB           │    │  │ BVHBroadPhase       │   │   │  │
+│  │  │  Type           │    │  │ DBVTBroadPhase      │   │   │  │
+│  │  │  UserData       │    │  │ OctreeBroadPhase    │   │   │  │
+│  │  │  LayerMask      │    │  │ ...                 │   │   │  │
+│  │  └─────────────────┘    │  │ MBPBroadPhase       │   │   │  │
+│  │                         │  │ GridSAPBroadPhase   │   │   │  │
+│  │                         │  │ SpatialHashBroadPhase│  │   │  │
+│  │                         │  └─────────────────────┘   │   │  │
+│  │            Data Layer   └─────────────────────────────┘   │  │
+│  │                                  Broad Phase              │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                              │                                   │
 │  ┌───────────────────────────┼───────────────────────────────┐  │
@@ -169,112 +210,228 @@ world.UpdateSphere(handle, newCenter, radius);
 
 | コンポーネント | 責務 |
 |---------------|------|
-| **SpatialWorld** | 公開API。登録・更新・削除・クエリを統合 |
-| **ShapeRegistry** | Shapeデータの管理。SoAレイアウト |
-| **WorldPartition** | ゾーン管理。Broad Phase候補絞り込み |
-| **Zone** | 1ゾーン内のSAP配列管理 |
+| **SpatialWorld** | 公開API。登録・更新・削除・クエリを統合。レイヤーマスクアクセス |
+| **ShapeRegistry** | Shapeデータの管理。SoAレイアウト。LayerMask保持 |
+| **IBroadPhase** | Broad Phase インターフェース |
 | **ShapeIntersection** | 幾何学的交差判定。static メソッド群 |
 
 ---
 
-## Broad Phase詳細
+## Broad Phase 戦略
 
-### WorldPartition
+### IBroadPhase インターフェース
 
-3D空間を固定サイズのゾーンに分割する。
+すべての Broad Phase 戦略が実装するインターフェース。
 
-```
-ワールド空間
-┌─────┬─────┬─────┬─────┐
-│ Z0  │ Z1  │ Z2  │ Z3  │
-├─────┼─────┼─────┼─────┤
-│ Z4  │ Z5  │ Z6  │ Z7  │  ← 各ゾーンは独立したSAP配列を持つ
-├─────┼─────┼─────┼─────┤
-│ Z8  │ Z9  │ Z10 │ Z11 │
-└─────┴─────┴─────┴─────┘
-       gridSize
-       ◀───────▶
-```
-
-**ゾーン座標のパック:**
 ```csharp
-// 3軸座標を64ビット整数にパック
-// 各軸21ビット（±100万の範囲）
-long coord = ((x + 0x100000) << 42) | ((y + 0x100000) << 21) | (z + 0x100000);
+public interface IBroadPhase
+{
+    void Add(int shapeIndex, in AABB aabb);
+    bool Remove(int shapeIndex);
+    void Update(int shapeIndex, in AABB oldAABB, in AABB newAABB);
+    int Query(in AABB queryAABB, Span<int> candidates, ReadOnlySpan<AABB> allAABBs);
+    void Clear();
+}
 ```
 
-### Zone（SAP配列）
+### 戦略比較
 
-各ゾーン内では主軸でソートされたSAP（Sweep and Prune）配列を保持する。
+| 戦略 | 境界 | Add | Remove | Update | Query | 適用シーン |
+|------|------|-----|--------|--------|-------|----------|
+| BVH | 不要 | O(log n) | O(log n) | O(log n) | O(log n) | 動的シーン全般 |
+| DBVT | 不要 | O(log n) | O(log n) | O(1)* | O(log n) | 静的優位シーン |
+| Octree | 必要 | O(log n) | O(log n) | O(log n) | O(log n) | 疎な空間 |
+| MBP | 必要 | O(1) | O(1) | O(1) | O(k) | 固定境界マップ |
+| GridSAP | 不要 | O(z) | O(z) | O(z) | O(z·k) | 均一分布 |
+| SpatialHash | 不要 | O(c) | O(c) | O(c) | O(c·k) | 中規模均一 |
+
+*: DBVT の Update は移動量が小さい場合 O(1)、大きい場合 O(log n)
+z: 形状がまたがるゾーン数、c: セル数、k: 候補数
+
+### BVHBroadPhase
+
+バウンディングボリューム階層。空間を再帰的に二分割する木構造。
 
 ```
-主軸方向にソート（例: X軸モードの場合）
-[MinPrimary=1.0, MaxPrimary=2.5] [MinPrimary=2.0, MaxPrimary=4.0] [MinPrimary=5.0, MaxPrimary=6.0]
-      ◀────────A────────▶           ◀────────B────────▶           ◀────────C────────▶
+         [Root AABB]
+        /          \
+    [Left]        [Right]
+    /    \        /     \
+  [A]   [B]    [C]     [D]
+```
 
-クエリ: MinPrimary=1.5, MaxPrimary=3.5
-  → A, B が候補（MinPrimary ≤ 3.5 かつ MaxPrimary ≥ 1.5）
-  → C はスキップ（MinPrimary > クエリMaxPrimary）
+**特徴:**
+- バランスの取れた性能（クエリ・更新ともに高速）
+- ワールド境界が不要
+- SAH（Surface Area Heuristic）による最適な分割
+
+**初期化:**
+```csharp
+var bvh = new BVHBroadPhase(
+    maxShapes: 10000,    // 最大形状数
+    useSAH: true         // SAH を使用（推奨）
+);
+var world = new SpatialWorld(bvh);
+```
+
+**推奨用途:**
+- ゲーム全般（推奨デフォルト）
+- 動的シーン
+- 形状の追加・削除が頻繁
+
+### DBVTBroadPhase
+
+動的バウンディングボリューム木。増分更新に最適化された BVH 変種。
+
+**特徴:**
+- クエリ性能が最速
+- 増分更新で小さな移動は O(1)
+- margin パラメータで更新頻度を調整
+
+**初期化:**
+```csharp
+var dbvt = new DBVTBroadPhase(
+    maxShapes: 10000,
+    margin: 0.1f         // AABB のマージン（移動許容量）
+);
+var world = new SpatialWorld(dbvt);
+```
+
+**推奨用途:**
+- 静的オブジェクトが多いシーン
+- 物理シミュレーション（ペア検出）
+- オープンワールド
+
+### OctreeBroadPhase
+
+8分木。空間を再帰的に8つの立方体に分割。
+
+```
+      ┌───┬───┐
+     /│  /│  /│
+    ┌─┼─┬─┼─┐ │
+    │ └─┼─┴─┼─┤
+    │  /│  /│ /
+    └─┼─┴─┼─┘/
+      └───┴───┘
+```
+
+**特徴:**
+- 疎な空間で効率的（空のノードをスキップ）
+- 深度制限で過度な分割を防止
+- ワールド境界が必要
+
+**初期化:**
+```csharp
+var bounds = new AABB(
+    new Vector3(-1000, -100, -1000),
+    new Vector3(1000, 100, 1000)
+);
+var octree = new OctreeBroadPhase(
+    bounds,
+    maxDepth: 8,         // 最大深度
+    maxShapes: 10000
+);
+var world = new SpatialWorld(octree);
+```
+
+**推奨用途:**
+- 広大で疎なワールド
+- 静的シーン
+- 形状サイズが均一
+
+### MBPBroadPhase
+
+Multi-Box Pruning。空間を固定リージョンに分割し、各リージョン内でソートベース枝刈り。
+
+```
+┌─────┬─────┬─────┬─────┐
+│ R0  │ R1  │ R2  │ R3  │
+├─────┼─────┼─────┼─────┤
+│ R4  │ R5  │ R6  │ R7  │  8x8 = 64 リージョン
+├─────┼─────┼─────┼─────┤
+│ ... │     │     │     │
+└─────┴─────┴─────┴─────┘
+```
+
+**特徴:**
+- 安定した性能（最悪ケースが予測可能）
+- X-Z 平面でリージョン分割
+- ワールド境界が必要
+
+**初期化:**
+```csharp
+var bounds = new AABB(
+    new Vector3(-500, -500, -500),
+    new Vector3(500, 500, 500)
+);
+var mbp = new MBPBroadPhase(
+    bounds,
+    regionsX: 8,         // X方向のリージョン数
+    regionsZ: 8,         // Z方向のリージョン数
+    maxShapes: 10000
+);
+var world = new SpatialWorld(mbp);
+```
+
+**推奨用途:**
+- 固定境界のあるマップ
+- アリーナ型ゲーム
+- 大規模バッチ処理
+
+### GridSAPBroadPhase
+
+グリッド分割 + Sweep and Prune。固定サイズのゾーンに分割し、各ゾーン内で SAP を適用。
+
+**特徴:**
+- 動的にゾーンを生成（境界不要）
+- SAP 軸モードで絞り込み効率を調整
+- 大きすぎるオブジェクトは別リストで管理
+
+**初期化:**
+```csharp
+var gridSap = new GridSAPBroadPhase(
+    gridSize: 16f,                    // ゾーンの辺の長さ
+    axisMode: SAPAxisMode.XZ          // SAP 軸モード
+);
+var world = new SpatialWorld(gridSap);
 ```
 
 **SAP軸モード:**
 
-| モード | 主軸 | 副軸 | 動作 |
-|--------|------|------|------|
-| `X` | X | なし | X軸でソート・判定（デフォルト） |
-| `Z` | Z | なし | Z軸でソート・判定 |
-| `XZ` | X | Z | X軸でソート、Z軸も追加フィルタ |
+| モード | 説明 | 用途 |
+|--------|------|------|
+| `X` | X軸でソート（デフォルト） | 横スクロール |
+| `Z` | Z軸でソート | 縦スクロール |
+| `XZ` | X軸ソート + Z軸フィルタ | オープンワールド |
 
-```
-SAPAxisMode.X:
-    主軸でソート → 主軸範囲で絞り込み → 候補確定
+**推奨用途:**
+- 均一分布のシーン
+- 小〜中規模マップ
 
-SAPAxisMode.XZ:
-    主軸でソート → 主軸範囲で絞り込み → 副軸範囲でフィルタ → 候補確定
-```
+### SpatialHashBroadPhase
 
-**差分更新:**
+空間ハッシュ。固定サイズのセルにオブジェクトをハッシュ登録。
+
+**特徴:**
+- O(1) の追加・削除
+- シンプルな実装
+- セルサイズの選択が重要
+
+**初期化:**
 ```csharp
-// 位置更新時は差分ソート（Insertion Sort）
-// 移動量が小さい場合は O(1) ～ O(k) で完了
-zone.Update(shapeIndex, newMinPrimary, newMaxPrimary, newMinSecondary, newMaxSecondary);
+var spatialHash = new SpatialHashBroadPhase(
+    cellSize: 8f,        // セルの辺の長さ
+    maxShapes: 10000,
+    cellCapacity: 4096   // ハッシュテーブルサイズ
+);
+var world = new SpatialWorld(spatialHash);
 ```
 
-### クエリフロー
-
-```
-Query(AABB)
-    │
-    ├─1. クエリAABBがカバーするゾーン座標を列挙
-    │
-    ├─2. 各ゾーンで主軸オーバーラップ候補を収集
-    │   └─ 二分探索で開始位置を特定
-    │   └─ MaxPrimary < queryMinPrimary の間スキップ
-    │   └─ MinPrimary > queryMaxPrimary で終了
-    │   └─ XZモードの場合は副軸でもフィルタ
-    │
-    ├─3. 重複排除
-    │   └─ 複数ゾーンにまたがるShapeの重複を除去
-    │
-    └─4. 3軸AABBオーバーラップで最終フィルタ
-```
-
-### 愚直検索へのフォールバック
-
-Shape数が32個以下の場合、ゾーン分割のオーバーヘッドが逆効果になるため愚直検索を使用する。
-
-```csharp
-private int QueryBruteForce(in AABB queryAABB, Span<int> candidates, ReadOnlySpan<AABB> allAABBs)
-{
-    int count = 0;
-    foreach (var shapeIndex in _shapeToZones.Keys)
-    {
-        if (allAABBs[shapeIndex].Intersects(queryAABB))
-            candidates[count++] = shapeIndex;
-    }
-    return count;
-}
-```
+**推奨用途:**
+- 中規模シーン
+- 均一な形状サイズ
+- シンプルさ重視
 
 ---
 
@@ -286,13 +443,13 @@ private int QueryBruteForce(in AABB queryAABB, Span<int> candidates, ReadOnlySpa
 
 ### 対応する判定組み合わせ
 
-| クエリ / Shape | Sphere | Capsule | Cylinder |
-|:---------------|:------:|:-------:|:--------:|
-| Point          | ✓      | ✓       | ✓        |
-| Ray            | ✓      | ✓       | ✓        |
-| Sphere         | ✓      | ✓       | ✓        |
-| CapsuleSweep   | ✓      | ✓       | ✓        |
-| Slash          | ✓      | ✓       | ✓        |
+| クエリ / Shape | Sphere | Capsule | Cylinder | Box |
+|:---------------|:------:|:-------:|:--------:|:---:|
+| Point          | ○      | ○       | ○        | ○   |
+| Ray            | ○      | ○       | ○        | ○   |
+| Sphere         | ○      | ○       | ○        | ○   |
+| CapsuleSweep   | ○      | ○       | ○        | ○   |
+| Slash          | ○      | ○       | ○        | ○   |
 
 ### Point vs Shape
 
@@ -300,14 +457,14 @@ private int QueryBruteForce(in AABB queryAABB, Span<int> candidates, ReadOnlySpa
 // Point vs Sphere: 距離判定
 bool PointSphere(in Vector3 point, in SphereData sphere)
 {
-    return DistanceSquared(point, sphere.Center) <= sphere.Radius²;
+    return DistanceSquared(point, sphere.Center) <= sphere.Radius * sphere.Radius;
 }
 
 // Point vs Capsule: 線分への最近点からの距離
 bool PointCapsule(in Vector3 point, in CapsuleData capsule)
 {
     var closest = ClosestPointOnSegment(point, capsule.Point1, capsule.Point2);
-    return DistanceSquared(point, closest) <= capsule.Radius²;
+    return DistanceSquared(point, closest) <= capsule.Radius * capsule.Radius;
 }
 
 // Point vs Cylinder: Y軸範囲 + XZ平面距離
@@ -318,7 +475,7 @@ bool PointCylinder(in Vector3 point, in CylinderData cylinder)
 
     float dx = point.X - cylinder.BaseCenter.X;
     float dz = point.Z - cylinder.BaseCenter.Z;
-    return dx² + dz² <= cylinder.Radius²;
+    return dx * dx + dz * dz <= cylinder.Radius * cylinder.Radius;
 }
 ```
 
@@ -333,8 +490,8 @@ bool RaySphere(origin, direction, maxDistance, sphere, out t, out point, out nor
 
     var oc = origin - sphere.Center;
     var b = Dot(oc, direction);
-    var c = oc.LengthSquared - sphere.Radius²;
-    var discriminant = b² - c;
+    var c = oc.LengthSquared - sphere.Radius * sphere.Radius;
+    var discriminant = b * b - c;
 
     if (discriminant < 0) return false;
 
@@ -344,82 +501,6 @@ bool RaySphere(origin, direction, maxDistance, sphere, out t, out point, out nor
     point = origin + direction * t;
     normal = (point - center) / radius;
     return true;
-}
-```
-
-### Sphere vs Sphere
-
-```csharp
-bool SphereSphere(sphereA, sphereB, out point, out normal, out distance)
-{
-    var diff = sphereB.Center - sphereA.Center;
-    var distSq = diff.LengthSquared;
-    var radiusSum = sphereA.Radius + sphereB.Radius;
-
-    if (distSq > radiusSum²) return false;
-
-    distance = Sqrt(distSq);
-    normal = distance > 0 ? diff / distance : Vector3.UnitY;
-    point = sphereA.Center + normal * sphereA.Radius;
-    return true;
-}
-```
-
-### Capsule Sweep
-
-移動するカプセルがいつ・どこで形状に衝突するかを計算する。
-
-```csharp
-// Time of Impact (TOI) を計算
-// TOI = 0.0: 開始位置で衝突
-// TOI = 0.5: 移動の半分で衝突
-// TOI = 1.0: 終了位置で衝突
-
-bool CapsuleSweep(start, end, radius, target, out toi, out point, out normal)
-{
-    // 簡易実装: 移動方向へのレイキャストで近似
-    var direction = end - start;
-    var length = direction.Length;
-    if (length < Epsilon) return false;
-
-    direction /= length;
-
-    // 拡張されたターゲット（半径分膨張）に対してレイキャスト
-    if (RayExpandedShape(start, direction, length, target, radius, out var t, ...))
-    {
-        toi = t / length;
-        return true;
-    }
-    return false;
-}
-```
-
-### Slash（斬撃線）
-
-剣の軌跡が形状と交差するかを判定する。四角形の軌跡を2つの三角形に分割して判定。
-
-```
-StartBase ─────────── StartTip
-    │ ＼               │
-    │   ＼  Triangle1  │
-    │     ＼           │
-    │       ＼─────────│
-    │  Triangle2  ＼   │
-    │               ＼ │
-EndBase ──────────── EndTip
-```
-
-```csharp
-bool SlashSphere(startBase, startTip, endBase, endTip, sphere, out point, out normal, out distance)
-{
-    // 1. 三角形 (StartBase, StartTip, EndTip) vs Sphere
-    // 2. 三角形 (StartBase, EndTip, EndBase) vs Sphere
-    // 3. いずれかがヒットすれば衝突
-
-    var tri1Hit = TriangleSphere(startBase, startTip, endTip, sphere, ...);
-    var tri2Hit = TriangleSphere(startBase, endTip, endBase, sphere, ...);
-
-    return tri1Hit || tri2Hit;
 }
 ```
 
@@ -435,9 +516,12 @@ public readonly struct RayQuery
     public readonly Vector3 Origin;      // レイの始点
     public readonly Vector3 Direction;   // 正規化された方向
     public readonly float MaxDistance;   // 最大距離
+    public readonly uint IncludeMask;    // 判定対象レイヤー（デフォルト: 全ビットON）
+    public readonly uint ExcludeMask;    // 除外レイヤー（デフォルト: 0）
 
     public Vector3 End => Origin + Direction * MaxDistance;
     public AABB GetAABB();  // Broad Phase用
+    public bool PassesMask(uint shapeMask);  // マスク判定
 }
 ```
 
@@ -448,6 +532,13 @@ var ray = new RayQuery(gunPosition, aimDirection, 100f);
 if (world.Raycast(ray, out var hit))
 {
     SpawnBulletHole(hit.Point, hit.Normal);
+    DealDamage(hit.ShapeIndex);
+}
+
+// 敵のみを狙う（プレイヤー・環境を無視）
+var enemyRay = new RayQuery(gunPosition, aimDirection, 100f, includeMask: LayerEnemy);
+if (world.Raycast(enemyRay, out var hit))
+{
     DealDamage(hit.ShapeIndex);
 }
 
@@ -467,8 +558,11 @@ public readonly struct SphereOverlapQuery
 {
     public readonly Vector3 Center;
     public readonly float Radius;
+    public readonly uint IncludeMask;    // 判定対象レイヤー
+    public readonly uint ExcludeMask;    // 除外レイヤー
 
     public AABB GetAABB();
+    public bool PassesMask(uint shapeMask);
 }
 ```
 
@@ -482,9 +576,13 @@ int count = world.QuerySphereOverlap(query, hits);
 for (int i = 0; i < count; i++)
 {
     float distanceRatio = hits[i].Distance / explosionRadius;
-    float damage = baseDamage * (1f - distanceRatio);
+    float damage = baseDamage * (1f - distanceRatio * distanceRatio);
     DealDamage(hits[i].ShapeIndex, damage);
 }
+
+// ダメージ可能なターゲットのみ（環境を除外）
+var damageQuery = new SphereOverlapQuery(explosionCenter, explosionRadius,
+    includeMask: LayerPlayer | LayerEnemy);
 ```
 
 ### CapsuleSweepQuery
@@ -495,8 +593,11 @@ public readonly struct CapsuleSweepQuery
     public readonly Vector3 Start;   // 開始位置
     public readonly Vector3 End;     // 終了位置
     public readonly float Radius;    // カプセル半径
+    public readonly uint IncludeMask;    // 判定対象レイヤー
+    public readonly uint ExcludeMask;    // 除外レイヤー
 
     public AABB GetAABB();
+    public bool PassesMask(uint shapeMask);
 }
 ```
 
@@ -515,6 +616,10 @@ if (world.CapsuleSweep(sweep, out var hit))
     var slideDir = remainder - hit.Normal * Vector3.Dot(remainder, hit.Normal);
     character.Position += slideDir;
 }
+
+// 環境のみと衝突判定（他のキャラクターは通過）
+var envSweep = new CapsuleSweepQuery(currentPos, targetPos, characterRadius,
+    includeMask: LayerEnvironment);
 ```
 
 ### SlashQuery
@@ -526,8 +631,11 @@ public readonly struct SlashQuery
     public readonly Vector3 StartTip;   // 開始時の剣の先端
     public readonly Vector3 EndBase;    // 終了時の剣の根元
     public readonly Vector3 EndTip;     // 終了時の剣の先端
+    public readonly uint IncludeMask;   // 判定対象レイヤー
+    public readonly uint ExcludeMask;   // 除外レイヤー
 
     public AABB GetAABB();
+    public bool PassesMask(uint shapeMask);
 }
 ```
 
@@ -546,11 +654,52 @@ for (int i = 0; i < count; i++)
     PlaySlashEffect(hits[i].Point, hits[i].Normal);
     DealDamage(hits[i].ShapeIndex);
 }
+
+// 敵のみにダメージ（環境はスルー）
+var enemySlash = new SlashQuery(
+    prevSwordBase, prevSwordTip,
+    currSwordBase, currSwordTip,
+    includeMask: LayerEnemy);
 ```
 
 ---
 
 ## パフォーマンス設計
+
+### 戦略別ベンチマーク
+
+1000 shapes, 500 queries での測定結果（参考値）:
+
+| パターン | BVH | DBVT | Octree | MBP | GridSAP | SpatialHash |
+|----------|-----|------|--------|-----|---------|-------------|
+| 均一分布（小オブジェクト） | 0 us | 0 us | 2 us | 0 us | 4 us | 4 us |
+| 均一分布（大オブジェクト） | 0 us | 0 us | 4 us | 0 us | 24 us | 44 us |
+| 混合サイズ | 16 us | 0 us | 8 us | 0 us | 22 us | 94 us |
+| 長いレイ | 2 us | 4 us | 4 us | 2 us | 28 us | 16 us |
+| 高頻度更新（5000回） | 1 ms | 39 ms | 4 ms | 3 ms | 40 ms | 4 ms |
+
+### 戦略選択ガイド
+
+```
+迷ったら BVH を選択（バランス良好）
+
+用途別推奨:
+├── ゲーム全般        → BVH
+├── オープンワールド   → BVH or DBVT
+├── 物理シミュレーション → DBVT
+├── 固定マップ + 動的NPC → MBP
+└── 広大で疎なワールド  → Octree
+
+更新頻度で選択:
+├── 高頻度更新（毎フレーム多数） → BVH, SpatialHash
+├── 中頻度更新 → BVH, Octree, MBP
+└── 低頻度更新（静的優位） → DBVT
+
+形状サイズで選択:
+├── 均一サイズ → どれでも OK
+├── 混合サイズ → BVH, DBVT, MBP
+└── 大きいオブジェクトが多い → BVH, DBVT
+```
 
 ### メモリレイアウト
 
@@ -563,6 +712,7 @@ struct ShapeAoS {
     SphereData sphere;
     CapsuleData capsule;
     CylinderData cylinder;
+    BoxData box;
     AABB aabb;
     int userData;
 }
@@ -573,132 +723,10 @@ ShapeType[] types;
 SphereData[] spheres;
 CapsuleData[] capsules;
 CylinderData[] cylinders;
+BoxData[] boxes;
 AABB[] aabbs;
 int[] userDatas;
 ```
-
-### グリッドサイズの選択
-
-グリッドサイズはクエリ性能を左右する最重要パラメータ。
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ グリッドサイズが小さすぎる場合                                     │
-│                                                                 │
-│  ┌──┬──┬──┬──┐                                                  │
-│  │●●│● │  │  │  1つの形状が複数ゾーンにまたがる                │
-│  ├──┼──┼──┼──┤  → 登録・更新時に複数ゾーンを操作                │
-│  │● │●●│  │  │  → オーバーヘッド増加                           │
-│  └──┴──┴──┴──┘                                                  │
-│                                                                 │
-│  問題: 形状サイズ > グリッドサイズ だと効率低下                    │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│ グリッドサイズが大きすぎる場合                                     │
-│                                                                 │
-│  ┌────────────────┬────────────────┐                            │
-│  │ ●  ●  ●  ●     │                │  1ゾーンに形状が集中       │
-│  │ ●  ●  ●  ●     │                │  → Broad Phaseの絞り込み │
-│  │ ●  ●  ●  ●     │                │    効果が薄れる           │
-│  └────────────────┴────────────────┘                            │
-│                                                                 │
-│  問題: ほぼ全形状が候補になり O(n) に近づく                      │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 適切なグリッドサイズ                                               │
-│                                                                 │
-│  ┌─────┬─────┬─────┬─────┐                                      │
-│  │     │ ●●  │     │     │  形状が1～2ゾーンに収まる            │
-│  ├─────┼─────┼─────┼─────┤  → 効率的な絞り込み                  │
-│  │     │     │ ●●  │     │  → クエリは関係ゾーンのみ検索        │
-│  └─────┴─────┴─────┴─────┘                                      │
-│                                                                 │
-│  目安: 形状サイズの 5～10倍                                      │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**選定基準**:
-
-| 基準 | 推奨グリッドサイズ |
-|-----|-----------------|
-| 形状サイズ基準 | 典型的な形状サイズ × 5～10 |
-| 密度基準 | 1ゾーンあたり10～100形状が理想 |
-
-**ゲームタイプ別**:
-
-| ゲームタイプ | 形状サイズ例 | 推奨グリッドサイズ |
-|-------------|-------------|-----------------|
-| 格闘ゲーム | 0.5～2m | 8～16m |
-| アクションRPG | 1～3m | 16～32m |
-| シューター | 0.5～2m | 16～32m |
-| オープンワールド | 1～10m | 32～64m |
-| RTS | 1～50m | 64～128m |
-
-**ワールドサイズ別**:
-
-| ワールドサイズ | 推奨グリッドサイズ | 理由 |
-|---------------|-----------------|------|
-| < 100m        | 8～16m          | ゾーン数を適度に保つ |
-| 100m～1km     | 16～64m         | バランス |
-| > 1km         | 64～512m        | ゾーン管理のオーバーヘッド削減 |
-
-**コンストラクタの選択**:
-
-```csharp
-// 方法1: 固定サイズ指定（推奨）
-// 形状サイズが分かっている場合
-var world = new SpatialWorld(gridSize: 16f);
-
-// 方法2: ワールドサイズから自動計算
-// gridSize = estimatedWorldSize / 64（8m～512mにクランプ）
-var world = new SpatialWorld(estimatedWorldSize: 500f, _: true);
-// → 500 / 64 ≈ 8m
-
-// 方法3: SAP軸モードを指定
-var world = new SpatialWorld(gridSize: 16f, axisMode: SAPAxisMode.XZ);
-
-// 方法4: デフォルト（省略時）
-var world = new SpatialWorld();  // gridSize = 8m（MinGridSize）, axisMode = X
-```
-
-**SAP軸モードの選択**:
-
-| ゲームタイプ | 推奨モード | 理由 |
-|-------------|-----------|------|
-| 横スクロール | `X` | X軸方向に形状が広がる |
-| 縦スクロール | `Z` | Z軸方向に形状が広がる |
-| オープンワールド | `XZ` | XZ平面に均等に分布 |
-| MMORPG | `XZ` | 広いフィールドに均等に分布 |
-
-**動的再構築**:
-
-```csharp
-// 形状追加後に現在の分布から最適化
-world.RebuildWithOptimalGridSize();
-
-// 明示的にサイズ指定で再構築
-world.RebuildPartition(newGridSize: 32f);
-```
-
-**デバッグ用プロパティ**:
-
-```csharp
-Console.WriteLine($"Zone size: {world.CurrentGridSize}");
-Console.WriteLine($"Shape count: {world.ShapeCount}");
-Console.WriteLine($"Zone count: {world.CellCount}");
-Console.WriteLine($"Shapes per zone: {world.ShapeCount / (float)world.CellCount:F1}");
-```
-
-### パフォーマンス指標
-
-| 指標 | 目標 |
-|-----|-----|
-| 1フレームあたりのアロケーション | 0 |
-| 1000 Shape + 100 クエリ | < 1ms |
-| Shape追加/削除 | O(log n) |
-| Shape位置更新（小移動） | O(1)～O(k) |
 
 ### 最適化のヒント
 
@@ -713,10 +741,13 @@ Console.WriteLine($"Shapes per zone: {world.ShapeCount / (float)world.CellCount:
    Span<HitResult> results = stackalloc HitResult[8];  // 8個で十分
    ```
 
-3. **静的Shapeはフラグを設定**
+3. **適切な Broad Phase を選択**
    ```csharp
-   world.AddSphere(center, radius, isStatic: true);
-   // → 将来的に静的専用の最適化が可能
+   // オープンワールド → 境界不要の戦略
+   var world = new SpatialWorld(new BVHBroadPhase(50000));
+
+   // 固定マップ → リージョン分割
+   var world = new SpatialWorld(new MBPBroadPhase(bounds, 8, 8, 10000));
    ```
 
 4. **UserDataでゲームデータにアクセス**
@@ -737,10 +768,16 @@ public class ProjectileSystem
 {
     private readonly SpatialWorld _world;
 
+    // レイヤー定義
+    private const uint LayerEnemy = 0x02;
+    private const uint LayerEnvironment = 0x10;
+    private const uint LayerProjectile = 0x08;
+
     public HitResult? ProcessProjectile(Vector3 start, Vector3 end, float radius)
     {
-        // カプセルスイープで弾道判定
-        var sweep = new CapsuleSweepQuery(start, end, radius);
+        // カプセルスイープで弾道判定（弾丸同士は判定しない）
+        var sweep = new CapsuleSweepQuery(start, end, radius,
+            excludeMask: LayerProjectile);
 
         if (_world.CapsuleSweep(sweep, out var hit))
         {
@@ -753,7 +790,9 @@ public class ProjectileSystem
 
     public void ProcessHitscan(Vector3 origin, Vector3 direction, float maxDistance)
     {
-        var ray = new RayQuery(origin, direction, maxDistance);
+        // 敵と環境のみを判定対象に
+        var ray = new RayQuery(origin, direction, maxDistance,
+            includeMask: LayerEnemy | LayerEnvironment);
 
         Span<HitResult> hits = stackalloc HitResult[16];
         int count = _world.RaycastAll(ray, hits);
@@ -788,9 +827,16 @@ public class ExplosionSystem
 {
     private readonly SpatialWorld _world;
 
+    // レイヤー定義
+    private const uint LayerPlayer = 0x01;
+    private const uint LayerEnemy = 0x02;
+    private const uint LayerDamageable = LayerPlayer | LayerEnemy;
+
     public void Explode(Vector3 center, float radius, float maxDamage)
     {
-        var query = new SphereOverlapQuery(center, radius);
+        // ダメージを受けるレイヤーのみを対象に（環境は除外）
+        var query = new SphereOverlapQuery(center, radius,
+            includeMask: LayerDamageable);
         Span<HitResult> hits = stackalloc HitResult[64];
         int count = _world.QuerySphereOverlap(query, hits);
 
@@ -825,6 +871,9 @@ public class MeleeWeaponSystem
 {
     private readonly SpatialWorld _world;
 
+    // レイヤー定義
+    private const uint LayerEnemy = 0x02;
+
     private Vector3 _prevWeaponBase;
     private Vector3 _prevWeaponTip;
 
@@ -833,9 +882,11 @@ public class MeleeWeaponSystem
         // 前フレームとの軌跡で斬撃判定
         if (_prevWeaponBase != Vector3.Zero)
         {
+            // 敵のみを攻撃対象に
             var slash = new SlashQuery(
                 _prevWeaponBase, _prevWeaponTip,
-                weaponBase, weaponTip);
+                weaponBase, weaponTip,
+                includeMask: LayerEnemy);
 
             Span<HitResult> hits = stackalloc HitResult[8];
             int count = _world.QuerySlash(slash, hits);
@@ -869,11 +920,14 @@ public class MeleeWeaponSystem
 
 ### ヒットが検出されない
 
-**1. グリッドサイズを確認**
+**1. Broad Phase の選択を確認**
 ```csharp
-Console.WriteLine($"Zone size: {world.CurrentGridSize}");
-Console.WriteLine($"Shape count: {world.ShapeCount}");
-Console.WriteLine($"Zone count: {world.CellCount}");
+// 境界が必要な戦略（Octree, MBP）で境界外の形状は検出されない
+var bounds = new AABB(...);
+var world = new SpatialWorld(new OctreeBroadPhase(bounds, ...));
+
+// → 境界不要の戦略を使用
+var world = new SpatialWorld(new BVHBroadPhase(...));
 ```
 
 **2. AABBが正しいか確認**
@@ -884,29 +938,15 @@ var shapeAABB = world.GetAABB(handle.Index);
 bool overlaps = queryAABB.Intersects(shapeAABB);
 ```
 
-### 意図しないヒットが発生
-
-**1. 重複検出を確認**
-```csharp
-// カスタム衝突検出の場合、A-BとB-Aの重複に注意
-if (handleA.Index > handleB.Index)
-    continue;  // 小さいインデックスからのみ報告
-```
-
-**2. 自己衝突を除外**
-```csharp
-// 同じエンティティの形状同士は衝突しないように
-if (hits[i].ShapeIndex == selfShapeIndex)
-    continue;
-```
-
 ### パフォーマンスが悪い
 
-**1. グリッドサイズを調整**
+**1. 適切な戦略を選択**
 ```csharp
-// 大きすぎる → 1ゾーンに形状が集中
-// 小さすぎる → ゾーン数が爆発
-Console.WriteLine($"Shapes per zone: {world.ShapeCount / world.CellCount}");
+// 大きいオブジェクトが多い → BVH or DBVT
+// 均一サイズ → どれでも OK
+// 高頻度更新 → BVH, SpatialHash
+
+Console.WriteLine($"Shape count: {world.ShapeCount}");
 ```
 
 **2. 結果バッファサイズを適切に**
@@ -938,12 +978,6 @@ if (!IsInViewFrustum(shape.Position))
 }
 ```
 
-**3. ゾーンの再構築**
-```csharp
-// 形状が大きく移動した後は再構築
-world.RebuildWithOptimalGridSize();
-```
-
 ---
 
 ## ディレクトリ構造
@@ -959,16 +993,21 @@ CollisionSystem/
 │   │
 │   ├── Data/
 │   │   ├── ShapeType.cs             # 形状種別 enum
-│   │   ├── ShapeData.cs             # SphereData, CapsuleData, CylinderData
+│   │   ├── ShapeData.cs             # SphereData, CapsuleData, CylinderData, BoxData
 │   │   ├── ShapeHandle.cs           # ハンドル型
 │   │   ├── ShapeRegistry.cs         # 形状データ管理（SoA）
 │   │   └── HitResult.cs             # クエリ結果
 │   │
 │   ├── BroadPhase/
+│   │   ├── IBroadPhase.cs           # Broad Phase インターフェース
+│   │   ├── BVHBroadPhase.cs         # BVH 実装
+│   │   ├── DBVTBroadPhase.cs        # DBVT 実装
+│   │   ├── OctreeBroadPhase.cs      # Octree 実装
+│   │   ├── MBPBroadPhase.cs         # MBP 実装
+│   │   ├── GridSAPBroadPhase.cs     # GridSAP 実装
+│   │   ├── SpatialHashBroadPhase.cs # SpatialHash 実装
 │   │   ├── SAPAxisMode.cs           # SAP 軸モード enum
-│   │   ├── SAPEntry.cs              # SAP エントリ
-│   │   ├── Zone.cs                  # SAP ゾーン
-│   │   └── WorldPartition.cs        # 空間分割管理
+│   │   └── Zone.cs                  # SAP ゾーン
 │   │
 │   ├── NarrowPhase/
 │   │   └── ShapeIntersection.cs     # 幾何学的交差判定
@@ -978,11 +1017,12 @@ CollisionSystem/
 │
 └── CollisionSystem.Tests/
     ├── CollisionSystem.Tests.csproj
-    ├── PointQueryTests.cs
     ├── RaycastTests.cs
     ├── SphereOverlapTests.cs
     ├── CapsuleSweepTests.cs
     ├── SlashQueryTests.cs
+    ├── PointQueryTests.cs
     ├── ShapeManagementTests.cs
-    └── PerformanceTests.cs
-```
+    ├── MaskFilteringTests.cs
+    ├── PerformanceTests.cs
+    └── ComprehensiveBenchmark.cs

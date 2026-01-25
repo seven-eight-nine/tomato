@@ -99,7 +99,7 @@ public sealed class WeightedRandomSelectorNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int d = 0; d < _selectedIndexStack.Count; d++)
         {
@@ -108,7 +108,7 @@ public sealed class WeightedRandomSelectorNode : IFlowNode
         }
         for (int i = 0; i < _children.Length; i++)
         {
-            _children[i].Reset();
+            _children[i].Reset(fireExitEvents);
         }
     }
 

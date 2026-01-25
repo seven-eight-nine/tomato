@@ -1,4 +1,5 @@
 using Xunit;
+using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
 
@@ -25,37 +26,37 @@ public class RecursionTests
         var treeB = new FlowTree("B");
         var treeA = new FlowTree("A");
 
-        treeC.Build(state)
-            .Action(s =>
-            {
-                s.Order += "C";
-                return NodeStatus.Success;
-            })
-            .Complete();
-
-        treeB.Build(state)
-            .Sequence()
-                .Action(s =>
+        treeC.Build(state, 
+                Action<OrderState>(s =>
                 {
-                    s.Order += "B";
+                    s.Order += "C";
                     return NodeStatus.Success;
                 })
-                .SubTree(treeC)
-            .End()
-            .Complete();
+            );
+
+        treeB.Build(state, 
+                Sequence(
+                    Action<OrderState>(s =>
+                    {
+                        s.Order += "B";
+                        return NodeStatus.Success;
+                    }),
+                    SubTree(treeC)
+                )
+            );
 
         treeA
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Order += "A";
-                    return NodeStatus.Success;
-                })
-                .SubTree(treeB)
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    Action<OrderState>(s =>
+                    {
+                        s.Order += "A";
+                        return NodeStatus.Success;
+                    }),
+                    SubTree(treeB)
+                )
+            );
 
         var status = treeA.Tick(0.016f);
 
@@ -75,28 +76,28 @@ public class RecursionTests
             trees[i] = new FlowTree($"Tree{i + 1}");
 
         // 最深部のツリー
-        trees[depth - 1].Build(state)
-            .Action(s =>
-            {
-                s.Counter++;
-                return NodeStatus.Success;
-            })
-            .Complete();
+        trees[depth - 1].Build(state, 
+                Action<CounterState>(s =>
+                {
+                    s.Counter++;
+                    return NodeStatus.Success;
+                })
+            );
 
         // 各レベルのツリーを作成（N → N+1 を呼ぶ）
         for (int i = depth - 2; i >= 0; i--)
         {
             var next = trees[i + 1];
-            trees[i].Build(state)
-                .Sequence()
-                    .Action(s =>
-                    {
-                        s.Counter++;
-                        return NodeStatus.Success;
-                    })
-                    .SubTree(next)
-                .End()
-                .Complete();
+            trees[i].Build(state, 
+                    Sequence(
+                        Action<CounterState>(s =>
+                        {
+                            s.Counter++;
+                            return NodeStatus.Success;
+                        }),
+                        SubTree(next)
+                    )
+                );
         }
 
         trees[0].WithCallStack(new FlowCallStack(32));
@@ -119,33 +120,33 @@ public class RecursionTests
         var factorialTree = new FlowTree("Factorial");
         factorialTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                // 終了条件: counter <= 0 なら Success
-                .Sequence()
-                    .Condition(s => s.Counter <= 0)
-                    .Action(s =>
-                    {
-                        if (s.Result == 0)
-                            s.Result = 1;
-                        return NodeStatus.Success;
-                    })
-                .End()
-                // 再帰: counter-- して自己呼び出し
-                .Sequence()
-                    .Action(s =>
-                    {
-                        var counter = s.Counter;
-                        var result = s.Result;
-                        if (result == 0) result = 1;
-                        s.Result = result * counter;
-                        s.Counter = counter - 1;
-                        return NodeStatus.Success;
-                    })
-                    .SubTree(factorialTree)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    // 終了条件: counter <= 0 なら Success
+                    Sequence(
+                        Condition<FactorialState>(s => s.Counter <= 0),
+                        Action<FactorialState>(s =>
+                        {
+                            if (s.Result == 0)
+                                s.Result = 1;
+                            return NodeStatus.Success;
+                        })
+                    ),
+                    // 再帰: counter-- して自己呼び出し
+                    Sequence(
+                        Action<FactorialState>(s =>
+                        {
+                            var counter = s.Counter;
+                            var result = s.Result;
+                            if (result == 0) result = 1;
+                            s.Result = result * counter;
+                            s.Counter = counter - 1;
+                            return NodeStatus.Success;
+                        }),
+                        SubTree(factorialTree)
+                    )
+                )
+            );
 
         var status = factorialTree.Tick(0.016f);
 
@@ -162,29 +163,29 @@ public class RecursionTests
         var countdownTree = new FlowTree("Countdown");
         countdownTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                // 終了条件
-                .Sequence()
-                    .Condition(s => s.Counter <= 0)
-                    .Action(s =>
-                    {
-                        s.Log += "Done";
-                        return NodeStatus.Success;
-                    })
-                .End()
-                // 再帰
-                .Sequence()
-                    .Action(s =>
-                    {
-                        s.Log += s.Counter.ToString();
-                        s.Counter--;
-                        return NodeStatus.Success;
-                    })
-                    .SubTree(countdownTree)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    // 終了条件
+                    Sequence(
+                        Condition<CountdownState>(s => s.Counter <= 0),
+                        Action<CountdownState>(s =>
+                        {
+                            s.Log += "Done";
+                            return NodeStatus.Success;
+                        })
+                    ),
+                    // 再帰
+                    Sequence(
+                        Action<CountdownState>(s =>
+                        {
+                            s.Log += s.Counter.ToString();
+                            s.Counter--;
+                            return NodeStatus.Success;
+                        }),
+                        SubTree(countdownTree)
+                    )
+                )
+            );
 
         var status = countdownTree.Tick(0.016f);
 
@@ -204,42 +205,42 @@ public class RecursionTests
         // TreeA: "A" を記録してカウンタデクリメント、counter > 0 なら TreeB を呼ぶ
         treeA
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Log += "A";
-                    s.Counter--;
-                    return NodeStatus.Success;
-                })
-                .Selector()
-                    .Sequence()
-                        .Condition(s => s.Counter > 0)
-                        .SubTree(treeB)
-                    .End()
-                    .Action(static () => NodeStatus.Success)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    Action<PingPongState>(s =>
+                    {
+                        s.Log += "A";
+                        s.Counter--;
+                        return NodeStatus.Success;
+                    }),
+                    Selector(
+                        Sequence(
+                            Condition<PingPongState>(s => s.Counter > 0),
+                            SubTree(treeB)
+                        ),
+                        Action(static () => NodeStatus.Success)
+                    )
+                )
+            );
 
         // TreeB: "B" を記録してカウンタデクリメント、counter > 0 なら TreeA を呼ぶ
-        treeB.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Log += "B";
-                    s.Counter--;
-                    return NodeStatus.Success;
-                })
-                .Selector()
-                    .Sequence()
-                        .Condition(s => s.Counter > 0)
-                        .SubTree(treeA)
-                    .End()
-                    .Action(static () => NodeStatus.Success)
-                .End()
-            .End()
-            .Complete();
+        treeB.Build(state, 
+                Sequence(
+                    Action<PingPongState>(s =>
+                    {
+                        s.Log += "B";
+                        s.Counter--;
+                        return NodeStatus.Success;
+                    }),
+                    Selector(
+                        Sequence(
+                            Condition<PingPongState>(s => s.Counter > 0),
+                            SubTree(treeA)
+                        ),
+                        Action(static () => NodeStatus.Success)
+                    )
+                )
+            );
 
         var status = treeA.Tick(0.016f);
 
@@ -263,16 +264,12 @@ public class RecursionTests
             trees[i] = new FlowTree($"Tree{i + 1}");
 
         // 最後のツリー
-        trees[chainLength - 1].Build()
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        trees[chainLength - 1].Build(Action(static () => NodeStatus.Success));
 
         // チェーンを作成
         for (int i = chainLength - 2; i >= 0; i--)
         {
-            trees[i].Build()
-                .SubTree(trees[i + 1])
-                .Complete();
+            trees[i].Build(SubTree(trees[i + 1]));
         }
 
         trees[0]
@@ -296,15 +293,11 @@ public class RecursionTests
         for (int i = 0; i < chainLength; i++)
             trees[i] = new FlowTree($"Tree{i + 1}");
 
-        trees[chainLength - 1].Build()
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        trees[chainLength - 1].Build(Action(static () => NodeStatus.Success));
 
         for (int i = chainLength - 2; i >= 0; i--)
         {
-            trees[i].Build()
-                .SubTree(trees[i + 1])
-                .Complete();
+            trees[i].Build(SubTree(trees[i + 1]));
         }
 
         trees[0]
@@ -327,19 +320,19 @@ public class RecursionTests
         var state = new CounterState { Counter = 0 };
 
         var iterativeTree = new FlowTree("Iterative");
-        iterativeTree.Build(state)
-            .Node(new RepeatUntilSuccessNode(
-                new SequenceNode(
-                    new ActionNode<CounterState>(s =>
-                    {
-                        s.Counter++;
-                        return NodeStatus.Success;
-                    }),
-                    new YieldNode(),
-                    new ConditionNode<CounterState>(s => s.Counter >= 5)
+        iterativeTree.Build(state, 
+                new RepeatUntilSuccessNode(
+                    new SequenceNode(
+                        new ActionNode<CounterState>(s =>
+                        {
+                            s.Counter++;
+                            return NodeStatus.Success;
+                        }),
+                        new YieldNode(),
+                        new ConditionNode<CounterState>(s => s.Counter >= 5)
+                    )
                 )
-            ))
-            .Complete();
+            );
 
         // 外部ループでTickを繰り返す
         NodeStatus status;
@@ -361,16 +354,16 @@ public class RecursionTests
         var state = new CounterState { Counter = 0 };
 
         var retryTree = new FlowTree("Retry");
-        retryTree.Build(state)
-            .Node(new RetryNode(10, new SequenceNode(
-                new ActionNode<CounterState>(s =>
-                {
-                    s.Counter++;
-                    return NodeStatus.Success;
-                }),
-                new ConditionNode<CounterState>(s => s.Counter >= 5)
-            )))
-            .Complete();
+        retryTree.Build(state, 
+                new RetryNode(10, new SequenceNode(
+                    new ActionNode<CounterState>(s =>
+                    {
+                        s.Counter++;
+                        return NodeStatus.Success;
+                    }),
+                    new ConditionNode<CounterState>(s => s.Counter >= 5)
+                ))
+            );
 
         // RetryNodeはRunningを返すので、外部ループが必要
         NodeStatus status;
@@ -396,28 +389,26 @@ public class RecursionTests
         var state = new PhaseState { Phase = 0 };
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Phase++;
-                    return NodeStatus.Success;
-                })
-                .Yield()
-                .Action(s =>
-                {
-                    s.Phase++;
-                    return NodeStatus.Success;
-                })
-            .End()
-            .Complete();
+        subTree.Build(state, 
+                Sequence(
+                    Action<PhaseState>(s =>
+                    {
+                        s.Phase++;
+                        return NodeStatus.Success;
+                    }),
+                    Yield(),
+                    Action<PhaseState>(s =>
+                    {
+                        s.Phase++;
+                        return NodeStatus.Success;
+                    })
+                )
+            );
 
         var mainTree = new FlowTree("Main");
         mainTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .SubTree(subTree)
-            .Complete();
+            .Build(state, SubTree(subTree));
 
         // 1回目のTick: phase=1, YieldでRunning
         var status1 = mainTree.Tick(0.016f);
@@ -441,57 +432,57 @@ public class RecursionTests
         var treeA = new FlowTree("A");
 
         // TreeC: Yieldを含む
-        treeC.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-                .Yield()
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-            .End()
-            .Complete();
+        treeC.Build(state, 
+                Sequence(
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    }),
+                    Yield(),
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    })
+                )
+            );
 
         // TreeB: TreeCを呼ぶ
-        treeB.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-                .SubTree(treeC)
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-            .End()
-            .Complete();
+        treeB.Build(state, 
+                Sequence(
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    }),
+                    SubTree(treeC),
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    })
+                )
+            );
 
         // TreeA: TreeBを呼ぶ
         treeA
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-                .SubTree(treeB)
-                .Action(s =>
-                {
-                    s.Stage++;
-                    return NodeStatus.Success;
-                })
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    }),
+                    SubTree(treeB),
+                    Action<StageState>(s =>
+                    {
+                        s.Stage++;
+                        return NodeStatus.Success;
+                    })
+                )
+            );
 
         // 1回目: A(1) → B(2) → C(3) → Yield → Running
         var status1 = treeA.Tick(0.016f);

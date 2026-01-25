@@ -37,7 +37,7 @@ public sealed class YieldNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
         for (int i = 0; i < _hasYieldedStack.Count; i++)
         {

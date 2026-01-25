@@ -4,7 +4,7 @@ namespace Tomato.FlowTree;
 
 /// <summary>
 /// フローツリー定義。
-/// 空で作成し、Build()でビルダーを取得して構築する。
+/// 空で作成し、Build()でルートノードを設定する。
 /// </summary>
 public sealed class FlowTree
 {
@@ -34,25 +34,47 @@ public sealed class FlowTree
     }
 
     /// <summary>
-    /// 状態なしでビルダーを取得してツリーを構築する。
+    /// ツリーを構築する（ステートレス）。
     /// </summary>
-    /// <returns>FlowTreeBuilder</returns>
-    public FlowTreeBuilder Build()
+    /// <param name="root">ルートノード</param>
+    /// <returns>this（メソッドチェーン用）</returns>
+    public FlowTree Build(IFlowNode root)
     {
+        _root = root ?? throw new ArgumentNullException(nameof(root));
         _state = null;
-        return new FlowTreeBuilder(this);
+        return this;
     }
 
     /// <summary>
-    /// 型付き状態を設定してビルダーを取得する。
+    /// ツリーを構築する（型付き状態付き）。
     /// </summary>
     /// <typeparam name="T">状態の型</typeparam>
     /// <param name="state">状態オブジェクト</param>
-    /// <returns>型付きFlowTreeBuilder</returns>
-    public FlowTreeBuilder<T> Build<T>(T state) where T : class, IFlowState
+    /// <param name="root">ルートノード</param>
+    /// <returns>this（メソッドチェーン用）</returns>
+    public FlowTree Build<T>(T state, IFlowNode root) where T : class, IFlowState
     {
         _state = state ?? throw new ArgumentNullException(nameof(state));
-        return new FlowTreeBuilder<T>(this);
+        _root = root ?? throw new ArgumentNullException(nameof(root));
+        return this;
+    }
+
+    /// <summary>
+    /// ツリーを構築する（型付き状態付き、ビルダー経由）。
+    /// 型推論を効かせてラムダ内で型指定を省略できる。
+    /// </summary>
+    /// <typeparam name="T">状態の型</typeparam>
+    /// <param name="state">状態オブジェクト</param>
+    /// <param name="builder">ルートノードを構築するラムダ</param>
+    /// <returns>this（メソッドチェーン用）</returns>
+    public FlowTree Build<T>(T state, Func<FlowBuilder<T>, IFlowNode> builder) where T : class, IFlowState
+    {
+        if (state == null) throw new ArgumentNullException(nameof(state));
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+
+        _state = state;
+        _root = builder(FlowBuilder<T>.Instance);
+        return this;
     }
 
     /// <summary>
@@ -79,15 +101,6 @@ public sealed class FlowTree
     }
 
     /// <summary>
-    /// ルートノードを設定する（ビルダーから呼び出される）。
-    /// </summary>
-    /// <param name="root">ルートノード</param>
-    internal void SetRoot(IFlowNode root)
-    {
-        _root = root ?? throw new ArgumentNullException(nameof(root));
-    }
-
-    /// <summary>
     /// ツリーを評価する（deltaTimeのみ指定）。
     /// </summary>
     /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
@@ -95,7 +108,7 @@ public sealed class FlowTree
     public NodeStatus Tick(float deltaTime)
     {
         if (_root == null)
-            throw new InvalidOperationException("Tree not built. Call Build()...Complete() first.");
+            throw new InvalidOperationException("Tree not built. Call Build() first.");
 
         _totalTime += deltaTime;
 
@@ -108,7 +121,16 @@ public sealed class FlowTree
             TotalTime = _totalTime
         };
 
-        return _root.Tick(ref context);
+        var status = _root.Tick(ref context);
+
+        // ReturnNodeによる早期終了要求をチェック
+        if (context.ReturnRequested)
+        {
+            _root.Reset(fireExitEvents: true);
+            return context.ReturnStatus;
+        }
+
+        return status;
     }
 
     /// <summary>
@@ -120,17 +142,29 @@ public sealed class FlowTree
     public NodeStatus Tick(ref FlowContext context)
     {
         if (_root == null)
-            throw new InvalidOperationException("Tree not built. Call Build()...Complete() first.");
+            throw new InvalidOperationException("Tree not built. Call Build() first.");
 
-        return _root.Tick(ref context);
+        var status = _root.Tick(ref context);
+
+        // ReturnNodeによる早期終了要求をチェック
+        if (context.ReturnRequested)
+        {
+            _root.Reset(fireExitEvents: true);
+            // ReturnRequestedをクリアして呼び出し元に制御を返す
+            context.ReturnRequested = false;
+            return context.ReturnStatus;
+        }
+
+        return status;
     }
 
     /// <summary>
     /// ツリーの状態をリセットする。
     /// </summary>
-    public void Reset()
+    /// <param name="fireExitEvents">trueの場合、Running中のEventNodeでOnExitを発火する</param>
+    public void Reset(bool fireExitEvents = true)
     {
         _totalTime = 0f;
-        _root?.Reset();
+        _root?.Reset(fireExitEvents);
     }
 }

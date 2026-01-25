@@ -1,4 +1,5 @@
 using Xunit;
+using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
 
@@ -10,8 +11,8 @@ public class CoreTests
         var stack = new FlowCallStack(8);
         var tree1 = new FlowTree("Tree1");
         var tree2 = new FlowTree("Tree2");
-        tree1.Build().Success().Complete();
-        tree2.Build().Success().Complete();
+        tree1.Build(Success);
+        tree2.Build(Success);
 
         Assert.True(stack.IsEmpty);
         Assert.False(stack.IsFull);
@@ -37,9 +38,9 @@ public class CoreTests
         var tree1 = new FlowTree("Tree1");
         var tree2 = new FlowTree("Tree2");
         var tree3 = new FlowTree("Tree3");
-        tree1.Build().Success().Complete();
-        tree2.Build().Success().Complete();
-        tree3.Build().Success().Complete();
+        tree1.Build(Success);
+        tree2.Build(Success);
+        tree3.Build(Success);
 
         Assert.True(stack.TryPush(new CallFrame(tree1)));
         Assert.True(stack.TryPush(new CallFrame(tree2)));
@@ -54,9 +55,9 @@ public class CoreTests
         var tree1 = new FlowTree("Tree1");
         var tree2 = new FlowTree("Tree2");
         var tree3 = new FlowTree("Tree3");
-        tree1.Build().Success().Complete();
-        tree2.Build().Success().Complete();
-        tree3.Build().Success().Complete();
+        tree1.Build(Success);
+        tree2.Build(Success);
+        tree3.Build(Success);
 
         stack.Push(new CallFrame(tree1));
         stack.Push(new CallFrame(tree2));
@@ -71,13 +72,13 @@ public class CoreTests
     {
         var state = new TestState { Counter = 10 };
         var tree = new FlowTree();
-        tree.Build(state)
-            .Action(s =>
-            {
-                s.Counter++;
-                return NodeStatus.Success;
-            })
-            .Complete();
+        tree.Build(state, 
+                Action<TestState>(s =>
+                {
+                    s.Counter++;
+                    return NodeStatus.Success;
+                })
+            );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(11, state.Counter);
@@ -88,9 +89,7 @@ public class CoreTests
     {
         var state = new TestState { IsEnabled = false };
         var tree = new FlowTree();
-        tree.Build(state)
-            .Condition(s => s.IsEnabled)
-            .Complete();
+        tree.Build(state, Condition<TestState>(s => s.IsEnabled));
 
         Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
 

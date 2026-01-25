@@ -32,14 +32,15 @@
 
 ```csharp
 using Tomato.FlowTree;
+using static Tomato.FlowTree.Flow;
 
 var tree = new FlowTree();
-tree.Build()
-    .Sequence()
-        .Do(static () => Console.WriteLine("Step 1"))
-        .Do(static () => Console.WriteLine("Step 2"))
-    .End()
-    .Complete();
+tree.Build(
+    Sequence(
+        Do(static () => Console.WriteLine("Step 1")),
+        Do(static () => Console.WriteLine("Step 2"))
+    )
+);
 ```
 
 ### 2. 状態を使うツリーを定義
@@ -56,12 +57,19 @@ public class GameState : IFlowState
 var state = new GameState();
 var tree = new FlowTree();
 
-tree.Build(state)
-    .Sequence()
-        .Do(s => s.Score += 100)
-        .Condition(s => s.IsAlive)
-    .End()
-    .Complete();
+// FlowBuilder を使った型推論パターン（推奨）
+tree.Build(state, b => b.Sequence(
+    b.Do(s => s.Score += 100),
+    b.Condition(s => s.IsAlive)
+));
+
+// 明示的な型パラメータ指定も可能
+tree.Build(state,
+    Sequence(
+        Do<GameState>(s => s.Score += 100),
+        Condition<GameState>(s => s.IsAlive)
+    )
+);
 ```
 
 ### 3. 実行
@@ -71,13 +79,6 @@ var status = tree.Tick(0.016f);
 // 出力:
 // Step 1
 // Step 2
-```
-
-サブツリー呼び出しを使う場合はコールスタックを設定:
-
-```csharp
-tree.WithCallStack(new FlowCallStack(32));
-var status = tree.Tick(0.016f);
 ```
 
 ---
@@ -96,9 +97,9 @@ var status = tree.Tick(0.016f);
 
 | 分類 | 説明 | 例 |
 |------|------|-----|
-| **Composite** | 複数の子を持つ | Sequence, Selector, Parallel, ShuffledSelector |
+| **Composite** | 複数の子を持つ | Sequence, Selector, Race, Join, ShuffledSelector |
 | **Decorator** | 1つの子を修飾 | Repeat, Retry, Timeout, Event |
-| **Leaf** | 末端ノード | Action, Condition, SubTree, DynamicSubTree, Wait |
+| **Leaf** | 末端ノード | Action, Condition, SubTree, Wait |
 
 ### FlowTreeの構造
 
@@ -107,12 +108,12 @@ FlowTreeは「入れ物」と「中身」が分離している:
 ```csharp
 var tree = new FlowTree();  // 入れ物を作成（中身は空）
 
-tree.Build()
-    .Sequence()
-        .Action(...)
-        .SubTree(tree)  // ビルド中でも自己参照可能
-    .End()
-    .Complete();        // 中身を設定
+tree.Build(
+    Sequence(
+        Action(() => NodeStatus.Success),
+        SubTree(tree)  // ビルド中でも自己参照可能
+    )
+);
 ```
 
 この設計により:
@@ -134,20 +135,16 @@ public class CounterState : IFlowState
 
 var state = new CounterState { Counter = 5 };
 var countdown = new FlowTree();
-countdown
-    .WithCallStack(new FlowCallStack(32))
-    .Build(state)
-    .Selector()
-        .Sequence()
-            .Condition(s => s.Counter <= 0)
-            .Success()
-        .End()
-        .Sequence()
-            .Do(s => s.Counter--)
-            .SubTree(countdown) // 自己参照
-        .End()
-    .End()
-    .Complete();
+countdown.Build(state, b => b.Selector(
+        b.Sequence(
+            b.Condition(s => s.Counter <= 0),
+            b.Success
+        ),
+        b.Sequence(
+            b.Do(s => s.Counter--),
+            b.SubTree(countdown) // 自己参照
+        )
+    ));
 
 // 動的サブツリー（実行時にツリーを選択）
 public class DifficultyState : IFlowState
@@ -162,9 +159,7 @@ var hardTree = new FlowTree("Hard");
 
 var state = new DifficultyState { Difficulty = 3 };
 var tree = new FlowTree();
-tree.Build(state)
-    .SubTree(s => s.Difficulty > 5 ? hardTree : easyTree)  // 動的選択
-    .Complete();
+tree.Build(state, b => b.SubTree(s => s.Difficulty > 5 ? hardTree : easyTree));
 ```
 
 ### State注入
@@ -188,22 +183,18 @@ public class ChildState : IFlowState
 }
 
 var childTree = new FlowTree();
-childTree.Build(new ChildState())
-    .Do(s =>
-    {
-        s.LocalScore = 100;
-        // 親Stateにアクセス
-        var parent = (ParentState)s.Parent!;
-        parent.TotalScore += s.LocalScore;
-    })
-    .Complete();
+childTree.Build(new ChildState(), b => b.Do(s =>
+{
+    s.LocalScore = 100;
+    // 親Stateにアクセス
+    var parent = (ParentState)s.Parent!;
+    parent.TotalScore += s.LocalScore;
+}));
 
 var mainTree = new FlowTree();
-mainTree
-    .WithCallStack(new FlowCallStack(32))
-    .Build(new ParentState())
-    .SubTree<ChildState>(childTree, p => new ChildState())  // State注入
-    .Complete();
+mainTree.Build(new ParentState(), b =>
+    b.SubTree<ParentState, ChildState>(childTree, p => new ChildState())
+);
 ```
 
 ---
@@ -216,13 +207,11 @@ mainTree
 
 ```csharp
 var tree = new FlowTree();
-tree.Build(state)
-    .Sequence()
-        .Action(s => MoveToTarget(s))
-        .Action(s => Attack(s))
-        .Action(s => Retreat(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.Sequence(
+    b.Action(s => MoveToTarget(s)),
+    b.Action(s => Attack(s)),
+    b.Action(s => Retreat(s))
+));
 ```
 
 ### Selector（フォールバック）
@@ -231,30 +220,11 @@ tree.Build(state)
 
 ```csharp
 var tree = new FlowTree();
-tree.Build(state)
-    .Selector()
-        .Guard(s => s.HasAmmo,
-            new ActionNode<GameState>(s => Shoot(s)))
-        .Guard(s => s.HasMeleeWeapon,
-            new ActionNode<GameState>(s => MeleeAttack(s)))
-        .Action(s => Retreat(s))  // フォールバック
-    .End()
-    .Complete();
-```
-
-### Parallel（並列実行）
-
-全ての子を並列に評価。
-
-```csharp
-var tree = new FlowTree();
-tree.Build(state)
-    .Parallel()
-        .Action(s => PlayAnimation(s))
-        .Action(s => PlaySound(s))
-        .Action(s => SpawnParticle(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.Selector(
+    b.Guard(s => s.HasAmmo, b.Action(s => Shoot(s))),
+    b.Guard(s => s.HasMeleeWeapon, b.Action(s => MeleeAttack(s))),
+    b.Action(s => Retreat(s))  // フォールバック
+));
 ```
 
 ### Join（全完了待機）
@@ -263,13 +233,11 @@ tree.Build(state)
 
 ```csharp
 var tree = new FlowTree();
-tree.Build(state)
-    .Join()
-        .Action(s => LoadTextures(s))
-        .Action(s => LoadSounds(s))
-        .Action(s => LoadData(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.Join(
+    b.Action(s => LoadTextures(s)),
+    b.Action(s => LoadSounds(s)),
+    b.Action(s => LoadData(s))
+));
 ```
 
 ### Race（最初の完了を採用）
@@ -282,16 +250,12 @@ var patrolTree = new FlowTree("Patrol");
 // ... build trees ...
 
 var tree = new FlowTree();
-tree
-    .WithCallStack(new FlowCallStack(16))
-    .Build()
-    .Race()
-        .SubTree(attackTree)
-        .Timeout(5.0f)
-            .SubTree(patrolTree)
-        .End()
-    .End()
-    .Complete();
+tree.Build(
+    Race(
+        SubTree(attackTree),
+        Timeout(5.0f, SubTree(patrolTree))
+    )
+);
 ```
 
 ### ShuffledSelector（シャッフル選択）
@@ -300,13 +264,11 @@ tree
 
 ```csharp
 var tree = new FlowTree();
-tree.Build(state)
-    .ShuffledSelector()
-        .Action(s => PlayDialogue1(s))
-        .Action(s => PlayDialogue2(s))
-        .Action(s => PlayDialogue3(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.ShuffledSelector(
+    b.Action(s => PlayDialogue1(s)),
+    b.Action(s => PlayDialogue2(s)),
+    b.Action(s => PlayDialogue3(s))
+));
 ```
 
 ### WeightedRandomSelector（重み付きランダム）
@@ -315,12 +277,12 @@ tree.Build(state)
 
 ```csharp
 var tree = new FlowTree();
-tree.Build()
-    .WeightedRandomSelector()
-        .Weighted(3.0f, new ActionNode(static () => CommonAction()))   // 75%
-        .Weighted(1.0f, new ActionNode(static () => RareAction()))     // 25%
-    .End()
-    .Complete();
+tree.Build(
+    WeightedRandomSelector(
+        (3.0f, Action(static () => CommonAction())),   // 75%
+        (1.0f, Action(static () => RareAction()))      // 25%
+    )
+);
 ```
 
 ### RoundRobin（順番選択）
@@ -329,13 +291,11 @@ tree.Build()
 
 ```csharp
 var tree = new FlowTree();
-tree.Build(state)
-    .RoundRobin()
-        .Action(s => PatrolPointA(s))
-        .Action(s => PatrolPointB(s))
-        .Action(s => PatrolPointC(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.RoundRobin(
+    b.Action(s => PatrolPointA(s)),
+    b.Action(s => PatrolPointB(s)),
+    b.Action(s => PatrolPointC(s))
+));
 ```
 
 ### Event（イベント発火）
@@ -345,23 +305,23 @@ tree.Build(state)
 ```csharp
 // ステートレス版
 var tree = new FlowTree();
-tree.Build()
-    .Event(
-        onEnter: () => { Console.WriteLine("開始"); },
-        onExit: result => { Console.WriteLine($"終了: {result}"); })
-    .Sequence()
-        .Action(static () => DoSomething())
-        .Wait(1.0f)
-    .End()
-    .Complete();
+tree.Build(
+    Event(
+        () => Console.WriteLine("開始"),
+        result => Console.WriteLine($"終了: {result}"),
+        Sequence(
+            Action(static () => DoSomething()),
+            Wait(1.0f)
+        )
+    )
+);
 
-// 状態付き版
-tree.Build(state)
-    .Event(
-        onEnter: s => { s.StartTime = DateTime.Now; },
-        onExit: (s, result) => { s.EndTime = DateTime.Now; })
-    .Action(s => Process(s))
-    .Complete();
+// 状態付き版（FlowBuilder）
+tree.Build(state, b => b.Event(
+    s => s.StartTime = DateTime.Now,
+    (s, result) => s.EndTime = DateTime.Now,
+    b.Action(s => Process(s))
+));
 ```
 
 ### Wait（待機）
@@ -371,22 +331,20 @@ tree.Build(state)
 ```csharp
 // 時間待機
 var tree = new FlowTree();
-tree.Build()
-    .Sequence()
-        .Action(static () => ShowMessage())
-        .Wait(2.0f)  // 2秒待機
-        .Action(static () => HideMessage())
-    .End()
-    .Complete();
+tree.Build(
+    Sequence(
+        Action(static () => ShowMessage()),
+        Wait(2.0f),  // 2秒待機
+        Action(static () => HideMessage())
+    )
+);
 
 // 条件待機（条件がtrueになるまでRunning）
-tree.Build(state)
-    .Sequence()
-        .Action(s => StartLoading(s))
-        .Wait(s => s.LevelLoaded)  // ロード完了まで待機
-        .Action(s => ShowLevel(s))
-    .End()
-    .Complete();
+tree.Build(state, b => b.Sequence(
+    b.Action(s => StartLoading(s)),
+    b.WaitUntil(s => s.LevelLoaded),  // ロード完了まで待機
+    b.Action(s => ShowLevel(s))
+));
 ```
 
 ---

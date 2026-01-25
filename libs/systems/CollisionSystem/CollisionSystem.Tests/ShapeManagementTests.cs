@@ -9,7 +9,7 @@ public class ShapeManagementTests
     [Fact]
     public void AddSphere_ReturnsValidHandle()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var handle = world.AddSphere(new Vector3(0, 0, 0), 1f);
 
         Assert.True(handle.IsValid);
@@ -19,7 +19,7 @@ public class ShapeManagementTests
     [Fact]
     public void Remove_InvalidatesHandle()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var handle = world.AddSphere(new Vector3(0, 0, 0), 1f);
 
         bool removed = world.Remove(handle);
@@ -31,7 +31,7 @@ public class ShapeManagementTests
     [Fact]
     public void Remove_ShapeNoLongerHit()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var handle = world.AddSphere(new Vector3(5, 0, 0), 1f);
 
         var query = new RayQuery(new Vector3(0, 0, 0), new Vector3(1, 0, 0), 100f);
@@ -45,7 +45,7 @@ public class ShapeManagementTests
     [Fact]
     public void Update_MovesShape()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var handle = world.AddSphere(new Vector3(5, 0, 0), 1f);
 
         // 元の位置でヒット
@@ -66,7 +66,7 @@ public class ShapeManagementTests
     [Fact]
     public void GetUserData_ReturnsStoredValue()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         var handle = world.AddSphere(new Vector3(0, 0, 0), 1f, userData: 42);
 
         Assert.Equal(42, world.GetUserData(handle));
@@ -76,7 +76,7 @@ public class ShapeManagementTests
     [Fact]
     public void ShapeCount_TracksCorrectly()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
 
         Assert.Equal(0, world.ShapeCount);
 
@@ -96,7 +96,7 @@ public class ShapeManagementTests
     [Fact]
     public void MultipleShapeTypes_WorkTogether()
     {
-        var world = new SpatialWorld();
+        var world = new SpatialWorld(new GridSAPBroadPhase(8f));
         // 全てy=0に配置し、半径/高さを調整してレイがヒットするようにする
         world.AddSphere(new Vector3(5, 0, 0), 2f);  // 半径2なのでy=0のレイでもヒット
         world.AddCapsule(new Vector3(10, -1, 0), new Vector3(10, 3, 0), 1f);  // y=-1からy=3のカプセル

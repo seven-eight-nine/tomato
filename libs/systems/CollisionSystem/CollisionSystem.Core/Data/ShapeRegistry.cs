@@ -19,6 +19,7 @@ public sealed class ShapeRegistry
     private int[] _paramIndices;
     private bool[] _isStatic;
     private int[] _userData;
+    private uint[] _layerMasks;
 
     // AABB（Fat AABB）
     private AABB[] _aabbs;
@@ -44,9 +45,11 @@ public sealed class ShapeRegistry
         _paramIndices = new int[_capacity];
         _isStatic = new bool[_capacity];
         _userData = new int[_capacity];
+        _layerMasks = new uint[_capacity];
         _aabbs = new AABB[_capacity];
 
         Array.Fill(_generations, -1);
+        Array.Fill(_layerMasks, 0xFFFFFFFF);
     }
 
     /// <summary>
@@ -75,49 +78,49 @@ public sealed class ShapeRegistry
     /// <summary>
     /// 球を登録する。
     /// </summary>
-    public ShapeHandle AddSphere(in SphereData sphere, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddSphere(in SphereData sphere, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         int paramIndex = _spheres.Count;
         _spheres.Add(sphere);
 
         var aabb = ComputeSphereAABB(sphere);
-        return AllocateShape(ShapeType.Sphere, paramIndex, aabb, isStatic, userData);
+        return AllocateShape(ShapeType.Sphere, paramIndex, aabb, isStatic, userData, layerMask);
     }
 
     /// <summary>
     /// カプセルを登録する。
     /// </summary>
-    public ShapeHandle AddCapsule(in CapsuleData capsule, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddCapsule(in CapsuleData capsule, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         int paramIndex = _capsules.Count;
         _capsules.Add(capsule);
 
         var aabb = ComputeCapsuleAABB(capsule);
-        return AllocateShape(ShapeType.Capsule, paramIndex, aabb, isStatic, userData);
+        return AllocateShape(ShapeType.Capsule, paramIndex, aabb, isStatic, userData, layerMask);
     }
 
     /// <summary>
     /// 円柱を登録する。
     /// </summary>
-    public ShapeHandle AddCylinder(in CylinderData cylinder, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddCylinder(in CylinderData cylinder, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         int paramIndex = _cylinders.Count;
         _cylinders.Add(cylinder);
 
         var aabb = ComputeCylinderAABB(cylinder);
-        return AllocateShape(ShapeType.Cylinder, paramIndex, aabb, isStatic, userData);
+        return AllocateShape(ShapeType.Cylinder, paramIndex, aabb, isStatic, userData, layerMask);
     }
 
     /// <summary>
     /// ボックスを登録する。
     /// </summary>
-    public ShapeHandle AddBox(in BoxData box, bool isStatic = false, int userData = 0)
+    public ShapeHandle AddBox(in BoxData box, bool isStatic = false, int userData = 0, uint layerMask = 0xFFFFFFFF)
     {
         int paramIndex = _boxes.Count;
         _boxes.Add(box);
 
         var aabb = ComputeBoxAABB(box);
-        return AllocateShape(ShapeType.Box, paramIndex, aabb, isStatic, userData);
+        return AllocateShape(ShapeType.Box, paramIndex, aabb, isStatic, userData, layerMask);
     }
 
     /// <summary>
@@ -264,6 +267,23 @@ public sealed class ShapeRegistry
     public int GetUserData(int index) => _userData[index];
 
     /// <summary>
+    /// レイヤーマスクを取得する。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public uint GetLayerMask(int index) => _layerMasks[index];
+
+    /// <summary>
+    /// レイヤーマスクを設定する。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetLayerMask(int index, uint layerMask) => _layerMasks[index] = layerMask;
+
+    /// <summary>
+    /// 全レイヤーマスクの Span を取得する。
+    /// </summary>
+    public ReadOnlySpan<uint> LayerMasks => _layerMasks.AsSpan(0, _capacity);
+
+    /// <summary>
     /// AABB を取得する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -330,7 +350,7 @@ public sealed class ShapeRegistry
 
     #region Private Methods
 
-    private ShapeHandle AllocateShape(ShapeType type, int paramIndex, AABB aabb, bool isStatic, int userData)
+    private ShapeHandle AllocateShape(ShapeType type, int paramIndex, AABB aabb, bool isStatic, int userData, uint layerMask)
     {
         int index;
         if (_freeIndices.Count > 0)
@@ -349,6 +369,7 @@ public sealed class ShapeRegistry
         _paramIndices[index] = paramIndex;
         _isStatic[index] = isStatic;
         _userData[index] = userData;
+        _layerMasks[index] = layerMask;
         _aabbs[index] = aabb.Expand(FatAABBMargin);
 
         _count++;
@@ -366,11 +387,13 @@ public sealed class ShapeRegistry
         Array.Resize(ref _paramIndices, newCapacity);
         Array.Resize(ref _isStatic, newCapacity);
         Array.Resize(ref _userData, newCapacity);
+        Array.Resize(ref _layerMasks, newCapacity);
         Array.Resize(ref _aabbs, newCapacity);
 
         for (int i = _capacity; i < newCapacity; i++)
         {
             _generations[i] = -1;
+            _layerMasks[i] = 0xFFFFFFFF;
         }
 
         _capacity = newCapacity;

@@ -39,7 +39,7 @@ public sealed class ActionNode : IFlowNode
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
     }
 }
@@ -68,7 +68,7 @@ public sealed class ActionNode<T> : IFlowNode where T : class, IFlowState
     }
 
     /// <inheritdoc/>
-    public void Reset()
+    public void Reset(bool fireExitEvents = true)
     {
     }
 }

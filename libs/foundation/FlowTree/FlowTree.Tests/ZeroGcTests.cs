@@ -1,5 +1,6 @@
 using System;
 using Xunit;
+using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
 
@@ -13,31 +14,31 @@ public class ZeroGcTests
         var state = new TestState();
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build(state)
-            .Sequence()
-                .Action(static () => NodeStatus.Success)
-                .Action(static () => NodeStatus.Success)
-            .End()
-            .Complete();
+        subTree.Build(state, 
+                Sequence(
+                    Action(static () => NodeStatus.Success),
+                    Action(static () => NodeStatus.Success)
+                )
+            );
 
         var tree = new FlowTree("Main");
         tree
             .WithCallStack(stack)
-            .Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.IntValue = 42;
-                    return NodeStatus.Success;
-                })
-                .Selector()
-                    .Condition(s => s.BoolValue)
-                    .Action(static () => NodeStatus.Success)
-                .End()
-                .SubTree(subTree)
-                .Wait(0.1f)
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    Action<TestState>(s =>
+                    {
+                        s.IntValue = 42;
+                        return NodeStatus.Success;
+                    }),
+                    Selector(
+                        Condition<TestState>(s => s.BoolValue),
+                        Action(static () => NodeStatus.Success)
+                    ),
+                    SubTree(subTree),
+                    Wait(0.1f)
+                )
+            );
 
         // ウォームアップ（JIT等）
         for (int i = 0; i < 100; i++)
@@ -77,8 +78,8 @@ public class ZeroGcTests
         // ダミーツリーを作成
         var dummyTree1 = new FlowTree("Dummy1");
         var dummyTree2 = new FlowTree("Dummy2");
-        dummyTree1.Build().Success().Complete();
-        dummyTree2.Build().Success().Complete();
+        dummyTree1.Build(Success);
+        dummyTree2.Build(Success);
 
         // ウォームアップ
         for (int i = 0; i < 100; i++)
@@ -121,7 +122,7 @@ public class ZeroGcTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var parallel = new ParallelNode(
+        var race = new RaceNode(
             new ActionNode(static () => NodeStatus.Success),
             new ActionNode(static () => NodeStatus.Success)
         );
@@ -135,8 +136,8 @@ public class ZeroGcTests
             sequence.Tick(ref ctx);
             selector.Reset();
             selector.Tick(ref ctx);
-            parallel.Reset();
-            parallel.Tick(ref ctx);
+            race.Reset();
+            race.Tick(ref ctx);
         }
 
         // GCアロケーション計測
@@ -148,8 +149,8 @@ public class ZeroGcTests
             sequence.Tick(ref ctx);
             selector.Reset();
             selector.Tick(ref ctx);
-            parallel.Reset();
-            parallel.Tick(ref ctx);
+            race.Reset();
+            race.Tick(ref ctx);
         }
 
         long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
@@ -204,16 +205,16 @@ public class ZeroGcTests
         var state = new TestState { IntValue = 0 };
 
         var tree = new FlowTree();
-        tree.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.IntValue++;
-                    return NodeStatus.Success;
-                })
-                .Condition(s => s.IntValue > 0)
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Sequence(
+                    Action<TestState>(s =>
+                    {
+                        s.IntValue++;
+                        return NodeStatus.Success;
+                    }),
+                    Condition<TestState>(s => s.IntValue > 0)
+                )
+            );
 
         // ウォームアップ
         for (int i = 0; i < 100; i++)

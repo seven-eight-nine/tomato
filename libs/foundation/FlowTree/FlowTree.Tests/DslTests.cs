@@ -13,12 +13,12 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Sequence()
-                .Action(() => { callCount++; return NodeStatus.Success; })
-                .Action(() => { callCount++; return NodeStatus.Success; })
-            .End()
-            .Complete();
+        tree.Build(
+            Sequence(
+                Action(() => { callCount++; return NodeStatus.Success; }),
+                Action(() => { callCount++; return NodeStatus.Success; })
+            )
+        );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(2, callCount);
@@ -30,12 +30,12 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Sequence()
-                .Do(() => callCount++)
-                .Do(() => callCount++)
-            .End()
-            .Complete();
+        tree.Build(
+            Sequence(
+                Do(() => callCount++),
+                Do(() => callCount++)
+            )
+        );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(2, callCount);
@@ -47,12 +47,12 @@ public class FlowTreeBuilderTests
         var state = new GameState { Score = 0 };
 
         var tree = new FlowTree();
-        tree.Build(state)
-            .Sequence()
-                .Do(s => s.Score += 10)
-                .Do(s => s.Score += 20)
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Sequence(
+                    Do<GameState>(s => s.Score += 10),
+                    Do<GameState>(s => s.Score += 20)
+                )
+            );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(30, state.Score);
@@ -65,16 +65,16 @@ public class FlowTreeBuilderTests
         bool actionCalled = false;
 
         var tree = new FlowTree();
-        tree.Build(state)
-            .Sequence()
-                .Do(s => s.Score = 100)
-                .Action(s =>
-                {
-                    actionCalled = true;
-                    return s.Score > 50 ? NodeStatus.Success : NodeStatus.Failure;
-                })
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Sequence(
+                    Do<GameState>(s => s.Score = 100),
+                    Action<GameState>(s =>
+                    {
+                        actionCalled = true;
+                        return s.Score > 50 ? NodeStatus.Success : NodeStatus.Failure;
+                    })
+                )
+            );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(100, state.Score);
@@ -87,15 +87,15 @@ public class FlowTreeBuilderTests
         var executed = new bool[3];
 
         var tree = new FlowTree();
-        tree.Build()
-            .Sequence()
-                .Selector()
-                    .Action(() => { executed[0] = true; return NodeStatus.Failure; })
-                    .Action(() => { executed[1] = true; return NodeStatus.Success; })
-                .End()
-                .Action(() => { executed[2] = true; return NodeStatus.Success; })
-            .End()
-            .Complete();
+        tree.Build(
+            Sequence(
+                Selector(
+                    Action(() => { executed[0] = true; return NodeStatus.Failure; }),
+                    Action(() => { executed[1] = true; return NodeStatus.Success; })
+                ),
+                Action(() => { executed[2] = true; return NodeStatus.Success; })
+            )
+        );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.True(executed[0]);
@@ -109,17 +109,17 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Retry(2)
-                .Action(() =>
+        tree.Build(
+            Retry(2,
+                Action(() =>
                 {
                     callCount++;
                     return callCount < 2 ? NodeStatus.Failure : NodeStatus.Success;
                 })
-            .End()
-            .Complete();
+            )
+        );
 
-        // 1回目: Failure → Running
+        // 1回目: Failure -> Running
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
         // 2回目: Success
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
@@ -130,11 +130,11 @@ public class FlowTreeBuilderTests
     public void Builder_WithDecorators_ScopeBased_Timeout()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Timeout(0.5f)
-                .Action(static () => NodeStatus.Running)
-            .End()
-            .Complete();
+        tree.Build(
+            Timeout(0.5f,
+                Action(static () => NodeStatus.Running)
+            )
+        );
 
         Assert.Equal(NodeStatus.Running, tree.Tick(0.3f));
         Assert.Equal(NodeStatus.Failure, tree.Tick(0.3f)); // タイムアウト
@@ -146,11 +146,11 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Delay(0.5f)
-                .Action(() => { callCount++; return NodeStatus.Success; })
-            .End()
-            .Complete();
+        tree.Build(
+            Delay(0.5f,
+                Action(() => { callCount++; return NodeStatus.Success; })
+            )
+        );
 
         Assert.Equal(NodeStatus.Running, tree.Tick(0.3f)); // 遅延中
         Assert.Equal(0, callCount);
@@ -165,11 +165,9 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .Repeat(3)
-                .Do(() => callCount++)
-            .End()
-            .Complete();
+        tree.Build(
+            Repeat(3, Do(() => callCount++))
+        );
 
         // 子がSuccessを即座に返すので、1回のTickで3回全部実行される
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
@@ -182,15 +180,15 @@ public class FlowTreeBuilderTests
         int callCount = 0;
 
         var tree = new FlowTree();
-        tree.Build()
-            .RepeatUntilFail()
-                .Action(() =>
+        tree.Build(
+            RepeatUntilFail(
+                Action(() =>
                 {
                     callCount++;
                     return callCount < 3 ? NodeStatus.Success : NodeStatus.Failure;
                 })
-            .End()
-            .Complete();
+            )
+        );
 
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 1回目
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 2回目
@@ -202,11 +200,9 @@ public class FlowTreeBuilderTests
     public void Builder_WithDecorators_ScopeBased_Inverter()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Inverter()
-                .Action(static () => NodeStatus.Success)
-            .End()
-            .Complete();
+        tree.Build(
+            Inverter(Action(static () => NodeStatus.Success))
+        );
 
         Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
     }
@@ -215,11 +211,9 @@ public class FlowTreeBuilderTests
     public void Builder_WithDecorators_ScopeBased_Succeeder()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Succeeder()
-                .Action(static () => NodeStatus.Failure)
-            .End()
-            .Complete();
+        tree.Build(
+            Succeeder(Action(static () => NodeStatus.Failure))
+        );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
     }
@@ -228,11 +222,9 @@ public class FlowTreeBuilderTests
     public void Builder_WithDecorators_ScopeBased_Failer()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Failer()
-                .Action(static () => NodeStatus.Success)
-            .End()
-            .Complete();
+        tree.Build(
+            Failer(Action(static () => NodeStatus.Success))
+        );
 
         Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
     }
@@ -245,14 +237,14 @@ public class FlowTreeBuilderTests
         // Retry内にSequenceを含む複雑なパターン
         // maxRetries=2なので最大3回実行できる（初回+2回リトライ）
         var tree = new FlowTree();
-        tree.Build()
-            .Retry(2)
-                .Sequence()
-                    .Do(() => callCount++)
-                    .Action(() => callCount < 3 ? NodeStatus.Failure : NodeStatus.Success)
-                .End()
-            .End()
-            .Complete();
+        tree.Build(
+            Retry(2,
+                Sequence(
+                    Do(() => callCount++),
+                    Action(() => callCount < 3 ? NodeStatus.Failure : NodeStatus.Success)
+                )
+            )
+        );
 
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 1回目失敗、リトライ
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 2回目失敗、リトライ
@@ -266,11 +258,9 @@ public class FlowTreeBuilderTests
         var state = new GameState { Score = 0 };
 
         var tree = new FlowTree();
-        tree.Build(state)
-            .Repeat(3)
-                .Do(s => s.Score += 10)
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Repeat(3, Do<GameState>(s => s.Score += 10))
+            );
 
         // 1回のTickで3回実行される
         tree.Tick(0.016f);
@@ -283,19 +273,19 @@ public class FlowTreeBuilderTests
         var executed = new bool[2];
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build()
-            .Action(() => { executed[1] = true; return NodeStatus.Success; })
-            .Complete();
+        subTree.Build(
+            Action(() => { executed[1] = true; return NodeStatus.Success; })
+        );
 
         var mainTree = new FlowTree("MainTree");
         mainTree
             .WithCallStack(new FlowCallStack(16))
-            .Build()
-            .Sequence()
-                .Action(() => { executed[0] = true; return NodeStatus.Success; })
-                .SubTree(subTree)
-            .End()
-            .Complete();
+            .Build(
+                Sequence(
+                    Action(() => { executed[0] = true; return NodeStatus.Success; }),
+                    SubTree(subTree)
+                )
+            );
 
         Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
         Assert.True(executed[0]);
@@ -306,9 +296,7 @@ public class FlowTreeBuilderTests
     public void Builder_Wait()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Wait(0.5f)
-            .Complete();
+        tree.Build(Wait(0.5f));
 
         Assert.Equal(NodeStatus.Running, tree.Tick(0.3f));
         Assert.Equal(NodeStatus.Success, tree.Tick(0.3f)); // 0.6秒経過
@@ -318,30 +306,16 @@ public class FlowTreeBuilderTests
     public void Builder_SingleAction()
     {
         var tree = new FlowTree();
-        tree.Build()
-            .Action(static () => NodeStatus.Success)
-            .Complete();
+        tree.Build(Action(static () => NodeStatus.Success));
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
     }
 
     [Fact]
-    public void Builder_UnclosedComposite_ThrowsOnComplete()
+    public void Builder_NoRoot_ThrowsOnTick()
     {
         var tree = new FlowTree();
-        var builder = tree.Build()
-            .Sequence()
-                .Action(static () => NodeStatus.Success);
-
-        Assert.Throws<System.InvalidOperationException>(() => builder.Complete());
-    }
-
-    [Fact]
-    public void Builder_NoRoot_ThrowsOnComplete()
-    {
-        var tree = new FlowTree();
-        var builder = tree.Build();
-        Assert.Throws<System.InvalidOperationException>(() => builder.Complete());
+        Assert.Throws<System.InvalidOperationException>(() => tree.Tick(0.016f));
     }
 
     [Fact]
@@ -349,16 +323,16 @@ public class FlowTreeBuilderTests
     {
         var state = new GameState { Score = 100 };
         var tree = new FlowTree();
-        tree.Build(state)
-            .Sequence()
-                .Action(s =>
-                {
-                    s.Score += 10;
-                    return NodeStatus.Success;
-                })
-                .Condition(s => s.Score > 100)
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Sequence(
+                    Action<GameState>(s =>
+                    {
+                        s.Score += 10;
+                        return NodeStatus.Success;
+                    }),
+                    Condition<GameState>(s => s.Score > 100)
+                )
+            );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(110, state.Score);
@@ -377,11 +351,11 @@ public class FlowShorthandTests
     public void Flow_TreeCreation()
     {
         var tree = Tree("TestTree");
-        tree.Build()
-            .Sequence()
-                .Action(static () => NodeStatus.Success)
-            .End()
-            .Complete();
+        tree.Build(
+            Sequence(
+                Action(static () => NodeStatus.Success)
+            )
+        );
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal("TestTree", tree.Name);
@@ -409,18 +383,6 @@ public class FlowShorthandTests
 
         var ctx = new FlowContext();
         Assert.Equal(NodeStatus.Success, selector.Tick(ref ctx));
-    }
-
-    [Fact]
-    public void Flow_Parallel()
-    {
-        var parallel = Parallel(
-            Action(static () => NodeStatus.Success),
-            Action(static () => NodeStatus.Success)
-        );
-
-        var ctx = new FlowContext();
-        Assert.Equal(NodeStatus.Success, parallel.Tick(ref ctx));
     }
 
     [Fact]
@@ -467,7 +429,7 @@ public class FlowShorthandTests
     {
         var state = new TestState { IsEnabled = false };
 
-        var guarded = new GuardNode<TestState>(
+        var guarded = Guard<TestState>(
             s => s.IsEnabled,
             Action(static () => NodeStatus.Success)
         );
@@ -536,9 +498,9 @@ public class FlowShorthandTests
         var fleeFlow = new FlowTree("Flee");
 
         // ダミー実装
-        patrolFlow.Build().Success().Complete();
-        attackFlow.Build().Success().Complete();
-        fleeFlow.Build().Success().Complete();
+        patrolFlow.Build(Success);
+        attackFlow.Build(Success);
+        fleeFlow.Build(Success);
 
         var state = new AIState();
 
@@ -546,15 +508,13 @@ public class FlowShorthandTests
         var aiTree = Tree("AI Behavior");
         aiTree
             .WithCallStack(new FlowCallStack(16))
-            .Build(state)
-            .Selector()
-                .Guard(s => s.IsLowHealth,
-                    new SubTreeNode(fleeFlow))
-                .Guard(s => s.HasTarget,
-                    new SubTreeNode(attackFlow))
-                .SubTree(patrolFlow)
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    Guard<AIState>(s => s.IsLowHealth, SubTree(fleeFlow)),
+                    Guard<AIState>(s => s.HasTarget, SubTree(attackFlow)),
+                    SubTree(patrolFlow)
+                )
+            );
 
         Assert.Equal("AI Behavior", aiTree.Name);
 
@@ -639,36 +599,36 @@ public class ComplexFlowTreeTests
         int actionCount = 0;
 
         var tree = new FlowTree("DeepNest");
-        tree.Build(state)
-            .Retry(2)
-                .Timeout(10.0f)
-                    .Sequence()
-                        .Do(s => s.EventLog.Add("Sequence Start"))
-                        .Selector()
-                            .Sequence()
-                                .Condition(s => s.FrameCount > 5)
-                                .Do(s => s.EventLog.Add("Branch A"))
-                            .End()
-                            .Sequence()
-                                .RepeatUntilFail()
-                                    .Inverter()
-                                        .Action(s =>
-                                        {
-                                            actionCount++;
-                                            s.FrameCount++;
-                                            // 3回目でSuccessを返す（Inverterで反転→Failure→RepeatUntilFail終了）
-                                            return actionCount >= 3 ? NodeStatus.Success : NodeStatus.Failure;
-                                        })
-                                    .End()
-                                .End()
-                                .Do(s => s.EventLog.Add("Branch B"))
-                            .End()
-                        .End()
-                        .Do(s => s.EventLog.Add("Sequence End"))
-                    .End()
-                .End()
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Retry(2,
+                    Timeout(10.0f,
+                        Sequence(
+                            Do<GameLoopState>(s => s.EventLog.Add("Sequence Start")),
+                            Selector(
+                                Sequence(
+                                    Condition<GameLoopState>(s => s.FrameCount > 5),
+                                    Do<GameLoopState>(s => s.EventLog.Add("Branch A"))
+                                ),
+                                Sequence(
+                                    RepeatUntilFail(
+                                        Inverter(
+                                            Action<GameLoopState>(s =>
+                                            {
+                                                actionCount++;
+                                                s.FrameCount++;
+                                                // 3回目でSuccessを返す（Inverterで反転→Failure→RepeatUntilFail終了）
+                                                return actionCount >= 3 ? NodeStatus.Success : NodeStatus.Failure;
+                                            })
+                                        )
+                                    ),
+                                    Do<GameLoopState>(s => s.EventLog.Add("Branch B"))
+                                )
+                            ),
+                            Do<GameLoopState>(s => s.EventLog.Add("Sequence End"))
+                        )
+                    )
+                )
+            );
 
         // 実行
         var status = tree.Tick(0.016f);
@@ -697,24 +657,24 @@ public class ComplexFlowTreeTests
         var countdown = new FlowTree("Countdown");
         countdown
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                // 終了条件: カウントが0以下
-                .Sequence()
-                    .Condition(s => s.FrameCount <= 0)
-                    .Do(s => log.Add(-1)) // 終了マーカー
-                .End()
-                // 再帰: カウントを減らして自己呼び出し
-                .Sequence()
-                    .Do(s =>
-                    {
-                        log.Add(s.FrameCount);
-                        s.FrameCount--;
-                    })
-                    .SubTree(countdown) // 自己再帰
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    // 終了条件: カウントが0以下
+                    Sequence(
+                        Condition<GameLoopState>(s => s.FrameCount <= 0),
+                        Do<GameLoopState>(s => log.Add(-1)) // 終了マーカー
+                    ),
+                    // 再帰: カウントを減らして自己呼び出し
+                    Sequence(
+                        Do<GameLoopState>(s =>
+                        {
+                            log.Add(s.FrameCount);
+                            s.FrameCount--;
+                        }),
+                        SubTree(countdown) // 自己再帰
+                    )
+                )
+            );
 
         var status = countdown.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status);
@@ -733,41 +693,41 @@ public class ComplexFlowTreeTests
 
         pingTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                .Sequence()
-                    .Condition(s => s.FrameCount >= 6)
-                    .Success()
-                .End()
-                .Sequence()
-                    .Do(s =>
-                    {
-                        log.Add("Ping");
-                        s.FrameCount++;
-                    })
-                    .SubTree(pongTree)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    Sequence(
+                        Condition<GameLoopState>(s => s.FrameCount >= 6),
+                        Success
+                    ),
+                    Sequence(
+                        Do<GameLoopState>(s =>
+                        {
+                            log.Add("Ping");
+                            s.FrameCount++;
+                        }),
+                        SubTree(pongTree)
+                    )
+                )
+            );
 
         pongTree
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Selector()
-                .Sequence()
-                    .Condition(s => s.FrameCount >= 6)
-                    .Success()
-                .End()
-                .Sequence()
-                    .Do(s =>
-                    {
-                        log.Add("Pong");
-                        s.FrameCount++;
-                    })
-                    .SubTree(pingTree)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Selector(
+                    Sequence(
+                        Condition<GameLoopState>(s => s.FrameCount >= 6),
+                        Success
+                    ),
+                    Sequence(
+                        Do<GameLoopState>(s =>
+                        {
+                            log.Add("Pong");
+                            s.FrameCount++;
+                        }),
+                        SubTree(pingTree)
+                    )
+                )
+            );
 
         var status = pingTree.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status);
@@ -781,37 +741,37 @@ public class ComplexFlowTreeTests
         var parentState = new GameLoopState { Score = 0 };
 
         var childTree = new FlowTree("Child");
-        childTree.Build(new BattleState())
-            .Sequence()
-                .Do(s =>
-                {
-                    // 子Stateでバトル処理
-                    s.EnemyHealth -= 30;
-                    s.TurnCount++;
-                })
-                .Action(s =>
-                {
-                    // 親Stateにスコアを加算
-                    var parent = (GameLoopState)s.Parent!;
-                    parent.Score += 100 * s.TurnCount;
-                    return NodeStatus.Success;
-                })
-            .End()
-            .Complete();
+        childTree.Build(new BattleState(),
+                Sequence(
+                    Do<BattleState>(s =>
+                    {
+                        // 子Stateでバトル処理
+                        s.EnemyHealth -= 30;
+                        s.TurnCount++;
+                    }),
+                    Action<BattleState>(s =>
+                    {
+                        // 親Stateにスコアを加算
+                        var parent = (GameLoopState)s.Parent!;
+                        parent.Score += 100 * s.TurnCount;
+                        return NodeStatus.Success;
+                    })
+                )
+            );
 
         var mainTree = new FlowTree("Main");
         mainTree
             .WithCallStack(new FlowCallStack(16))
-            .Build(parentState)
-            .Sequence()
-                .Do(s => s.EventLog.Add("Start"))
-                // 3回バトルを実行（State注入）
-                .Repeat(3)
-                    .SubTree<BattleState>(childTree, p => new BattleState())
-                .End()
-                .Do(s => s.EventLog.Add("End"))
-            .End()
-            .Complete();
+            .Build(parentState, 
+                Sequence(
+                    Do<GameLoopState>(s => s.EventLog.Add("Start")),
+                    // 3回バトルを実行（State注入）
+                    Repeat(3,
+                        SubTree<GameLoopState, BattleState>(childTree, p => new BattleState())
+                    ),
+                    Do<GameLoopState>(s => s.EventLog.Add("End"))
+                )
+            );
 
         var status = mainTree.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status);
@@ -827,44 +787,34 @@ public class ComplexFlowTreeTests
         var state = new GameLoopState { Score = 0 };
 
         var easyTree = new FlowTree("Easy");
-        easyTree.Build(state)
-            .Do(s => s.Score += 10)
-            .Complete();
+        easyTree.Build(state, Do<GameLoopState>(s => s.Score += 10));
 
         var normalTree = new FlowTree("Normal");
-        normalTree.Build(state)
-            .Do(s => s.Score += 50)
-            .Complete();
+        normalTree.Build(state, Do<GameLoopState>(s => s.Score += 50));
 
         var hardTree = new FlowTree("Hard");
-        hardTree.Build(state)
-            .Do(s => s.Score += 100)
-            .Complete();
+        hardTree.Build(state, Do<GameLoopState>(s => s.Score += 100));
 
         var mainTree = new FlowTree("DynamicSelect");
         mainTree
             .WithCallStack(new FlowCallStack(16))
-            .Build(state)
-            .Repeat(3)
-                .Sequence()
-                    .SubTree(s =>
-                    {
-                        // スコアに応じて難易度を選択
-                        if (s.Score >= 100) return hardTree;
-                        if (s.Score >= 30) return normalTree;
-                        return easyTree;
-                    })
-                    .Do(s => s.FrameCount++)
-                .End()
-            .End()
-            .Complete();
+            .Build(state, 
+                Repeat(3,
+                    Sequence(
+                        SubTree<GameLoopState>(s =>
+                        {
+                            // スコアに応じて難易度を選択
+                            if (s.Score >= 100) return hardTree;
+                            if (s.Score >= 30) return normalTree;
+                            return easyTree;
+                        }),
+                        Do<GameLoopState>(s => s.FrameCount++)
+                    )
+                )
+            );
 
         var status = mainTree.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status);
-        // 1回目: Easy(+10) -> Score=10
-        // 2回目: Easy(+10) -> Score=20
-        // 3回目: Easy(+10) -> Score=30 ではない！
-        // Repeatは1Tickで全部実行されるので、
         // 1回目: Easy(+10) -> Score=10
         // 2回目: Easy(+10) -> Score=20
         // 3回目: Easy(+10) -> Score=30
@@ -878,20 +828,21 @@ public class ComplexFlowTreeTests
         // Eventハンドラで実行追跡
         var state = new GameLoopState();
 
-        // シンプルなEvent追跡テスト（Event()の後は必ずリーフノード）
         var tree = new FlowTree("EventTracking");
-        tree.Build(state)
-            .Sequence()
-                .Event(
-                    onEnter: s => s.EventLog.Add("Action1:Enter"),
-                    onExit: (s, result) => s.EventLog.Add($"Action1:Exit({result})"))
-                .Do(s => s.Score += 10)
-                .Event(
-                    onEnter: s => s.EventLog.Add("Action2:Enter"),
-                    onExit: (s, result) => s.EventLog.Add($"Action2:Exit({result})"))
-                .Do(s => s.Score += 20)
-            .End()
-            .Complete();
+        tree.Build(state, 
+                Sequence(
+                    Event<GameLoopState>(
+                        s => s.EventLog.Add("Action1:Enter"),
+                        (s, result) => s.EventLog.Add($"Action1:Exit({result})"),
+                        Do<GameLoopState>(s => s.Score += 10)
+                    ),
+                    Event<GameLoopState>(
+                        s => s.EventLog.Add("Action2:Enter"),
+                        (s, result) => s.EventLog.Add($"Action2:Exit({result})"),
+                        Do<GameLoopState>(s => s.Score += 20)
+                    )
+                )
+            );
 
         var status = tree.Tick(0.016f);
         Assert.Equal(NodeStatus.Success, status);
@@ -911,25 +862,25 @@ public class ComplexFlowTreeTests
         var state = new NetworkState();
 
         var tree = new FlowTree("NetworkConnect");
-        tree.Build(state)
-            .Retry(3)
-                .Timeout(1.0f)
-                    .Sequence()
-                        .Do(s => s.ConnectionAttempts++)
-                        // 3回目で接続成功
-                        .Action(s =>
-                        {
-                            if (s.ConnectionAttempts >= 3)
+        tree.Build(state, 
+                Retry(3,
+                    Timeout(1.0f,
+                        Sequence(
+                            Do<NetworkState>(s => s.ConnectionAttempts++),
+                            // 3回目で接続成功
+                            Action<NetworkState>(s =>
                             {
-                                s.IsConnected = true;
-                                return NodeStatus.Success;
-                            }
-                            return NodeStatus.Failure; // 失敗してリトライ
-                        })
-                    .End()
-                .End()
-            .End()
-            .Complete();
+                                if (s.ConnectionAttempts >= 3)
+                                {
+                                    s.IsConnected = true;
+                                    return NodeStatus.Success;
+                                }
+                                return NodeStatus.Failure; // 失敗してリトライ
+                            })
+                        )
+                    )
+                )
+            );
 
         // 1回目: 失敗 -> Running (リトライ)
         Assert.Equal(NodeStatus.Running, tree.Tick(0.1f));
@@ -952,33 +903,33 @@ public class ComplexFlowTreeTests
         var state = new GameLoopState();
 
         var gameLoopTree = new FlowTree("GameLoop");
-        gameLoopTree.Build(state)
-            .RepeatUntilFail()
-                .Action(s =>
-                {
-                    // ポーズ中は待機
-                    if (s.IsPaused)
-                        return NodeStatus.Running;
-
-                    // ゲームオーバー処理
-                    if (s.IsGameOver)
+        gameLoopTree.Build(state, 
+                RepeatUntilFail(
+                    Action<GameLoopState>(s =>
                     {
-                        if (s.WantsToContinue)
-                        {
-                            s.IsGameOver = false;
-                            s.RetryCount++;
-                            return NodeStatus.Success; // ループ継続
-                        }
-                        return NodeStatus.Failure; // ループ終了
-                    }
+                        // ポーズ中は待機
+                        if (s.IsPaused)
+                            return NodeStatus.Running;
 
-                    // 通常処理
-                    s.FrameCount++;
-                    s.Score += 10;
-                    return NodeStatus.Success; // ループ継続
-                })
-            .End()
-            .Complete();
+                        // ゲームオーバー処理
+                        if (s.IsGameOver)
+                        {
+                            if (s.WantsToContinue)
+                            {
+                                s.IsGameOver = false;
+                                s.RetryCount++;
+                                return NodeStatus.Success; // ループ継続
+                            }
+                            return NodeStatus.Failure; // ループ終了
+                        }
+
+                        // 通常処理
+                        s.FrameCount++;
+                        s.Score += 10;
+                        return NodeStatus.Success; // ループ継続
+                    })
+                )
+            );
 
         // 通常フレーム実行
         Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
@@ -1025,43 +976,43 @@ public class ComplexFlowTreeTests
         };
 
         var battleTree = new FlowTree("Battle");
-        battleTree.Build(state)
-            .RepeatUntilFail()
-                .Sequence()
-                    // 勝敗判定
-                    .Inverter()
-                        .Selector()
-                            .Condition(s => s.PlayerHealth <= 0)
-                            .Condition(s => s.EnemyHealth <= 0)
-                        .End()
-                    .End()
-                    // ターン処理
-                    .Selector()
-                        // プレイヤーターン
-                        .Sequence()
-                            .Condition(s => s.IsPlayerTurn)
-                            .Do(s =>
-                            {
-                                s.EnemyHealth -= 20;
-                                s.LastAction = "PlayerAttack";
-                                s.IsPlayerTurn = false;
-                                s.TurnCount++;
-                            })
-                        .End()
-                        // 敵ターン
-                        .Sequence()
-                            .Condition(s => !s.IsPlayerTurn)
-                            .Do(s =>
-                            {
-                                s.PlayerHealth -= 15;
-                                s.LastAction = "EnemyAttack";
-                                s.IsPlayerTurn = true;
-                            })
-                        .End()
-                    .End()
-                .End()
-            .End()
-            .Complete();
+        battleTree.Build(state, 
+                RepeatUntilFail(
+                    Sequence(
+                        // 勝敗判定
+                        Inverter(
+                            Selector(
+                                Condition<BattleState>(s => s.PlayerHealth <= 0),
+                                Condition<BattleState>(s => s.EnemyHealth <= 0)
+                            )
+                        ),
+                        // ターン処理
+                        Selector(
+                            // プレイヤーターン
+                            Sequence(
+                                Condition<BattleState>(s => s.IsPlayerTurn),
+                                Do<BattleState>(s =>
+                                {
+                                    s.EnemyHealth -= 20;
+                                    s.LastAction = "PlayerAttack";
+                                    s.IsPlayerTurn = false;
+                                    s.TurnCount++;
+                                })
+                            ),
+                            // 敵ターン
+                            Sequence(
+                                Condition<BattleState>(s => !s.IsPlayerTurn),
+                                Do<BattleState>(s =>
+                                {
+                                    s.PlayerHealth -= 15;
+                                    s.LastAction = "EnemyAttack";
+                                    s.IsPlayerTurn = true;
+                                })
+                            )
+                        )
+                    )
+                )
+            );
 
         // バトル実行
         while (battleTree.Tick(0.016f) == NodeStatus.Running)
@@ -1075,7 +1026,7 @@ public class ComplexFlowTreeTests
     }
 
     [Fact]
-    public void Complex_ParallelWithJoin_ResourceLoading()
+    public void Complex_Join_ResourceLoading()
     {
         // 並列ロード + 全完了待機
         int frameCount = 0;
@@ -1083,36 +1034,36 @@ public class ComplexFlowTreeTests
         var eventLog = new List<string>();
 
         var tree = new FlowTree("ResourceLoading");
-        tree.Build()
-            .Sequence()
-                .Do(() => eventLog.Add("LoadStart"))
-                .Join()
+        tree.Build(
+            Sequence(
+                Do(() => eventLog.Add("LoadStart")),
+                Join(
                     // テクスチャロード（2フレーム目で完了）
-                    .Action(() =>
+                    Action(() =>
                     {
                         if (frameCount < 2) return NodeStatus.Running;
                         if (!loadedResources.Contains("Textures"))
                             loadedResources.Add("Textures");
                         return NodeStatus.Success;
-                    })
+                    }),
                     // サウンドロード（3フレーム目で完了）
-                    .Action(() =>
+                    Action(() =>
                     {
                         if (frameCount < 3) return NodeStatus.Running;
                         if (!loadedResources.Contains("Sounds"))
                             loadedResources.Add("Sounds");
                         return NodeStatus.Success;
-                    })
+                    }),
                     // データロード（即座に完了）
-                    .Do(() =>
+                    Do(() =>
                     {
                         if (!loadedResources.Contains("Data"))
                             loadedResources.Add("Data");
                     })
-                .End()
-                .Do(() => eventLog.Add("LoadComplete"))
-            .End()
-            .Complete();
+                ),
+                Do(() => eventLog.Add("LoadComplete"))
+            )
+        );
 
         // フレーム0
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
@@ -1143,24 +1094,24 @@ public class ComplexFlowTreeTests
         string winner = "";
 
         var tree = new FlowTree("Race");
-        tree.Build()
-            .Race()
+        tree.Build(
+            Race(
                 // 遅いタスク（5フレーム）
-                .Action(() =>
+                Action(() =>
                 {
                     if (frameCount < 5) return NodeStatus.Running;
                     winner = "SlowTask";
                     return NodeStatus.Success;
-                })
+                }),
                 // 速いタスク（2フレーム）
-                .Action(() =>
+                Action(() =>
                 {
                     if (frameCount < 2) return NodeStatus.Running;
                     winner = "FastTask";
                     return NodeStatus.Success;
                 })
-            .End()
-            .Complete();
+            )
+        );
 
         // フレーム0
         Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
@@ -1183,13 +1134,13 @@ public class ComplexFlowTreeTests
         var tried = new List<int>();
 
         var tree = new FlowTree("Shuffle");
-        tree.Build()
-            .ShuffledSelector()
-                .Action(() => { tried.Add(1); return NodeStatus.Failure; })
-                .Action(() => { tried.Add(2); return NodeStatus.Failure; })
-                .Action(() => { tried.Add(3); return NodeStatus.Failure; })
-            .End()
-            .Complete();
+        tree.Build(
+            ShuffledSelector(
+                Action(() => { tried.Add(1); return NodeStatus.Failure; }),
+                Action(() => { tried.Add(2); return NodeStatus.Failure; }),
+                Action(() => { tried.Add(3); return NodeStatus.Failure; })
+            )
+        );
 
         // 各Tickで1つの子が試される
         tree.Tick(0.016f);
@@ -1223,13 +1174,13 @@ public class ComplexFlowTreeTests
         };
 
         var tree = new FlowTree("WeightedRandom");
-        tree.Build()
-            .WeightedRandomSelector()
-                .Weighted(70.0f, new ActionNode(() => { selections["Common"]++; return NodeStatus.Success; }))
-                .Weighted(25.0f, new ActionNode(() => { selections["Rare"]++; return NodeStatus.Success; }))
-                .Weighted(5.0f, new ActionNode(() => { selections["Legendary"]++; return NodeStatus.Success; }))
-            .End()
-            .Complete();
+        tree.Build(
+            WeightedRandomSelector(
+                (70.0f, Action(() => { selections["Common"]++; return NodeStatus.Success; })),
+                (25.0f, Action(() => { selections["Rare"]++; return NodeStatus.Success; })),
+                (5.0f, Action(() => { selections["Legendary"]++; return NodeStatus.Success; }))
+            )
+        );
 
         // 1000回実行
         for (int i = 0; i < 1000; i++)
@@ -1252,13 +1203,13 @@ public class ComplexFlowTreeTests
         var selections = new List<string>();
 
         var tree = new FlowTree("RoundRobin");
-        tree.Build(state)
-            .RoundRobin()
-                .Do(s => selections.Add("A"))
-                .Do(s => selections.Add("B"))
-                .Do(s => selections.Add("C"))
-            .End()
-            .Complete();
+        tree.Build(state, 
+                RoundRobin(
+                    Do<GameLoopState>(s => selections.Add("A")),
+                    Do<GameLoopState>(s => selections.Add("B")),
+                    Do<GameLoopState>(s => selections.Add("C"))
+                )
+            );
 
         // 6回実行
         for (int i = 0; i < 6; i++)
@@ -1282,59 +1233,57 @@ public class ComplexFlowTreeTests
         var resultScene = new FlowTree("Result");
 
         // タイトル画面
-        titleScene.Build(state)
-            .Sequence()
-                .Do(s => s.EventLog.Add("Title:Show"))
-                .Do(s => s.EventLog.Add("Title:Hide"))
-            .End()
-            .Complete();
+        titleScene.Build(state, 
+                Sequence(
+                    Do<GameLoopState>(s => s.EventLog.Add("Title:Show")),
+                    Do<GameLoopState>(s => s.EventLog.Add("Title:Hide"))
+                )
+            );
 
         // ゲーム画面（親Stateを使用）
-        gameScene.Build(state)
-            .Sequence()
-                .Do(s => s.EventLog.Add("Game:Start"))
-                .Repeat(3)
-                    .Do(s => s.FrameCount++)
-                .End()
-                .Do(s =>
-                {
-                    s.Score += 1000;
-                    s.EventLog.Add("Game:End");
-                })
-            .End()
-            .Complete();
+        gameScene.Build(state, 
+                Sequence(
+                    Do<GameLoopState>(s => s.EventLog.Add("Game:Start")),
+                    Repeat(3, Do<GameLoopState>(s => s.FrameCount++)),
+                    Do<GameLoopState>(s =>
+                    {
+                        s.Score += 1000;
+                        s.EventLog.Add("Game:End");
+                    })
+                )
+            );
 
         // リザルト画面
-        resultScene.Build(state)
-            .Sequence()
-                .Do(s =>
-                {
-                    s.EventLog.Add($"Result:Score={s.Score}");
-                    s.WantsToContinue = s.RetryCount < 1;
-                    s.RetryCount++;
-                })
-            .End()
-            .Complete();
+        resultScene.Build(state, 
+                Sequence(
+                    Do<GameLoopState>(s =>
+                    {
+                        s.EventLog.Add($"Result:Score={s.Score}");
+                        s.WantsToContinue = s.RetryCount < 1;
+                        s.RetryCount++;
+                    })
+                )
+            );
 
         // メインフロー
         var mainFlow = new FlowTree("Main");
         mainFlow
             .WithCallStack(new FlowCallStack(32))
-            .Build(state)
-            .Sequence()
-                // タイトル
-                .SubTree(titleScene)
-                // ゲームループ
-                .RepeatUntilFail()
-                    .Sequence()
-                        .SubTree(gameScene)
-                        .SubTree(resultScene)
-                        .Condition(s => s.WantsToContinue)
-                    .End()
-                .End()
-                .Do(s => s.EventLog.Add("Exit"))
-            .End()
-            .Complete();
+            .Build(state, 
+                Sequence(
+                    // タイトル
+                    SubTree(titleScene),
+                    // ゲームループ
+                    RepeatUntilFail(
+                        Sequence(
+                            SubTree(gameScene),
+                            SubTree(resultScene),
+                            Condition<GameLoopState>(s => s.WantsToContinue)
+                        )
+                    ),
+                    Do<GameLoopState>(s => s.EventLog.Add("Exit"))
+                )
+            );
 
         // SubTreeは複数Tickが必要な場合がある
         NodeStatus status;
@@ -1362,5 +1311,198 @@ public class ComplexFlowTreeTests
         };
         Assert.Equal(expected, state.EventLog);
         Assert.Equal(2000, state.Score);
+    }
+}
+
+/// <summary>
+/// FlowBuilder&lt;T&gt;を使った型推論テスト。
+/// b.Do(s => ...) のように明示的な型パラメータなしで記述できることを確認。
+/// </summary>
+public class FlowBuilderTypeInferenceTests
+{
+    private class TestState : IFlowState
+    {
+        public IFlowState? Parent { get; set; }
+        public int Value { get; set; }
+        public bool IsEnabled { get; set; }
+        public List<string> Log { get; } = new();
+    }
+
+    [Fact]
+    public void FlowBuilder_Do_TypeInference()
+    {
+        var state = new TestState { Value = 0 };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.Do(s => s.Value += 10),  // 型パラメータ不要
+            b.Do(s => s.Value += 20)
+        ));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(30, state.Value);
+    }
+
+    [Fact]
+    public void FlowBuilder_Action_TypeInference()
+    {
+        var state = new TestState { Value = 0 };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Action(s =>
+        {
+            s.Value = 42;
+            return NodeStatus.Success;
+        }));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(42, state.Value);
+    }
+
+    [Fact]
+    public void FlowBuilder_Condition_TypeInference()
+    {
+        var state = new TestState { IsEnabled = true };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.Condition(s => s.IsEnabled),  // 型パラメータ不要
+            b.Do(s => s.Value = 100)
+        ));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(100, state.Value);
+    }
+
+    [Fact]
+    public void FlowBuilder_WaitUntil_TypeInference()
+    {
+        var state = new TestState { IsEnabled = false };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.WaitUntil(s => s.IsEnabled),  // 型パラメータ不要
+            b.Do(s => s.Value = 200)
+        ));
+
+        // まだ有効化されていない
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+
+        // 有効化
+        state.IsEnabled = true;
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(200, state.Value);
+    }
+
+    [Fact]
+    public void FlowBuilder_Guard_TypeInference()
+    {
+        var state = new TestState { IsEnabled = true };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.Guard(s => s.IsEnabled, b.Do(s => s.Value = 300)),  // 型推論
+            b.Do(s => s.Log.Add("Done"))
+        ));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(300, state.Value);
+        Assert.Contains("Done", state.Log);
+    }
+
+    [Fact]
+    public void FlowBuilder_Event_TypeInference()
+    {
+        var state = new TestState();
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Event(
+            s => s.Log.Add("Enter"),
+            (s, result) => s.Log.Add($"Exit:{result}"),
+            b.Do(s => s.Value = 100)
+        ));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(100, state.Value);
+        Assert.Contains("Enter", state.Log);
+        Assert.Contains("Exit:Success", state.Log);
+    }
+
+    [Fact]
+    public void FlowBuilder_ComplexTree_AllTypesInferred()
+    {
+        var state = new TestState { Value = 0 };
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.Do(s => s.Log.Add("Start")),
+            b.Selector(
+                b.Sequence(
+                    b.Condition(s => s.Value > 100),
+                    b.Do(s => s.Log.Add("Branch A"))
+                ),
+                b.Sequence(
+                    b.Do(s => s.Value = 50),
+                    b.Do(s => s.Log.Add("Branch B"))
+                )
+            ),
+            b.Event(
+                s => s.Log.Add("Event:Enter"),
+                (s, _) => s.Log.Add("Event:Exit"),
+                b.Guard(
+                    s => s.Value >= 50,
+                    b.Do(s => s.Log.Add("Guarded"))
+                )
+            ),
+            b.Do(s => s.Log.Add("End"))
+        ));
+
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(50, state.Value);
+        Assert.Equal(new[] { "Start", "Branch B", "Event:Enter", "Guarded", "Event:Exit", "End" }, state.Log);
+    }
+
+    [Fact]
+    public void FlowBuilder_MixedWithStatelessNodes()
+    {
+        var state = new TestState();
+
+        var tree = new FlowTree();
+        tree.Build(state, b => b.Sequence(
+            b.Do(s => s.Log.Add("Typed")),  // 型付き
+            b.Wait(0.1f),                    // ステートレス
+            b.Repeat(2, b.Do(s => s.Value++)),  // 型付き + ステートレスデコレータ
+            b.Timeout(5.0f, b.Do(s => s.Log.Add("Inside Timeout")))
+        ));
+
+        // Wait中
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.05f));
+        Assert.Single(state.Log);
+
+        // Wait完了、Repeat + Timeout も同一 Tick で完了
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.1f));
+        Assert.Equal(2, state.Value);
+        Assert.Contains("Inside Timeout", state.Log);
+    }
+
+    [Fact]
+    public void FlowBuilder_SubTree_TypeInference()
+    {
+        var state = new TestState();
+
+        var subTree = new FlowTree();
+        subTree.Build(state, b => b.Do(s => s.Value = 999));
+
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(16))
+            .Build(state, b => b.Sequence(
+                b.SubTree(s => subTree),  // 動的SubTree、型推論
+                b.Do(s => s.Log.Add($"Value={s.Value}"))
+            ));
+
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
+        Assert.Equal(999, state.Value);
+        Assert.Contains("Value=999", state.Log);
     }
 }
