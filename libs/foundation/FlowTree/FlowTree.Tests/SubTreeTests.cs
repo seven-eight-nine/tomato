@@ -212,13 +212,118 @@ public class SubTreeTests
         Assert.Equal("POPOPO", state.Log);
     }
 
-    private class CounterState
+    // =====================================================
+    // State Injection Tests
+    // =====================================================
+
+    [Fact]
+    public void SubTreeNode_StateInjection_InjectsNewState()
     {
+        var parentState = new ParentState { ParentValue = 10 };
+        var childTree = new FlowTree();
+        childTree.Build(new ChildState())
+            .Action(s =>
+            {
+                // 子のStateを使用
+                s.ChildValue = 42;
+                // 親のStateにもアクセス可能
+                var parent = (ParentState)s.Parent!;
+                parent.ParentValue += s.ChildValue;
+                return NodeStatus.Success;
+            })
+            .Complete();
+
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(parentState)
+            .SubTree<ChildState>(childTree, p => new ChildState())
+            .Complete();
+
+        var status = mainTree.Tick(0.016f);
+
+        Assert.Equal(NodeStatus.Success, status);
+        Assert.Equal(52, parentState.ParentValue); // 10 + 42
+    }
+
+    [Fact]
+    public void SubTreeNode_StateInjection_ParentIsSet()
+    {
+        var parentState = new ParentState { ParentValue = 100 };
+        IFlowState? capturedParent = null;
+
+        var childTree = new FlowTree();
+        childTree.Build(new ChildState())
+            .Action(s =>
+            {
+                capturedParent = s.Parent;
+                return NodeStatus.Success;
+            })
+            .Complete();
+
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(parentState)
+            .SubTree<ChildState>(childTree, p => new ChildState())
+            .Complete();
+
+        mainTree.Tick(0.016f);
+
+        Assert.NotNull(capturedParent);
+        Assert.Same(parentState, capturedParent);
+    }
+
+    [Fact]
+    public void SubTreeNode_StateInjection_DynamicTree()
+    {
+        var parentState = new ParentState { ParentValue = 5 };
+        var childTree = new FlowTree();
+        childTree.Build(new ChildState())
+            .Action(s =>
+            {
+                var parent = (ParentState)s.Parent!;
+                parent.ParentValue *= 2;
+                return NodeStatus.Success;
+            })
+            .Complete();
+
+        var mainTree = new FlowTree();
+        mainTree
+            .WithCallStack(new FlowCallStack(32))
+            .Build(parentState)
+            .SubTree<ChildState>(
+                p => childTree,  // 動的ツリー
+                p => new ChildState { ChildValue = p.ParentValue }  // 親の値を使って子を初期化
+            )
+            .Complete();
+
+        mainTree.Tick(0.016f);
+
+        Assert.Equal(10, parentState.ParentValue); // 5 * 2
+    }
+
+    private class ParentState : IFlowState
+    {
+        public IFlowState? Parent { get; set; }
+        public int ParentValue { get; set; }
+    }
+
+    private class ChildState : IFlowState
+    {
+        public IFlowState? Parent { get; set; }
+        public int ChildValue { get; set; }
+    }
+
+    private class CounterState : IFlowState
+    {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
     }
 
-    private class PingPongState
+    private class PingPongState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
         public string Log { get; set; } = "";
     }

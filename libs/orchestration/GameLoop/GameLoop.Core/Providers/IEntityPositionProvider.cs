@@ -1,5 +1,5 @@
 using Tomato.EntityHandleSystem;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 
 namespace Tomato.GameLoop.Providers;
 

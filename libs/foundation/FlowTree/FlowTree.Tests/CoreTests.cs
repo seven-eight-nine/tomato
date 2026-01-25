@@ -99,8 +99,9 @@ public class CoreTests
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
     }
 
-    private class TestState
+    private class TestState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
         public bool IsEnabled { get; set; }
     }

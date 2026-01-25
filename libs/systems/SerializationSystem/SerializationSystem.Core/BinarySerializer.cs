@@ -2,7 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 
 namespace Tomato.SerializationSystem;
 
@@ -254,7 +254,7 @@ public sealed class BinarySerializer
 
     private void Grow(int minCapacity)
     {
-        var newCapacity = Math.Max(_buffer.Length * 2, minCapacity);
+        var newCapacity = System.Math.Max(_buffer.Length * 2, minCapacity);
         var newBuffer = new byte[newCapacity];
         Array.Copy(_buffer, newBuffer, _position);
         _buffer = newBuffer;

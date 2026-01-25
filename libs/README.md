@@ -19,12 +19,11 @@ libs/
 │   ├── ActionSelector/      # 行動選択エンジン
 │   ├── ActionExecutionSystem/ # 行動実行・ステートマシン
 │   ├── CharacterSpawnSystem/ # キャラクタースポーン
-│   ├── CollisionSystem/     # 当たり判定
+│   ├── CollisionSystem/       # 空間システム（衝突判定・空間検索統合）
 │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ
 │   ├── InventorySystem/     # アイテム・インベントリ管理
 │   ├── ReconciliationSystem/ # 位置調停・依存順処理
-│   ├── SpatialIndexSystem/  # 空間ハッシュグリッド
 │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │
 └── orchestration/           # 統合・オーケストレーション
@@ -41,7 +40,7 @@ libs/
 | **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
 | **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
-| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 128 |
+| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 148 |
 | **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 82 |
 | **DependencySortSystem** | 汎用トポロジカルソート、循環検出 | 28 |
 
@@ -52,12 +51,11 @@ libs/
 | **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 66 |
 | **ActionExecutionSystem** | アクション実行・ステートマシン管理 | 46 |
 | **CharacterSpawnSystem** | キャラクター生成・リソース管理 | 269 |
-| **CollisionSystem** | 当たり判定（Hitbox/Hurtbox/Pushbox/Trigger） | 68 |
+| **CollisionSystem** | 衝突判定・空間検索統合（CollisionDetector, SpatialWorld） | 50+ |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
 | **StatusEffectSystem** | 状態異常・バフ/デバフ管理 | 50 |
 | **InventorySystem** | アイテム・インベントリ管理 | 101 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停（DependencySortSystem使用） | 11 |
-| **SpatialIndexSystem** | 空間ハッシュグリッドによる高速検索 | 33 |
 | **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 21 |
 
 ### orchestration/ - 統合システム
@@ -66,7 +64,7 @@ libs/
 |---------|------|---------|
 | **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 56 |
 
-**合計: 1,624 テスト**
+**合計: 1,644 テスト**
 
 ## 主要な使用例
 
@@ -139,45 +137,56 @@ manager.RestoreSnapshot(snapshot);
 ### FlowTree
 
 ```csharp
-// 状態クラス定義
-public class PatrolState
+// 状態クラス定義（IFlowState必須）
+public class LoadingState : IFlowState
 {
-    public Vector3 CurrentWaypoint { get; set; }
-    public int WaypointIndex { get; set; }
+    public IFlowState? Parent { get; set; }
+    public bool LevelLoaded { get; set; }
+    public bool AssetsLoaded { get; set; }
 }
 
-// ツリー定義（入れ物と中身が分離）
-var state = new PatrolState();
-var tree = new FlowTree("Patrol");
+// ツリー定義
+var state = new LoadingState();
+var tree = new FlowTree("GameLoading");
 tree.Build(state)
     .Sequence()
-        .Action(s => GetNextWaypoint(s))
-        .Action(s => MoveToWaypoint(s))
-        .Wait(2.0f)
+        .Do(s => StartLoading(s))
+        .Wait(s => s.LevelLoaded && s.AssetsLoaded)  // 条件待機
+        .Do(() => HideLoadingScreen())
     .End()
     .Complete();
 
 // 実行
 var status = tree.Tick(0.016f);
 
-// 自己再帰も自然に書ける
-public class CounterState { public int Counter { get; set; } }
+// State注入でサブツリーに専用Stateを渡せる
+public class ParentState : IFlowState
+{
+    public IFlowState? Parent { get; set; }
+    public int TotalScore { get; set; }
+}
 
-var counterState = new CounterState { Counter = 5 };
-var countdown = new FlowTree("Countdown");
-countdown
+public class ChildState : IFlowState
+{
+    public IFlowState? Parent { get; set; }  // ParentStateへの参照が自動設定
+    public int LocalScore { get; set; }
+}
+
+var childTree = new FlowTree("Child");
+childTree.Build(new ChildState())
+    .Do(s =>
+    {
+        s.LocalScore = 100;
+        var parent = (ParentState)s.Parent!;  // 親Stateにアクセス
+        parent.TotalScore += s.LocalScore;
+    })
+    .Complete();
+
+var mainTree = new FlowTree("Main");
+mainTree
     .WithCallStack(new FlowCallStack(32))
-    .Build(counterState)
-    .Selector()
-        .Sequence()
-            .Condition(s => s.Counter <= 0)
-            .Success()
-        .End()
-        .Sequence()
-            .Action(s => { s.Counter--; return NodeStatus.Success; })
-            .SubTree(countdown)  // 自己参照
-        .End()
-    .End()
+    .Build(new ParentState())
+    .SubTree<ChildState>(childTree, p => new ChildState())  // State注入
     .Complete();
 ```
 
@@ -295,7 +304,7 @@ FlowTree.Core (独立・外部依存なし)
 ├── FlowTree / IFlowNode / NodeStatus
 ├── Composite: Sequence, Selector, Parallel, Race, Join, ShuffledSelector, WeightedRandomSelector, RoundRobin
 ├── Decorator: Retry, Timeout, Delay, Guard, Repeat, Event
-├── Leaf: Action, Condition, SubTree, DynamicSubTree, Wait, Yield
+├── Leaf: Action, Condition, SubTree, Wait, Yield
 └── FlowCallStack / CallFrame
 
 DependencySortSystem.Core (独立・外部依存なし)
@@ -309,7 +318,6 @@ DeepCloneGenerator (Source Generator)
 └── DeepClone() メソッド生成
 
 その他のシステムはEntityHandleSystem.Attributesに依存:
-├── SpatialIndexSystem.Core
 ├── CollisionSystem.Core
 ├── CombatSystem.Core（HandleSystem.Coreにも依存）
 ├── ReconciliationSystem.Core（DependencySortSystem.Coreにも依存）

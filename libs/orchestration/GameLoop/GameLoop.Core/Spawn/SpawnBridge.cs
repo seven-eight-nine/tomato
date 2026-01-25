@@ -122,8 +122,6 @@ public sealed class SpawnBridge<TCategory> : ISpawnCompletionHandler
             if (_registry.TryGetContext(handle, out var context) && context != null)
             {
                 context.IsActive = false;
-                // 衝突ボリュームをクリア
-                context.CollisionVolumes.Clear();
             }
         }
     }

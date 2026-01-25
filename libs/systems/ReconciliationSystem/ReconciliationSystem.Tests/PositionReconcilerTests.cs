@@ -4,7 +4,7 @@ using Xunit;
 using Tomato.ReconciliationSystem;
 using Tomato.DependencySortSystem;
 using Tomato.CommandGenerator;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using Tomato.EntityHandleSystem;
 
 namespace Tomato.ReconciliationSystem.Tests;
@@ -54,10 +54,10 @@ public class PositionReconcilerTests
 
         var reconciler = new PositionReconciler(graph, rule, transforms, entityTypes);
 
-        // Pushbox衝突を作成
-        var collisions = new List<CollisionResult>
+        // 押し出し衝突を作成
+        var collisions = new List<PushCollision>
         {
-            CreatePushboxCollision(player, wall, new Vector3(1, 0, 0), 0.5f)
+            new PushCollision(player, wall, new Vector3(1, 0, 0), 0.5f)
         };
 
         reconciler.Process(new[] { player, wall }, collisions);
@@ -93,7 +93,7 @@ public class PositionReconcilerTests
         var reconciler = new PositionReconciler(graph, rule, transforms, entityTypes);
 
         // 衝突なし
-        reconciler.Process(new[] { rider, horse }, new List<CollisionResult>());
+        reconciler.Process(new[] { rider, horse }, new List<PushCollision>());
 
         // 処理は正常に完了（依存関係が正しく解決される）
         Assert.True(true);
@@ -123,7 +123,7 @@ public class PositionReconcilerTests
         var reconciler = new PositionReconciler(graph, rule, transforms, entityTypes);
 
         // 循環依存があってもクラッシュしない
-        reconciler.Process(new[] { a, b }, new List<CollisionResult>());
+        reconciler.Process(new[] { a, b }, new List<PushCollision>());
 
         Assert.True(true);
     }
@@ -151,10 +151,10 @@ public class PositionReconcilerTests
         var reconciler = new PositionReconciler(graph, rule, transforms, entityTypes);
 
         // 複数の壁との衝突
-        var collisions = new List<CollisionResult>
+        var collisions = new List<PushCollision>
         {
-            CreatePushboxCollision(player, wall1, new Vector3(1, 0, 0), 0.3f),
-            CreatePushboxCollision(player, wall2, new Vector3(0, 1, 0), 0.2f)
+            new PushCollision(player, wall1, new Vector3(1, 0, 0), 0.3f),
+            new PushCollision(player, wall2, new Vector3(0, 1, 0), 0.2f)
         };
 
         reconciler.Process(new[] { player, wall1, wall2 }, collisions);
@@ -165,24 +165,6 @@ public class PositionReconcilerTests
     }
 
     #region Helper Classes
-
-    private static CollisionResult CreatePushboxCollision(AnyHandle entityA, AnyHandle entityB, Vector3 normal, float penetration)
-    {
-        var volumeA = new CollisionVolume(
-            owner: entityA,
-            shape: new SphereShape(1.0f),
-            filter: CollisionFilter.All,
-            volumeType: VolumeType.Pushbox);
-
-        var volumeB = new CollisionVolume(
-            owner: entityB,
-            shape: new SphereShape(1.0f),
-            filter: CollisionFilter.All,
-            volumeType: VolumeType.Pushbox);
-
-        var contact = new CollisionContact(Vector3.Zero, normal, penetration);
-        return new CollisionResult(volumeA, volumeB, contact);
-    }
 
     private class MockArena : IEntityArena
     {

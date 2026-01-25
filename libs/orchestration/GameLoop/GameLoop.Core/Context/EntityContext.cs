@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using Tomato.EntityHandleSystem;
 using Tomato.ActionExecutionSystem;
-using Tomato.CollisionSystem;
 using Tomato.CharacterSpawnSystem;
 using Tomato.ActionSelector;
 
@@ -10,7 +8,7 @@ namespace Tomato.GameLoop.Context;
 
 /// <summary>
 /// Entity単位のゲームコンテキスト。
-/// AnyHandle、ActionStateMachine、CollisionVolumeを統合する。
+/// AnyHandle、ActionStateMachineを統合する。
 /// </summary>
 /// <typeparam name="TCategory">アクションカテゴリのenum型</typeparam>
 public sealed class EntityContext<TCategory> where TCategory : struct, Enum
@@ -24,11 +22,6 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     /// このEntityのアクション状態機械。
     /// </summary>
     public ActionStateMachine<TCategory> ActionStateMachine { get; }
-
-    /// <summary>
-    /// このEntityが発行中の衝突ボリューム。
-    /// </summary>
-    public List<CollisionVolume> CollisionVolumes { get; }
 
     /// <summary>
     /// このEntityのジャッジメント群。
@@ -58,7 +51,6 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     {
         Handle = handle;
         ActionStateMachine = new ActionStateMachine<TCategory>();
-        CollisionVolumes = new List<CollisionVolume>();
         Judgments = Array.Empty<IActionJudgment<TCategory, InputState, GameState>>();
         SpawnController = null;
         IsMarkedForDeletion = false;
@@ -70,9 +62,6 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     /// </summary>
     public void Reset()
     {
-        // ActionStateMachineは各カテゴリのアクションがnullになる
-        // （新しいインスタンスが作られるため、特にリセット不要）
-        CollisionVolumes.Clear();
         Judgments = Array.Empty<IActionJudgment<TCategory, InputState, GameState>>();
         SpawnController = null;
         IsMarkedForDeletion = false;

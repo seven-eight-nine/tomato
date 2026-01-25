@@ -14,7 +14,7 @@ public delegate bool FlowCondition();
 /// <typeparam name="T">状態の型</typeparam>
 /// <param name="state">状態オブジェクト</param>
 /// <returns>条件が満たされた場合はtrue</returns>
-public delegate bool FlowCondition<in T>(T state) where T : class;
+public delegate bool FlowCondition<in T>(T state) where T : class, IFlowState;
 
 /// <summary>
 /// 条件を評価するノード（ステートレス）。
@@ -50,7 +50,7 @@ public sealed class ConditionNode : IFlowNode
 /// trueならSuccess、falseならFailureを返す。
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
-public sealed class ConditionNode<T> : IFlowNode where T : class
+public sealed class ConditionNode<T> : IFlowNode where T : class, IFlowState
 {
     private readonly FlowCondition<T> _condition;
 

@@ -2,7 +2,7 @@ using System;
 using Xunit;
 using Tomato.ReconciliationSystem;
 using Tomato.CommandGenerator;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using Tomato.EntityHandleSystem;
 
 namespace Tomato.ReconciliationSystem.Tests;
@@ -45,15 +45,13 @@ public class ReconciliationRuleTests
         var entityB = _arena.CreateHandle(2);
 
         // 法線がX方向、貫通深度0.2
-        var contact = new CollisionContact(
-            Vector3.Zero,
-            new Vector3(1, 0, 0),  // A -> B 方向
-            0.2f);
+        var normal = new Vector3(1, 0, 0);  // A -> B 方向
+        var penetration = 0.2f;
 
         rule.ComputePushout(
             entityA, EntityType.Player,
             entityB, EntityType.Player,  // 同じ優先度
-            in contact,
+            in normal, penetration,
             out var pushoutA,
             out var pushoutB);
 
@@ -69,15 +67,13 @@ public class ReconciliationRuleTests
         var wall = _arena.CreateHandle(1);
         var player = _arena.CreateHandle(2);
 
-        var contact = new CollisionContact(
-            Vector3.Zero,
-            new Vector3(1, 0, 0),
-            0.5f);
+        var normal = new Vector3(1, 0, 0);
+        var penetration = 0.5f;
 
         rule.ComputePushout(
             wall, EntityType.Wall,     // 高優先度
             player, EntityType.Player, // 低優先度
-            in contact,
+            in normal, penetration,
             out var pushoutWall,
             out var pushoutPlayer);
 
@@ -93,15 +89,13 @@ public class ReconciliationRuleTests
         var player = _arena.CreateHandle(1);
         var wall = _arena.CreateHandle(2);
 
-        var contact = new CollisionContact(
-            Vector3.Zero,
-            new Vector3(1, 0, 0),
-            0.5f);
+        var normal = new Vector3(1, 0, 0);
+        var penetration = 0.5f;
 
         rule.ComputePushout(
             player, EntityType.Player, // 低優先度
             wall, EntityType.Wall,     // 高優先度
-            in contact,
+            in normal, penetration,
             out var pushoutPlayer,
             out var pushoutWall);
 
@@ -120,15 +114,13 @@ public class ReconciliationRuleTests
         // NPCをPlayerより高優先度に変更
         rule.SetPriority(EntityType.NPC, 100);  // PlayerのデフォルトPriority(50)より高く
 
-        var contact = new CollisionContact(
-            Vector3.Zero,
-            new Vector3(1, 0, 0),
-            1.0f);
+        var normal = new Vector3(1, 0, 0);
+        var penetration = 1.0f;
 
         rule.ComputePushout(
             npc, EntityType.NPC,
             player, EntityType.Player,
-            in contact,
+            in normal, penetration,
             out var pushoutNPC,
             out var pushoutPlayer);
 

@@ -15,6 +15,7 @@ public sealed class FlowTreeBuilder
 
     private enum NodeType
     {
+        // Composites
         Sequence,
         Selector,
         Parallel,
@@ -23,11 +24,24 @@ public sealed class FlowTreeBuilder
         RandomSelector,
         ShuffledSelector,
         WeightedRandomSelector,
-        RoundRobin
+        RoundRobin,
+        // Decorators (single child)
+        Retry,
+        Timeout,
+        Delay,
+        Repeat,
+        RepeatUntilFail,
+        RepeatUntilSuccess,
+        Inverter,
+        Succeeder,
+        Failer
     }
 
     // WeightedRandomSelector用の重みリスト
     private readonly Stack<List<float>> _weightStack;
+
+    // デコレータ用パラメータスタック
+    private readonly Stack<float> _decoratorParamStack = new();
 
     // Event用のペンディングハンドラ
     private FlowEventHandler? _pendingOnEnter;
@@ -162,18 +176,19 @@ public sealed class FlowTreeBuilder
     }
 
     /// <summary>
-    /// 現在のCompositeノードを終了する。
+    /// 現在のComposite/Decoratorノードを終了する。
     /// </summary>
     public FlowTreeBuilder End()
     {
         if (_nodeStack.Count == 0)
-            throw new InvalidOperationException("No composite node to end.");
+            throw new InvalidOperationException("No composite/decorator node to end.");
 
         var children = _nodeStack.Pop().ToArray();
         var type = _typeStack.Pop();
 
         IFlowNode node = type switch
         {
+            // Composites
             NodeType.Sequence => new SequenceNode(children),
             NodeType.Selector => new SelectorNode(children),
             NodeType.Parallel => new ParallelNode(children),
@@ -183,6 +198,16 @@ public sealed class FlowTreeBuilder
             NodeType.ShuffledSelector => new ShuffledSelectorNode(children),
             NodeType.WeightedRandomSelector => CreateWeightedRandomSelector(children),
             NodeType.RoundRobin => new RoundRobinSelectorNode(children),
+            // Decorators
+            NodeType.Retry => CreateDecorator(children, p => new RetryNode((int)p, children[0])),
+            NodeType.Timeout => CreateDecorator(children, p => new TimeoutNode(p, children[0])),
+            NodeType.Delay => CreateDecorator(children, p => new DelayNode(p, children[0])),
+            NodeType.Repeat => CreateDecorator(children, p => new RepeatNode((int)p, children[0])),
+            NodeType.RepeatUntilFail => CreateDecoratorNoParam(children, () => new RepeatUntilFailNode(children[0])),
+            NodeType.RepeatUntilSuccess => CreateDecoratorNoParam(children, () => new RepeatUntilSuccessNode(children[0])),
+            NodeType.Inverter => CreateDecoratorNoParam(children, () => new InverterNode(children[0])),
+            NodeType.Succeeder => CreateDecoratorNoParam(children, () => new SucceederNode(children[0])),
+            NodeType.Failer => CreateDecoratorNoParam(children, () => new FailerNode(children[0])),
             _ => throw new InvalidOperationException($"Unknown node type: {type}")
         };
 
@@ -190,78 +215,129 @@ public sealed class FlowTreeBuilder
         return this;
     }
 
+    private IFlowNode CreateDecorator(IFlowNode[] children, Func<float, IFlowNode> factory)
+    {
+        if (children.Length != 1)
+            throw new InvalidOperationException("Decorator must have exactly one child.");
+        var param = _decoratorParamStack.Pop();
+        return factory(param);
+    }
+
+    private IFlowNode CreateDecoratorNoParam(IFlowNode[] children, Func<IFlowNode> factory)
+    {
+        if (children.Length != 1)
+            throw new InvalidOperationException("Decorator must have exactly one child.");
+        return factory();
+    }
+
     // =====================================================
-    // Decorator Nodes
+    // Decorator Nodes (Scope-based Fluent API)
     // =====================================================
 
     /// <summary>
-    /// Inverterデコレータを追加する（次の1ノードに適用）。
-    /// </summary>
-    public FlowTreeBuilder Inverter(IFlowNode child)
-    {
-        AddNode(new InverterNode(child));
-        return this;
-    }
-
-    /// <summary>
-    /// Succeederデコレータを追加する。
-    /// </summary>
-    public FlowTreeBuilder Succeeder(IFlowNode child)
-    {
-        AddNode(new SucceederNode(child));
-        return this;
-    }
-
-    /// <summary>
-    /// Failerデコレータを追加する。
-    /// </summary>
-    public FlowTreeBuilder Failer(IFlowNode child)
-    {
-        AddNode(new FailerNode(child));
-        return this;
-    }
-
-    /// <summary>
-    /// Repeatデコレータを追加する。
-    /// </summary>
-    /// <param name="count">繰り返し回数</param>
-    /// <param name="child">子ノード</param>
-    public FlowTreeBuilder Repeat(int count, IFlowNode child)
-    {
-        AddNode(new RepeatNode(count, child));
-        return this;
-    }
-
-    /// <summary>
-    /// Retryデコレータを追加する。
+    /// Retryデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
     /// <param name="maxRetries">最大リトライ回数</param>
-    /// <param name="child">子ノード</param>
-    public FlowTreeBuilder Retry(int maxRetries, IFlowNode child)
+    public FlowTreeBuilder Retry(int maxRetries)
     {
-        AddNode(new RetryNode(maxRetries, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Retry);
+        _decoratorParamStack.Push(maxRetries);
         return this;
     }
 
     /// <summary>
-    /// Timeoutデコレータを追加する。
+    /// Timeoutデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
     /// <param name="timeout">タイムアウト時間（秒）</param>
-    /// <param name="child">子ノード</param>
-    public FlowTreeBuilder Timeout(float timeout, IFlowNode child)
+    public FlowTreeBuilder Timeout(float timeout)
     {
-        AddNode(new TimeoutNode(timeout, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Timeout);
+        _decoratorParamStack.Push(timeout);
         return this;
     }
 
     /// <summary>
-    /// Delayデコレータを追加する。
+    /// Delayデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
     /// <param name="delay">遅延時間（秒）</param>
-    /// <param name="child">子ノード</param>
-    public FlowTreeBuilder Delay(float delay, IFlowNode child)
+    public FlowTreeBuilder Delay(float delay)
     {
-        AddNode(new DelayNode(delay, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Delay);
+        _decoratorParamStack.Push(delay);
+        return this;
+    }
+
+    /// <summary>
+    /// Repeatデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
+    /// </summary>
+    /// <param name="count">繰り返し回数</param>
+    public FlowTreeBuilder Repeat(int count)
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Repeat);
+        _decoratorParamStack.Push(count);
+        return this;
+    }
+
+    /// <summary>
+    /// RepeatUntilFailデコレータを開始する。
+    /// 子ノードがFailureを返すまで繰り返す。
+    /// </summary>
+    public FlowTreeBuilder RepeatUntilFail()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.RepeatUntilFail);
+        return this;
+    }
+
+    /// <summary>
+    /// RepeatUntilSuccessデコレータを開始する。
+    /// 子ノードがSuccessを返すまで繰り返す。
+    /// </summary>
+    public FlowTreeBuilder RepeatUntilSuccess()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.RepeatUntilSuccess);
+        return this;
+    }
+
+    /// <summary>
+    /// Inverterデコレータを開始する。
+    /// 子ノードの結果を反転する。
+    /// </summary>
+    public FlowTreeBuilder Inverter()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Inverter);
+        return this;
+    }
+
+    /// <summary>
+    /// Succeederデコレータを開始する。
+    /// 子ノードの結果を常にSuccessにする。
+    /// </summary>
+    public FlowTreeBuilder Succeeder()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Succeeder);
+        return this;
+    }
+
+    /// <summary>
+    /// Failerデコレータを開始する。
+    /// 子ノードの結果を常にFailureにする。
+    /// </summary>
+    public FlowTreeBuilder Failer()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Failer);
         return this;
     }
 
@@ -307,6 +383,17 @@ public sealed class FlowTreeBuilder
     }
 
     /// <summary>
+    /// voidアクションを実行してSuccessを返すノードを追加する。
+    /// Action()の短縮形。
+    /// </summary>
+    /// <param name="action">実行するアクション</param>
+    public FlowTreeBuilder Do(System.Action action)
+    {
+        AddNode(new ActionNode(() => { action(); return NodeStatus.Success; }));
+        return this;
+    }
+
+    /// <summary>
     /// Conditionノードを追加する。
     /// </summary>
     /// <param name="condition">評価する条件</param>
@@ -317,7 +404,7 @@ public sealed class FlowTreeBuilder
     }
 
     /// <summary>
-    /// SubTreeノードを追加する。
+    /// SubTreeノードを追加する（静的ツリー）。
     /// </summary>
     /// <param name="tree">呼び出すツリー</param>
     public FlowTreeBuilder SubTree(FlowTree tree)
@@ -327,13 +414,12 @@ public sealed class FlowTreeBuilder
     }
 
     /// <summary>
-    /// DynamicSubTreeノードを追加する。
-    /// ラムダ式でサブツリーを動的に渡す。
+    /// SubTreeノードを追加する（動的ツリー）。
     /// </summary>
-    /// <param name="provider">サブツリーを提供するラムダ</param>
-    public FlowTreeBuilder DynamicSubTree(FlowTreeProvider provider)
+    /// <param name="treeProvider">ツリーを提供するラムダ</param>
+    public FlowTreeBuilder SubTree(FlowTreeProvider treeProvider)
     {
-        AddNode(new DynamicSubTreeNode(provider));
+        AddNode(new SubTreeNode(treeProvider));
         return this;
     }
 
@@ -344,6 +430,16 @@ public sealed class FlowTreeBuilder
     public FlowTreeBuilder Wait(float duration)
     {
         AddNode(new WaitNode(duration));
+        return this;
+    }
+
+    /// <summary>
+    /// 条件が満たされるまで待機するノードを追加する。
+    /// </summary>
+    /// <param name="condition">待機条件（trueで待機終了）</param>
+    public FlowTreeBuilder Wait(FlowCondition condition)
+    {
+        AddNode(new WaitUntilNode(condition));
         return this;
     }
 
@@ -446,7 +542,7 @@ public sealed class FlowTreeBuilder
 /// 型付きFlowTreeを構築するためのビルダーDSL。
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
-public sealed class FlowTreeBuilder<T> where T : class
+public sealed class FlowTreeBuilder<T> where T : class, IFlowState
 {
     private readonly FlowTree _tree;
     private readonly Stack<List<IFlowNode>> _nodeStack;
@@ -455,6 +551,7 @@ public sealed class FlowTreeBuilder<T> where T : class
 
     private enum NodeType
     {
+        // Composites
         Sequence,
         Selector,
         Parallel,
@@ -463,11 +560,24 @@ public sealed class FlowTreeBuilder<T> where T : class
         RandomSelector,
         ShuffledSelector,
         WeightedRandomSelector,
-        RoundRobin
+        RoundRobin,
+        // Decorators (single child)
+        Retry,
+        Timeout,
+        Delay,
+        Repeat,
+        RepeatUntilFail,
+        RepeatUntilSuccess,
+        Inverter,
+        Succeeder,
+        Failer
     }
 
     // WeightedRandomSelector用の重みリスト
     private readonly Stack<List<float>> _weightStack;
+
+    // デコレータ用パラメータスタック
+    private readonly Stack<float> _decoratorParamStack = new();
 
     // Event用のペンディングハンドラ
     private FlowEventHandler<T>? _pendingOnEnter;
@@ -598,18 +708,19 @@ public sealed class FlowTreeBuilder<T> where T : class
     }
 
     /// <summary>
-    /// 現在のCompositeノードを終了する。
+    /// 現在のComposite/Decoratorノードを終了する。
     /// </summary>
     public FlowTreeBuilder<T> End()
     {
         if (_nodeStack.Count == 0)
-            throw new InvalidOperationException("No composite node to end.");
+            throw new InvalidOperationException("No composite/decorator node to end.");
 
         var children = _nodeStack.Pop().ToArray();
         var type = _typeStack.Pop();
 
         IFlowNode node = type switch
         {
+            // Composites
             NodeType.Sequence => new SequenceNode(children),
             NodeType.Selector => new SelectorNode(children),
             NodeType.Parallel => new ParallelNode(children),
@@ -619,6 +730,16 @@ public sealed class FlowTreeBuilder<T> where T : class
             NodeType.ShuffledSelector => new ShuffledSelectorNode(children),
             NodeType.WeightedRandomSelector => CreateWeightedRandomSelector(children),
             NodeType.RoundRobin => new RoundRobinSelectorNode(children),
+            // Decorators
+            NodeType.Retry => CreateDecorator(children, p => new RetryNode((int)p, children[0])),
+            NodeType.Timeout => CreateDecorator(children, p => new TimeoutNode(p, children[0])),
+            NodeType.Delay => CreateDecorator(children, p => new DelayNode(p, children[0])),
+            NodeType.Repeat => CreateDecorator(children, p => new RepeatNode((int)p, children[0])),
+            NodeType.RepeatUntilFail => CreateDecoratorNoParam(children, () => new RepeatUntilFailNode(children[0])),
+            NodeType.RepeatUntilSuccess => CreateDecoratorNoParam(children, () => new RepeatUntilSuccessNode(children[0])),
+            NodeType.Inverter => CreateDecoratorNoParam(children, () => new InverterNode(children[0])),
+            NodeType.Succeeder => CreateDecoratorNoParam(children, () => new SucceederNode(children[0])),
+            NodeType.Failer => CreateDecoratorNoParam(children, () => new FailerNode(children[0])),
             _ => throw new InvalidOperationException($"Unknown node type: {type}")
         };
 
@@ -626,70 +747,129 @@ public sealed class FlowTreeBuilder<T> where T : class
         return this;
     }
 
+    private IFlowNode CreateDecorator(IFlowNode[] children, Func<float, IFlowNode> factory)
+    {
+        if (children.Length != 1)
+            throw new InvalidOperationException("Decorator must have exactly one child.");
+        var param = _decoratorParamStack.Pop();
+        return factory(param);
+    }
+
+    private IFlowNode CreateDecoratorNoParam(IFlowNode[] children, Func<IFlowNode> factory)
+    {
+        if (children.Length != 1)
+            throw new InvalidOperationException("Decorator must have exactly one child.");
+        return factory();
+    }
+
     // =====================================================
-    // Decorator Nodes
+    // Decorator Nodes (Scope-based Fluent API)
     // =====================================================
 
     /// <summary>
-    /// Inverterデコレータを追加する。
+    /// Retryデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
-    public FlowTreeBuilder<T> Inverter(IFlowNode child)
+    /// <param name="maxRetries">最大リトライ回数</param>
+    public FlowTreeBuilder<T> Retry(int maxRetries)
     {
-        AddNode(new InverterNode(child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Retry);
+        _decoratorParamStack.Push(maxRetries);
         return this;
     }
 
     /// <summary>
-    /// Succeederデコレータを追加する。
+    /// Timeoutデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
-    public FlowTreeBuilder<T> Succeeder(IFlowNode child)
+    /// <param name="timeout">タイムアウト時間（秒）</param>
+    public FlowTreeBuilder<T> Timeout(float timeout)
     {
-        AddNode(new SucceederNode(child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Timeout);
+        _decoratorParamStack.Push(timeout);
         return this;
     }
 
     /// <summary>
-    /// Failerデコレータを追加する。
+    /// Delayデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
-    public FlowTreeBuilder<T> Failer(IFlowNode child)
+    /// <param name="delay">遅延時間（秒）</param>
+    public FlowTreeBuilder<T> Delay(float delay)
     {
-        AddNode(new FailerNode(child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Delay);
+        _decoratorParamStack.Push(delay);
         return this;
     }
 
     /// <summary>
-    /// Repeatデコレータを追加する。
+    /// Repeatデコレータを開始する。
+    /// End()で閉じるまでに追加した1つの子ノードに適用される。
     /// </summary>
-    public FlowTreeBuilder<T> Repeat(int count, IFlowNode child)
+    /// <param name="count">繰り返し回数</param>
+    public FlowTreeBuilder<T> Repeat(int count)
     {
-        AddNode(new RepeatNode(count, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Repeat);
+        _decoratorParamStack.Push(count);
         return this;
     }
 
     /// <summary>
-    /// Retryデコレータを追加する。
+    /// RepeatUntilFailデコレータを開始する。
+    /// 子ノードがFailureを返すまで繰り返す。
     /// </summary>
-    public FlowTreeBuilder<T> Retry(int maxRetries, IFlowNode child)
+    public FlowTreeBuilder<T> RepeatUntilFail()
     {
-        AddNode(new RetryNode(maxRetries, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.RepeatUntilFail);
         return this;
     }
 
     /// <summary>
-    /// Timeoutデコレータを追加する。
+    /// RepeatUntilSuccessデコレータを開始する。
+    /// 子ノードがSuccessを返すまで繰り返す。
     /// </summary>
-    public FlowTreeBuilder<T> Timeout(float timeout, IFlowNode child)
+    public FlowTreeBuilder<T> RepeatUntilSuccess()
     {
-        AddNode(new TimeoutNode(timeout, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.RepeatUntilSuccess);
         return this;
     }
 
     /// <summary>
-    /// Delayデコレータを追加する。
+    /// Inverterデコレータを開始する。
+    /// 子ノードの結果を反転する。
     /// </summary>
-    public FlowTreeBuilder<T> Delay(float delay, IFlowNode child)
+    public FlowTreeBuilder<T> Inverter()
     {
-        AddNode(new DelayNode(delay, child));
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Inverter);
+        return this;
+    }
+
+    /// <summary>
+    /// Succeederデコレータを開始する。
+    /// 子ノードの結果を常にSuccessにする。
+    /// </summary>
+    public FlowTreeBuilder<T> Succeeder()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Succeeder);
+        return this;
+    }
+
+    /// <summary>
+    /// Failerデコレータを開始する。
+    /// 子ノードの結果を常にFailureにする。
+    /// </summary>
+    public FlowTreeBuilder<T> Failer()
+    {
+        _nodeStack.Push(new List<IFlowNode>());
+        _typeStack.Push(NodeType.Failer);
         return this;
     }
 
@@ -740,6 +920,28 @@ public sealed class FlowTreeBuilder<T> where T : class
     }
 
     /// <summary>
+    /// voidアクションを実行してSuccessを返すノードを追加する（型付き）。
+    /// Action()の短縮形。
+    /// </summary>
+    /// <param name="action">実行するアクション</param>
+    public FlowTreeBuilder<T> Do(System.Action<T> action)
+    {
+        AddNode(new ActionNode<T>(s => { action(s); return NodeStatus.Success; }));
+        return this;
+    }
+
+    /// <summary>
+    /// voidアクションを実行してSuccessを返すノードを追加する（ステートレス）。
+    /// Action()の短縮形。
+    /// </summary>
+    /// <param name="action">実行するアクション</param>
+    public FlowTreeBuilder<T> Do(System.Action action)
+    {
+        AddNode(new ActionNode(() => { action(); return NodeStatus.Success; }));
+        return this;
+    }
+
+    /// <summary>
     /// Conditionノードを追加する（型付き）。
     /// </summary>
     public FlowTreeBuilder<T> Condition(FlowCondition<T> condition)
@@ -759,8 +961,9 @@ public sealed class FlowTreeBuilder<T> where T : class
     }
 
     /// <summary>
-    /// SubTreeノードを追加する。
+    /// SubTreeノードを追加する（静的ツリー、親のStateを継承）。
     /// </summary>
+    /// <param name="tree">呼び出すツリー</param>
     public FlowTreeBuilder<T> SubTree(FlowTree tree)
     {
         AddNode(new SubTreeNode(tree));
@@ -768,11 +971,38 @@ public sealed class FlowTreeBuilder<T> where T : class
     }
 
     /// <summary>
-    /// DynamicSubTreeノードを追加する（型付き）。
+    /// SubTreeノードを追加する（動的ツリー、親のStateを継承）。
     /// </summary>
-    public FlowTreeBuilder<T> DynamicSubTree(FlowTreeProvider<T> provider)
+    /// <param name="treeProvider">ツリーを提供するラムダ</param>
+    public FlowTreeBuilder<T> SubTree(FlowTreeProvider<T> treeProvider)
     {
-        AddNode(new DynamicSubTreeNode<T>(provider));
+        AddNode(new SubTreeNode<T>(treeProvider));
+        return this;
+    }
+
+    /// <summary>
+    /// SubTreeノードを追加する（静的ツリー、新しいStateを注入）。
+    /// </summary>
+    /// <typeparam name="TChild">子状態の型</typeparam>
+    /// <param name="tree">呼び出すツリー</param>
+    /// <param name="stateProvider">子Stateを作成するラムダ。Parentプロパティは自動設定される。</param>
+    public FlowTreeBuilder<T> SubTree<TChild>(FlowTree tree, FlowStateProvider<T, TChild> stateProvider)
+        where TChild : class, IFlowState
+    {
+        AddNode(new SubTreeNode<T, TChild>(tree, stateProvider));
+        return this;
+    }
+
+    /// <summary>
+    /// SubTreeノードを追加する（動的ツリー、新しいStateを注入）。
+    /// </summary>
+    /// <typeparam name="TChild">子状態の型</typeparam>
+    /// <param name="treeProvider">ツリーを提供するラムダ</param>
+    /// <param name="stateProvider">子Stateを作成するラムダ。Parentプロパティは自動設定される。</param>
+    public FlowTreeBuilder<T> SubTree<TChild>(FlowTreeProvider<T> treeProvider, FlowStateProvider<T, TChild> stateProvider)
+        where TChild : class, IFlowState
+    {
+        AddNode(new SubTreeNode<T, TChild>(treeProvider, stateProvider));
         return this;
     }
 
@@ -782,6 +1012,26 @@ public sealed class FlowTreeBuilder<T> where T : class
     public FlowTreeBuilder<T> Wait(float duration)
     {
         AddNode(new WaitNode(duration));
+        return this;
+    }
+
+    /// <summary>
+    /// 条件が満たされるまで待機するノードを追加する（型付き）。
+    /// </summary>
+    /// <param name="condition">待機条件（trueで待機終了）</param>
+    public FlowTreeBuilder<T> Wait(FlowCondition<T> condition)
+    {
+        AddNode(new WaitUntilNode<T>(condition));
+        return this;
+    }
+
+    /// <summary>
+    /// 条件が満たされるまで待機するノードを追加する（ステートレス）。
+    /// </summary>
+    /// <param name="condition">待機条件（trueで待機終了）</param>
+    public FlowTreeBuilder<T> Wait(FlowCondition condition)
+    {
+        AddNode(new WaitUntilNode(condition));
         return this;
     }
 

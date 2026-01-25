@@ -533,8 +533,9 @@ public class DecoratorNodeTests
         Assert.Equal(11, state.Counter);
     }
 
-    private class TestState
+    private class TestState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public bool IsEnabled { get; set; }
         public int Counter { get; set; }
     }

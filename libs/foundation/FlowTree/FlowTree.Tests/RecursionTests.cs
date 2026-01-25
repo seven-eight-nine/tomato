@@ -505,41 +505,48 @@ public class RecursionTests
     }
 
     // State classes
-    private class OrderState
+    private class OrderState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public string Order { get; set; } = "";
     }
 
-    private class CounterState
+    private class CounterState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
     }
 
-    private class FactorialState
+    private class FactorialState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
         public int Result { get; set; }
     }
 
-    private class CountdownState
+    private class CountdownState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
         public string Log { get; set; } = "";
     }
 
-    private class PingPongState
+    private class PingPongState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Counter { get; set; }
         public string Log { get; set; } = "";
     }
 
-    private class PhaseState
+    private class PhaseState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Phase { get; set; }
     }
 
-    private class StageState
+    private class StageState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int Stage { get; set; }
     }
 }

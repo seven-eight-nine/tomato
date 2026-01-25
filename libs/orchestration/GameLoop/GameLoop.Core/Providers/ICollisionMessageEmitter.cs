@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Tomato.CollisionSystem;
+using Tomato.GameLoop.Collision;
 
 namespace Tomato.GameLoop.Providers;
 
@@ -12,6 +12,6 @@ public interface ICollisionMessageEmitter
     /// <summary>
     /// 衝突結果からメッセージを発行する。
     /// </summary>
-    /// <param name="results">検出された衝突結果のリスト</param>
-    void EmitMessages(IReadOnlyList<CollisionResult> results);
+    /// <param name="collisions">検出された衝突ペアのリスト</param>
+    void EmitMessages(IReadOnlyList<CollisionPair> collisions);
 }

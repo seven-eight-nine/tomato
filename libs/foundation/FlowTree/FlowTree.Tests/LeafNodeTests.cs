@@ -79,11 +79,11 @@ public class LeafNodeTests
     }
 
     // =====================================================
-    // DynamicSubTreeNode Tests
+    // SubTreeNode (Dynamic) Tests
     // =====================================================
 
     [Fact]
-    public void DynamicSubTreeNode_ExecutesProvidedTree()
+    public void SubTreeNode_Dynamic_ExecutesProvidedTree()
     {
         int callCount = 0;
         var subTree = new FlowTree();
@@ -91,7 +91,7 @@ public class LeafNodeTests
             .Action(() => { callCount++; return NodeStatus.Success; })
             .Complete();
 
-        var node = new DynamicSubTreeNode(() => subTree);
+        var node = new SubTreeNode(() => subTree);
 
         var ctx = new FlowContext();
         var result = node.Tick(ref ctx);
@@ -101,9 +101,9 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_ReturnsFailureForNullTree()
+    public void SubTreeNode_Dynamic_ReturnsFailureForNullTree()
     {
-        var node = new DynamicSubTreeNode(() => null);
+        var node = new SubTreeNode(() => null);
 
         var ctx = new FlowContext();
         var result = node.Tick(ref ctx);
@@ -112,7 +112,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_EvaluatesProviderOnEachStart()
+    public void SubTreeNode_Dynamic_EvaluatesProviderOnEachStart()
     {
         int providerCallCount = 0;
         int actionCallCount = 0;
@@ -121,7 +121,7 @@ public class LeafNodeTests
             .Action(() => { actionCallCount++; return NodeStatus.Success; })
             .Complete();
 
-        var node = new DynamicSubTreeNode(() =>
+        var node = new SubTreeNode(() =>
         {
             providerCallCount++;
             return subTree;
@@ -139,7 +139,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_ContinuesRunningTree()
+    public void SubTreeNode_Dynamic_ContinuesRunningTree()
     {
         int providerCallCount = 0;
         int tickCount = 0;
@@ -152,7 +152,7 @@ public class LeafNodeTests
             })
             .Complete();
 
-        var node = new DynamicSubTreeNode(() =>
+        var node = new SubTreeNode(() =>
         {
             providerCallCount++;
             return subTree;
@@ -172,7 +172,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_DifferentTreesOnEachCall()
+    public void SubTreeNode_Dynamic_DifferentTreesOnEachCall()
     {
         int callCount = 0;
         var successTree = new FlowTree();
@@ -180,7 +180,7 @@ public class LeafNodeTests
         var failureTree = new FlowTree();
         failureTree.Build().Failure().Complete();
 
-        var node = new DynamicSubTreeNode(() =>
+        var node = new SubTreeNode(() =>
         {
             callCount++;
             return callCount == 1 ? successTree : failureTree;
@@ -198,7 +198,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_Reset()
+    public void SubTreeNode_Dynamic_Reset()
     {
         int providerCallCount = 0;
         int actionCallCount = 0;
@@ -211,7 +211,7 @@ public class LeafNodeTests
             })
             .Complete();
 
-        var node = new DynamicSubTreeNode(() =>
+        var node = new SubTreeNode(() =>
         {
             providerCallCount++;
             return subTree;
@@ -232,7 +232,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void DynamicSubTreeNode_Generic_WithState()
+    public void SubTreeNode_Dynamic_Generic_WithState()
     {
         var state = new TestState { Value = 0 };
         var subTree = new FlowTree();
@@ -244,7 +244,7 @@ public class LeafNodeTests
             })
             .Complete();
 
-        var node = new DynamicSubTreeNode<TestState>(s =>
+        var node = new SubTreeNode<TestState>(s =>
         {
             // 状態に基づいてサブツリーを選択できる
             return subTree;
@@ -256,8 +256,91 @@ public class LeafNodeTests
         Assert.Equal(100, state.Value);
     }
 
-    private class TestState
+    // =====================================================
+    // WaitUntilNode Tests
+    // =====================================================
+
+    [Fact]
+    public void WaitUntilNode_ReturnsRunningWhileConditionFalse()
     {
+        bool conditionMet = false;
+        var node = new WaitUntilNode(() => conditionMet);
+
+        var ctx = new FlowContext();
+
+        // まだ条件が満たされていない
+        Assert.Equal(NodeStatus.Running, node.Tick(ref ctx));
+        Assert.Equal(NodeStatus.Running, node.Tick(ref ctx));
+
+        // 条件が満たされた
+        conditionMet = true;
+        Assert.Equal(NodeStatus.Success, node.Tick(ref ctx));
+    }
+
+    [Fact]
+    public void WaitUntilNode_ReturnsSuccessImmediatelyWhenConditionTrue()
+    {
+        var node = new WaitUntilNode(() => true);
+
+        var ctx = new FlowContext();
+        Assert.Equal(NodeStatus.Success, node.Tick(ref ctx));
+    }
+
+    [Fact]
+    public void WaitUntilNode_Generic_UsesState()
+    {
+        var state = new TestState { IsEnabled = false };
+        var node = new WaitUntilNode<TestState>(s => s.IsEnabled);
+
+        var ctx = new FlowContext { State = state };
+
+        // 条件が満たされていない
+        Assert.Equal(NodeStatus.Running, node.Tick(ref ctx));
+
+        // 条件が満たされた
+        state.IsEnabled = true;
+        Assert.Equal(NodeStatus.Success, node.Tick(ref ctx));
+    }
+
+    [Fact]
+    public void WaitUntilNode_DslStateless()
+    {
+        bool loaded = false;
+
+        var tree = new FlowTree();
+        tree.Build()
+            .Wait(() => loaded)
+            .Complete();
+
+        // まだロードされていない
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+
+        // ロード完了
+        loaded = true;
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+    }
+
+    [Fact]
+    public void WaitUntilNode_DslWithState()
+    {
+        var state = new TestState { IsEnabled = false };
+
+        var tree = new FlowTree();
+        tree.Build(state)
+            .Wait(s => s.IsEnabled)
+            .Complete();
+
+        // まだ有効化されていない
+        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+
+        // 有効化
+        state.IsEnabled = true;
+        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+    }
+
+    private class TestState : IFlowState
+    {
+        public IFlowState? Parent { get; set; }
         public int Value { get; set; }
         public bool IsEnabled { get; set; }
     }

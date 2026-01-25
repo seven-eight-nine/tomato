@@ -11,7 +11,7 @@
     <ProjectReference Include="../../../foundation/EntityHandleSystem/EntityHandleSystem.Attributes/EntityHandleSystem.Attributes.csproj" />
     <ProjectReference Include="../../../foundation/CommandGenerator/CommandGenerator.Core/CommandGenerator.Core.csproj" />
     <ProjectReference Include="../../../foundation/DependencySortSystem/DependencySortSystem.Core/DependencySortSystem.Core.csproj" />
-    <ProjectReference Include="../../CollisionSystem/CollisionSystem.Core/CollisionSystem.Core.csproj" />
+    <ProjectReference Include="../../../common/Tomato.Math/Tomato.Math.csproj" />
   </ItemGroup>
 
 </Project>

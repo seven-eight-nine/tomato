@@ -36,16 +36,8 @@ using Tomato.FlowTree;
 var tree = new FlowTree();
 tree.Build()
     .Sequence()
-        .Action(static () =>
-        {
-            Console.WriteLine("Step 1");
-            return NodeStatus.Success;
-        })
-        .Action(static () =>
-        {
-            Console.WriteLine("Step 2");
-            return NodeStatus.Success;
-        })
+        .Do(static () => Console.WriteLine("Step 1"))
+        .Do(static () => Console.WriteLine("Step 2"))
     .End()
     .Complete();
 ```
@@ -53,9 +45,10 @@ tree.Build()
 ### 2. 状態を使うツリーを定義
 
 ```csharp
-// 状態クラス
-public class GameState
+// 状態クラス（IFlowState必須）
+public class GameState : IFlowState
 {
+    public IFlowState? Parent { get; set; }  // サブツリーで親参照に使用
     public int Score { get; set; }
     public bool IsAlive { get; set; } = true;
 }
@@ -65,11 +58,7 @@ var tree = new FlowTree();
 
 tree.Build(state)
     .Sequence()
-        .Action(s =>
-        {
-            s.Score += 100;
-            return NodeStatus.Success;
-        })
+        .Do(s => s.Score += 100)
         .Condition(s => s.IsAlive)
     .End()
     .Complete();
@@ -109,7 +98,7 @@ var status = tree.Tick(0.016f);
 |------|------|-----|
 | **Composite** | 複数の子を持つ | Sequence, Selector, Parallel, ShuffledSelector |
 | **Decorator** | 1つの子を修飾 | Repeat, Retry, Timeout, Event |
-| **Leaf** | 末端ノード | Action, Condition, SubTree, DynamicSubTree |
+| **Leaf** | 末端ノード | Action, Condition, SubTree, DynamicSubTree, Wait |
 
 ### FlowTreeの構造
 
@@ -133,11 +122,15 @@ tree.Build()
 
 ### サブツリー
 
-SubTreeNodeで他のツリーを呼び出せる。FlowTree参照で直接指定するため、自己再帰・相互再帰が自然に書ける。
+SubTreeで他のツリーを呼び出せる。静的・動的ツリー選択、State注入をサポート。
 
 ```csharp
 // 自己再帰
-public class CounterState { public int Counter { get; set; } }
+public class CounterState : IFlowState
+{
+    public IFlowState? Parent { get; set; }
+    public int Counter { get; set; }
+}
 
 var state = new CounterState { Counter = 5 };
 var countdown = new FlowTree();
@@ -150,43 +143,18 @@ countdown
             .Success()
         .End()
         .Sequence()
-            .Action(s =>
-            {
-                s.Counter--;
-                return NodeStatus.Success;
-            })
+            .Do(s => s.Counter--)
             .SubTree(countdown) // 自己参照
         .End()
     .End()
     .Complete();
 
-// 相互再帰
-var ping = new FlowTree("ping");
-var pong = new FlowTree("pong");
-
-ping
-    .WithCallStack(new FlowCallStack(32))
-    .Build(state)
-    .Sequence()
-        .Action(s => { /* ... */ return NodeStatus.Success; })
-        .SubTree(pong) // pongを参照
-    .End()
-    .Complete();
-
-pong.Build(state)
-    .Sequence()
-        .Action(s => { /* ... */ return NodeStatus.Success; })
-        .SubTree(ping) // pingを参照
-    .End()
-    .Complete();
-```
-
-### 動的サブツリー
-
-DynamicSubTreeNodeで実行時にサブツリーを動的に決定できる。
-
-```csharp
-public class DifficultyState { public int Difficulty { get; set; } }
+// 動的サブツリー（実行時にツリーを選択）
+public class DifficultyState : IFlowState
+{
+    public IFlowState? Parent { get; set; }
+    public int Difficulty { get; set; }
+}
 
 var easyTree = new FlowTree("Easy");
 var hardTree = new FlowTree("Hard");
@@ -195,11 +163,46 @@ var hardTree = new FlowTree("Hard");
 var state = new DifficultyState { Difficulty = 3 };
 var tree = new FlowTree();
 tree.Build(state)
-    .DynamicSubTree(s =>
+    .SubTree(s => s.Difficulty > 5 ? hardTree : easyTree)  // 動的選択
+    .Complete();
+```
+
+### State注入
+
+サブツリーに専用のStateを渡すことで、親子間で異なるStateを使える。
+子のStateにはParentプロパティで親のStateへの参照が自動設定される。
+
+```csharp
+// 親State
+public class ParentState : IFlowState
+{
+    public IFlowState? Parent { get; set; }
+    public int TotalScore { get; set; }
+}
+
+// 子State
+public class ChildState : IFlowState
+{
+    public IFlowState? Parent { get; set; }
+    public int LocalScore { get; set; }
+}
+
+var childTree = new FlowTree();
+childTree.Build(new ChildState())
+    .Do(s =>
     {
-        // 実行時に条件に応じてツリーを選択
-        return s.Difficulty > 5 ? hardTree : easyTree;
+        s.LocalScore = 100;
+        // 親Stateにアクセス
+        var parent = (ParentState)s.Parent!;
+        parent.TotalScore += s.LocalScore;
     })
+    .Complete();
+
+var mainTree = new FlowTree();
+mainTree
+    .WithCallStack(new FlowCallStack(32))
+    .Build(new ParentState())
+    .SubTree<ChildState>(childTree, p => new ChildState())  // State注入
     .Complete();
 ```
 
@@ -279,10 +282,14 @@ var patrolTree = new FlowTree("Patrol");
 // ... build trees ...
 
 var tree = new FlowTree();
-tree.Build()
+tree
+    .WithCallStack(new FlowCallStack(16))
+    .Build()
     .Race()
         .SubTree(attackTree)
-        .Node(new TimeoutNode(5.0f, new SubTreeNode(patrolTree)))
+        .Timeout(5.0f)
+            .SubTree(patrolTree)
+        .End()
     .End()
     .Complete();
 ```
@@ -354,6 +361,31 @@ tree.Build(state)
         onEnter: s => { s.StartTime = DateTime.Now; },
         onExit: (s, result) => { s.EndTime = DateTime.Now; })
     .Action(s => Process(s))
+    .Complete();
+```
+
+### Wait（待機）
+
+時間または条件で待機。
+
+```csharp
+// 時間待機
+var tree = new FlowTree();
+tree.Build()
+    .Sequence()
+        .Action(static () => ShowMessage())
+        .Wait(2.0f)  // 2秒待機
+        .Action(static () => HideMessage())
+    .End()
+    .Complete();
+
+// 条件待機（条件がtrueになるまでRunning）
+tree.Build(state)
+    .Sequence()
+        .Action(s => StartLoading(s))
+        .Wait(s => s.LevelLoaded)  // ロード完了まで待機
+        .Action(s => ShowLevel(s))
+    .End()
     .Complete();
 ```
 

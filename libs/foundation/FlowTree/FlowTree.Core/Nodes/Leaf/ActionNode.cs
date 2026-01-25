@@ -14,7 +14,7 @@ public delegate NodeStatus FlowAction();
 /// <typeparam name="T">状態の型</typeparam>
 /// <param name="state">状態オブジェクト</param>
 /// <returns>ノードの状態</returns>
-public delegate NodeStatus FlowAction<in T>(T state) where T : class;
+public delegate NodeStatus FlowAction<in T>(T state) where T : class, IFlowState;
 
 /// <summary>
 /// アクションを実行するノード（ステートレス）。
@@ -48,7 +48,7 @@ public sealed class ActionNode : IFlowNode
 /// アクションを実行するノード（型付き）。
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
-public sealed class ActionNode<T> : IFlowNode where T : class
+public sealed class ActionNode<T> : IFlowNode where T : class, IFlowState
 {
     private readonly FlowAction<T> _action;
 

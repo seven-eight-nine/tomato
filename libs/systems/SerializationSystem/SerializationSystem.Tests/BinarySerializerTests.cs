@@ -1,5 +1,5 @@
 using System;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using Xunit;
 
 namespace Tomato.SerializationSystem.Tests;

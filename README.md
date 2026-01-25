@@ -33,12 +33,11 @@ tomato/
 │   │   ├── ActionSelector/      # 行動選択エンジン
 │   │   ├── ActionExecutionSystem/  # 行動実行・ステートマシン
 │   │   ├── CharacterSpawnSystem/   # キャラクタースポーン管理
-│   │   ├── CollisionSystem/     # 衝突判定（Hitbox/Hurtbox/Pushbox）
+│   │   ├── SpatialSystem/       # 空間システム（衝突判定・空間検索統合）
 │   │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ管理
 │   │   ├── InventorySystem/     # アイテム・インベントリ管理
 │   │   ├── ReconciliationSystem/   # 位置調停・依存順処理
-│   │   ├── SpatialIndexSystem/  # 空間ハッシュグリッド
 │   │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │   │
 │   └── orchestration/           # 統合・オーケストレーション
@@ -350,7 +349,7 @@ reconciler.Process(entities, pushboxCollisions);
 |---------|------|
 | **StatusEffectSystem** | 状態異常・バフ/デバフの管理 |
 | **InventorySystem** | アイテム・インベントリ管理 |
-| **SpatialIndexSystem** | 空間ハッシュグリッドによる高速検索 |
+| **SpatialSystem** | 衝突判定・空間検索統合 |
 | **SerializationSystem** | ゼロアロケーションのバイナリシリアライズ |
 
 ## 統合システム（Orchestration）
@@ -422,12 +421,11 @@ Wave 1: 全Entityの次Waveのメッセージを処理
 | foundation | HandleSystem | 25 |
 | systems | CharacterSpawnSystem | 269 |
 | systems | InventorySystem | 101 |
-| systems | CollisionSystem | 68 |
 | systems | ActionSelector | 66 |
+| systems | SpatialSystem | 50+ |
 | systems | StatusEffectSystem | 50 |
 | systems | ActionExecutionSystem | 46 |
 | systems | CombatSystem | 37 |
-| systems | SpatialIndexSystem | 33 |
 | systems | SerializationSystem | 21 |
 | systems | ReconciliationSystem | 11 |
 | orchestration | GameLoop | 56 |

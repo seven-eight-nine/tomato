@@ -49,7 +49,7 @@ public sealed class FlowTree
     /// <typeparam name="T">状態の型</typeparam>
     /// <param name="state">状態オブジェクト</param>
     /// <returns>型付きFlowTreeBuilder</returns>
-    public FlowTreeBuilder<T> Build<T>(T state) where T : class
+    public FlowTreeBuilder<T> Build<T>(T state) where T : class, IFlowState
     {
         _state = state ?? throw new ArgumentNullException(nameof(state));
         return new FlowTreeBuilder<T>(this);

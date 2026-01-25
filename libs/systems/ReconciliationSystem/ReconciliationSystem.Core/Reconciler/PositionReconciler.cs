@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using Tomato.DependencySortSystem;
 using Tomato.EntityHandleSystem;
 
@@ -17,7 +17,6 @@ public sealed class PositionReconciler
     private readonly IEntityTransformAccessor _transforms;
     private readonly IEntityTypeAccessor _entityTypes;
 
-    private readonly List<(AnyHandle, AnyHandle, CollisionContact)> _pushboxCollisions;
     private readonly Dictionary<AnyHandle, Vector3> _pushouts;
 
     public PositionReconciler(
@@ -31,7 +30,6 @@ public sealed class PositionReconciler
         _rule = rule;
         _transforms = transforms;
         _entityTypes = entityTypes;
-        _pushboxCollisions = new List<(AnyHandle, AnyHandle, CollisionContact)>();
         _pushouts = new Dictionary<AnyHandle, Vector3>();
     }
 
@@ -43,12 +41,9 @@ public sealed class PositionReconciler
     /// <summary>
     /// LateUpdate処理を実行する。
     /// </summary>
-    public void Process(IEnumerable<AnyHandle> entities, IReadOnlyList<CollisionResult> pushboxCollisions)
+    public void Process(IEnumerable<AnyHandle> entities, IReadOnlyList<PushCollision> pushCollisions)
     {
-        // 1. 押し出し衝突を収集
-        CollectPushboxCollisions(pushboxCollisions);
-
-        // 2. 依存順を計算
+        // 1. 依存順を計算
         var result = _sorter.Sort(entities, _dependencyGraph);
         if (!result.Success)
         {
@@ -56,30 +51,14 @@ public sealed class PositionReconciler
             return;
         }
 
-        // 3. 依存順に従って位置調停
+        // 2. 依存順に従って位置調停
         foreach (var handle in result.SortedOrder!)
         {
             ReconcileEntity(handle);
         }
 
-        // 4. 押し出し処理
-        ProcessPushouts();
-    }
-
-    private void CollectPushboxCollisions(IReadOnlyList<CollisionResult> collisions)
-    {
-        _pushboxCollisions.Clear();
-        foreach (var collision in collisions)
-        {
-            if (collision.Volume1.VolumeType == VolumeType.Pushbox &&
-                collision.Volume2.VolumeType == VolumeType.Pushbox)
-            {
-                _pushboxCollisions.Add((
-                    collision.Volume1.Owner,
-                    collision.Volume2.Owner,
-                    collision.Contact));
-            }
-        }
+        // 3. 押し出し処理
+        ProcessPushouts(pushCollisions);
     }
 
     private void ReconcileEntity(AnyHandle handle)
@@ -94,20 +73,24 @@ public sealed class PositionReconciler
         // （実際の実装はゲームデザイン依存）
     }
 
-    private void ProcessPushouts()
+    private void ProcessPushouts(IReadOnlyList<PushCollision> pushCollisions)
     {
         _pushouts.Clear();
 
         // 押し出し量を計算
-        foreach (var (entityA, entityB, contact) in _pushboxCollisions)
+        foreach (var collision in pushCollisions)
         {
-            var typeA = _entityTypes.GetEntityType(entityA);
-            var typeB = _entityTypes.GetEntityType(entityB);
+            var typeA = _entityTypes.GetEntityType(collision.EntityA);
+            var typeB = _entityTypes.GetEntityType(collision.EntityB);
 
-            _rule.ComputePushout(entityA, typeA, entityB, typeB, contact, out var pushA, out var pushB);
+            _rule.ComputePushout(
+                collision.EntityA, typeA,
+                collision.EntityB, typeB,
+                collision.Normal, collision.Penetration,
+                out var pushA, out var pushB);
 
-            AccumulatePushout(entityA, pushA);
-            AccumulatePushout(entityB, pushB);
+            AccumulatePushout(collision.EntityA, pushA);
+            AccumulatePushout(collision.EntityB, pushB);
         }
 
         // 押し出しを適用

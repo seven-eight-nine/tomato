@@ -237,8 +237,9 @@ public class ZeroGcTests
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during generic context operations.");
     }
 
-    private class TestState
+    private class TestState : IFlowState
     {
+        public IFlowState? Parent { get; set; }
         public int IntValue { get; set; }
         public float FloatValue { get; set; }
         public bool BoolValue { get; set; }

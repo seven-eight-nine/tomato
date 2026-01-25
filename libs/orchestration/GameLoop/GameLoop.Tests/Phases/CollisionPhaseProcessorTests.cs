@@ -3,22 +3,16 @@ using System.Collections.Generic;
 using System.Threading;
 using Xunit;
 using Tomato.EntityHandleSystem;
+using Tomato.GameLoop.Collision;
 using Tomato.GameLoop.Context;
 using Tomato.GameLoop.Phases;
 using Tomato.GameLoop.Providers;
 using Tomato.GameLoop.Spawn;
 using Tomato.SystemPipeline;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using EHSIEntityArena = Tomato.EntityHandleSystem.IEntityArena;
 
 namespace Tomato.GameLoop.Tests.Phases;
-
-// VolumeType定数（テスト用）
-public static class TestVolumeType
-{
-    public const int Hitbox = 0;
-    public const int Hurtbox = 1;
-}
 
 #region Test Mocks for Collision
 
@@ -52,28 +46,27 @@ public class MockCollisionArena : EHSIEntityArena, IEntitySpawner
     }
 }
 
-public class MockCollisionMessageEmitter : ICollisionMessageEmitter
+public class MockCollisionSource : ICollisionSource
 {
-    public List<List<CollisionResult>> EmitCalls { get; } = new();
+    private readonly List<CollisionPair> _collisions = new();
 
-    public void EmitMessages(IReadOnlyList<CollisionResult> results)
+    public void AddCollision(int entityIdA, int entityIdB, Vector3 point, Vector3 normal)
     {
-        EmitCalls.Add(new List<CollisionResult>(results));
+        _collisions.Add(new CollisionPair(entityIdA, entityIdB, point, normal));
     }
+
+    public IReadOnlyList<CollisionPair> GetCollisions() => _collisions;
+
+    public void Clear() => _collisions.Clear();
 }
 
-public class MockEntityPositionProvider : IEntityPositionProvider
+public class MockCollisionMessageEmitter : ICollisionMessageEmitter
 {
-    private readonly Dictionary<AnyHandle, Vector3> _positions = new();
+    public List<List<CollisionPair>> EmitCalls { get; } = new();
 
-    public void SetPosition(AnyHandle handle, Vector3 position)
+    public void EmitMessages(IReadOnlyList<CollisionPair> collisions)
     {
-        _positions[handle] = position;
-    }
-
-    public Vector3 GetPosition(AnyHandle handle)
-    {
-        return _positions.TryGetValue(handle, out var pos) ? pos : Vector3.Zero;
+        EmitCalls.Add(new List<CollisionPair>(collisions));
     }
 }
 
@@ -82,8 +75,8 @@ public class MockEntityPositionProvider : IEntityPositionProvider
 public class CollisionSystemTests
 {
     private EntityContextRegistry<TestCategory> CreateRegistry() => new EntityContextRegistry<TestCategory>();
-    private MockCollisionArena CreateArena() => new MockCollisionArena();
     private SystemContext CreateContext() => new SystemContext(0.016f, 0.016f, 1, CancellationToken.None);
+    private MockCollisionSource CreateSource() => new MockCollisionSource();
     private MockCollisionMessageEmitter CreateEmitter() => new MockCollisionMessageEmitter();
 
     #region Constructor Tests
@@ -91,59 +84,31 @@ public class CollisionSystemTests
     [Fact]
     public void Constructor_WithValidParameters_ShouldSucceed()
     {
-        var registry = CreateRegistry();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
+        var source = CreateSource();
         var emitter = CreateEmitter();
 
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
+        var system = new CollisionSystem(source, emitter);
 
         Assert.NotNull(system);
         Assert.True(system.IsEnabled);
     }
 
     [Fact]
-    public void Constructor_WithNullRegistry_ShouldThrow()
+    public void Constructor_WithNullSource_ShouldThrow()
     {
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
         var emitter = CreateEmitter();
 
         Assert.Throws<ArgumentNullException>(() =>
-            new CollisionSystem<TestCategory>(null!, detector, positionProvider, emitter));
-    }
-
-    [Fact]
-    public void Constructor_WithNullDetector_ShouldThrow()
-    {
-        var registry = CreateRegistry();
-        var positionProvider = new MockEntityPositionProvider();
-        var emitter = CreateEmitter();
-
-        Assert.Throws<ArgumentNullException>(() =>
-            new CollisionSystem<TestCategory>(registry, null!, positionProvider, emitter));
-    }
-
-    [Fact]
-    public void Constructor_WithNullPositionProvider_ShouldThrow()
-    {
-        var registry = CreateRegistry();
-        var detector = new CollisionDetector();
-        var emitter = CreateEmitter();
-
-        Assert.Throws<ArgumentNullException>(() =>
-            new CollisionSystem<TestCategory>(registry, detector, null!, emitter));
+            new CollisionSystem(null!, emitter));
     }
 
     [Fact]
     public void Constructor_WithNullEmitter_ShouldThrow()
     {
-        var registry = CreateRegistry();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
+        var source = CreateSource();
 
         Assert.Throws<ArgumentNullException>(() =>
-            new CollisionSystem<TestCategory>(registry, detector, positionProvider, null!));
+            new CollisionSystem(source, null!));
     }
 
     #endregion
@@ -151,193 +116,100 @@ public class CollisionSystemTests
     #region ProcessSerial Tests
 
     [Fact]
-    public void ProcessSerial_WithNoEntities_ShouldNotThrow()
+    public void ProcessSerial_WithNoCollisions_ShouldCallEmitterWithEmptyList()
     {
         var registry = CreateRegistry();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
+        var source = CreateSource();
         var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
+        var system = new CollisionSystem(source, emitter);
         var context = CreateContext();
-
-        // Should not throw
-        var entities = registry.GetAllEntities();
-        system.ProcessSerial(registry, entities, in context);
-    }
-
-    [Fact]
-    public void ProcessSerial_WithInactiveEntity_ShouldSkipIt()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
-        var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
-        var context = CreateContext();
-
-        var handle = arena.Spawn();
-        var entityContext = registry.Register(handle);
-        entityContext.IsActive = false;
-
-        // Add a collision volume
-        var shape = new SphereShape(1.0f);
-        var filter = new CollisionFilter(1, 1);
-        entityContext.CollisionVolumes.Add(new CollisionVolume(handle, shape, filter, TestVolumeType.Hurtbox));
 
         var entities = registry.GetAllEntities();
         system.ProcessSerial(registry, entities, in context);
 
-        // EmitMessages is called but with empty results (inactive entity not processed)
         Assert.Single(emitter.EmitCalls);
         Assert.Empty(emitter.EmitCalls[0]);
     }
 
     [Fact]
-    public void ProcessSerial_WithActiveEntityAndVolume_ShouldProcess()
+    public void ProcessSerial_WithCollisions_ShouldPassToEmitter()
     {
         var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
+        var source = CreateSource();
         var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
+        var system = new CollisionSystem(source, emitter);
         var context = CreateContext();
 
-        var handle = arena.Spawn();
-        var entityContext = registry.Register(handle);
-        entityContext.IsActive = true;
-        positionProvider.SetPosition(handle, new Vector3(0, 0, 0));
-
-        // Add a collision volume
-        var shape = new SphereShape(1.0f);
-        var filter = new CollisionFilter(1, 1);
-        entityContext.CollisionVolumes.Add(new CollisionVolume(handle, shape, filter, TestVolumeType.Hurtbox));
+        // Add some collisions
+        source.AddCollision(1, 2, Vector3.Zero, Vector3.UnitY);
+        source.AddCollision(3, 4, new Vector3(1, 0, 0), Vector3.UnitX);
 
         var entities = registry.GetAllEntities();
         system.ProcessSerial(registry, entities, in context);
 
-        // Should complete without error
-        Assert.Single(entityContext.CollisionVolumes);
-    }
-
-    [Fact]
-    public void ProcessSerial_ShouldTickVolumeLifetimes()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
-        var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
-        var context = CreateContext();
-
-        var handle = arena.Spawn();
-        var entityContext = registry.Register(handle);
-        entityContext.IsActive = true;
-        positionProvider.SetPosition(handle, new Vector3(0, 0, 0));
-
-        // Add a collision volume with 3 frame lifetime
-        var shape = new SphereShape(1.0f);
-        var filter = new CollisionFilter(1, 1);
-        var volume = new CollisionVolume(handle, shape, filter, TestVolumeType.Hitbox, lifetime: 3);
-        entityContext.CollisionVolumes.Add(volume);
-
-        Assert.Equal(3, volume.RemainingLifetime);
-
-        var entities = registry.GetAllEntities();
-        system.ProcessSerial(registry, entities, in context);
-
-        Assert.Equal(2, volume.RemainingLifetime);
-    }
-
-    [Fact]
-    public void ProcessSerial_ShouldRemoveExpiredVolumes()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
-        var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
-        var context = CreateContext();
-
-        var handle = arena.Spawn();
-        var entityContext = registry.Register(handle);
-        entityContext.IsActive = true;
-        positionProvider.SetPosition(handle, new Vector3(0, 0, 0));
-
-        // Add a collision volume with 1 frame lifetime
-        var shape = new SphereShape(1.0f);
-        var filter = new CollisionFilter(1, 1);
-        var volume = new CollisionVolume(handle, shape, filter, TestVolumeType.Hitbox, lifetime: 1);
-        entityContext.CollisionVolumes.Add(volume);
-
-        var entities = registry.GetAllEntities();
-
-        // First process - volume is not yet expired
-        system.ProcessSerial(registry, entities, in context);
-        Assert.Single(entityContext.CollisionVolumes);
-
-        // Second process - volume should be removed after tick
-        system.ProcessSerial(registry, entities, in context);
-        Assert.Empty(entityContext.CollisionVolumes);
-    }
-
-    [Fact]
-    public void ProcessSerial_WithCollidingVolumes_ShouldCallEmitter()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
-        var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
-        var context = CreateContext();
-
-        // Entity 1 with hitbox
-        var handle1 = arena.Spawn();
-        var context1 = registry.Register(handle1);
-        context1.IsActive = true;
-        positionProvider.SetPosition(handle1, new Vector3(0, 0, 0));
-
-        var shape1 = new SphereShape(1.0f);
-        var filter1 = new CollisionFilter(1, 2); // Layer 1, can hit layer 2
-        context1.CollisionVolumes.Add(new CollisionVolume(handle1, shape1, filter1, TestVolumeType.Hitbox));
-
-        // Entity 2 with hurtbox at same position (should collide)
-        var handle2 = arena.Spawn();
-        var context2 = registry.Register(handle2);
-        context2.IsActive = true;
-        positionProvider.SetPosition(handle2, new Vector3(0, 0, 0));
-
-        var shape2 = new SphereShape(1.0f);
-        var filter2 = new CollisionFilter(2, 1); // Layer 2, can hit layer 1
-        context2.CollisionVolumes.Add(new CollisionVolume(handle2, shape2, filter2, TestVolumeType.Hurtbox));
-
-        var entities = registry.GetAllEntities();
-        system.ProcessSerial(registry, entities, in context);
-
-        // Emitter should have been called with collision results
         Assert.Single(emitter.EmitCalls);
-        Assert.Single(emitter.EmitCalls[0]); // One collision
+        Assert.Equal(2, emitter.EmitCalls[0].Count);
+
+        var collision1 = emitter.EmitCalls[0][0];
+        Assert.Equal(1, collision1.EntityIdA);
+        Assert.Equal(2, collision1.EntityIdB);
+
+        var collision2 = emitter.EmitCalls[0][1];
+        Assert.Equal(3, collision2.EntityIdA);
+        Assert.Equal(4, collision2.EntityIdB);
+    }
+
+    [Fact]
+    public void ProcessSerial_ShouldClearSourceAfterProcessing()
+    {
+        var registry = CreateRegistry();
+        var source = CreateSource();
+        var emitter = CreateEmitter();
+        var system = new CollisionSystem(source, emitter);
+        var context = CreateContext();
+
+        source.AddCollision(1, 2, Vector3.Zero, Vector3.UnitY);
+
+        var entities = registry.GetAllEntities();
+        system.ProcessSerial(registry, entities, in context);
+
+        // Source should be cleared
+        Assert.Empty(source.GetCollisions());
+    }
+
+    [Fact]
+    public void ProcessSerial_CalledTwice_ShouldClearBetweenCalls()
+    {
+        var registry = CreateRegistry();
+        var source = CreateSource();
+        var emitter = CreateEmitter();
+        var system = new CollisionSystem(source, emitter);
+        var context = CreateContext();
+
+        // First call with collision
+        source.AddCollision(1, 2, Vector3.Zero, Vector3.UnitY);
+        var entities = registry.GetAllEntities();
+        system.ProcessSerial(registry, entities, in context);
+
+        // Second call without adding new collision
+        system.ProcessSerial(registry, entities, in context);
+
+        Assert.Equal(2, emitter.EmitCalls.Count);
+        Assert.Single(emitter.EmitCalls[0]);  // First call had 1 collision
+        Assert.Empty(emitter.EmitCalls[1]);    // Second call had 0 (cleared)
     }
 
     [Fact]
     public void ProcessSerial_WhenDisabled_ShouldNotProcess()
     {
         var registry = CreateRegistry();
-        var arena = CreateArena();
-        var detector = new CollisionDetector();
-        var positionProvider = new MockEntityPositionProvider();
+        var source = CreateSource();
         var emitter = CreateEmitter();
-        var system = new CollisionSystem<TestCategory>(registry, detector, positionProvider, emitter);
+        var system = new CollisionSystem(source, emitter);
         system.IsEnabled = false;
         var context = CreateContext();
 
-        var handle = arena.Spawn();
-        var entityContext = registry.Register(handle);
-        entityContext.IsActive = true;
+        source.AddCollision(1, 2, Vector3.Zero, Vector3.UnitY);
 
         // Use SystemExecutor to respect IsEnabled
         SystemExecutor.Execute(system, registry, in context);

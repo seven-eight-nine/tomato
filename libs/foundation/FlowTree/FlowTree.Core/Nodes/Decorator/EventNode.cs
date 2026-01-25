@@ -13,7 +13,7 @@ public delegate void FlowEventHandler();
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
 /// <param name="state">状態オブジェクト</param>
-public delegate void FlowEventHandler<in T>(T state) where T : class;
+public delegate void FlowEventHandler<in T>(T state) where T : class, IFlowState;
 
 /// <summary>
 /// ノードから出た時のイベントハンドラ（ステートレス）。
@@ -27,7 +27,7 @@ public delegate void FlowExitEventHandler(NodeStatus result);
 /// <typeparam name="T">状態の型</typeparam>
 /// <param name="state">状態オブジェクト</param>
 /// <param name="result">子ノードの実行結果</param>
-public delegate void FlowExitEventHandler<in T>(T state, NodeStatus result) where T : class;
+public delegate void FlowExitEventHandler<in T>(T state, NodeStatus result) where T : class, IFlowState;
 
 /// <summary>
 /// 入った瞬間/出た瞬間にイベントを発火するデコレータノード（ステートレス）。
@@ -106,7 +106,7 @@ public sealed class EventNode : IFlowNode
 /// 入った瞬間/出た瞬間にイベントを発火するデコレータノード（型付き）。
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
-public sealed class EventNode<T> : IFlowNode where T : class
+public sealed class EventNode<T> : IFlowNode where T : class, IFlowState
 {
     private const int InitialCapacity = 4;
 

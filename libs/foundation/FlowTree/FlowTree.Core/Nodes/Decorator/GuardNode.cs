@@ -57,7 +57,7 @@ public sealed class GuardNode : IFlowNode
 /// 条件が満たされた場合のみ子ノードを実行するノード（型付き）。
 /// </summary>
 /// <typeparam name="T">状態の型</typeparam>
-public sealed class GuardNode<T> : IFlowNode where T : class
+public sealed class GuardNode<T> : IFlowNode where T : class, IFlowState
 {
     private readonly FlowCondition<T> _condition;
     private readonly IFlowNode _child;

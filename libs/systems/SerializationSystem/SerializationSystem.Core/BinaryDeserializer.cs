@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 
 namespace Tomato.SerializationSystem;
 

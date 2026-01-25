@@ -856,7 +856,7 @@ public readonly struct FormationSlot
 ### 設計ポイント
 
 - **ReconciliationSystemとの連携**: 位置調停時に隊列位置を考慮
-- **SpatialIndexSystemとの連携**: 近くのユニットを隊列に組み込む
+- **SpatialSystemとの連携**: 近くのユニットを隊列に組み込む
 - **スムーズな遷移**: 隊列変更時の補間をサポート
 
 ---

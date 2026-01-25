@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Tomato.CollisionSystem;
+using Tomato.Math;
 using Tomato.EntityHandleSystem;
 
 namespace Tomato.ReconciliationSystem;
@@ -37,7 +37,7 @@ public sealed class PriorityBasedReconciliationRule : ReconciliationRule
     public override void ComputePushout(
         AnyHandle entityA, EntityType typeA,
         AnyHandle entityB, EntityType typeB,
-        in CollisionContact contact,
+        in Vector3 normal, float penetration,
         out Vector3 pushoutA,
         out Vector3 pushoutB)
     {
@@ -45,7 +45,7 @@ public sealed class PriorityBasedReconciliationRule : ReconciliationRule
         int priorityB = _priorities.GetValueOrDefault(typeB, 0);
 
         // 押し出しベクトル（接触法線 * 深度）
-        var totalPushout = contact.Normal * contact.Penetration;
+        var totalPushout = normal * penetration;
 
         if (priorityA == priorityB)
         {

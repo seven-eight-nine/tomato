@@ -377,29 +377,6 @@ public class SpawnBridgeTests
     }
 
     [Fact]
-    public void OnCharacterDeactivated_ShouldClearCollisionVolumes()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var initializer = CreateInitializer();
-        var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
-
-        bridge.OnCharacterActivated(controller);
-        var context = bridge.GetContext("char1");
-        var handle = bridge.GetHandle("char1")!.Value;
-        // Create a minimal CollisionVolume for testing
-        var shape = new CollisionSystem.SphereShape(1.0f);
-        var filter = new CollisionSystem.CollisionFilter(1, 1);
-        context!.CollisionVolumes.Add(new CollisionSystem.CollisionVolume(
-            handle, shape, filter, volumeType: 1)); // 1 = Hurtbox
-
-        bridge.OnCharacterDeactivated(controller);
-
-        Assert.Empty(context.CollisionVolumes);
-    }
-
-    [Fact]
     public void OnCharacterDeactivated_WithUnknownCharacter_ShouldNotThrow()
     {
         var registry = CreateRegistry();

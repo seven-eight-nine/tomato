@@ -7,7 +7,7 @@ action-game-design.mdで定義された6フェーズゲームループを実現�
 
 GameLoopは以下の責務を持つ:
 
-1. **Entity単位のコンテキスト管理** - ActionStateMachine, CollisionVolumesをEntityに紐付け
+1. **Entity単位のコンテキスト管理** - ActionStateMachineをEntityに紐付け
 2. **6フェーズゲームループの統括** - Collision→Message→Decision→Execution→Reconciliation→Cleanup
 3. **CharacterSpawnSystemとの連携** - スポーン/デスポーンイベントをEntityContextに橋渡し
 4. **CommandGeneratorとの連携** - MessageHandlerQueueとWaveProcessorによるメッセージ処理
@@ -19,7 +19,7 @@ GameLoopは以下の責務を持つ:
 │                     Pipeline + SystemGroup                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │  UpdateGroup:                                                       │
-│    1. CollisionSystem      - 衝突判定・コマンド発行                 │
+│    1. CollisionSystem      - 外部衝突結果をメッセージ化             │
 │    2. MessageSystem        - WaveProcessorでメッセージ処理          │
 │    3. DecisionSystem       - アクション選択（読み取り専用）         │
 │    4. ExecutionSystem      - アクション実行                         │
@@ -47,7 +47,7 @@ Entity単位のコンテキスト管理。
 
 | クラス | 責務 |
 |--------|------|
-| `EntityContext<TCategory>` | Entity単位のコンテキスト。ActionStateMachine, CollisionVolumesを保持 |
+| `EntityContext<TCategory>` | Entity単位のコンテキスト。ActionStateMachineを保持 |
 | `EntityContextRegistry<TCategory>` | コンテキスト管理。IEntityRegistryを実装 |
 
 ```csharp
@@ -56,11 +56,40 @@ public sealed class EntityContext<TCategory>
 {
     public AnyHandle Handle { get; }
     public ActionStateMachine<TCategory> ActionStateMachine { get; }
-    public List<CollisionVolume> CollisionVolumes { get; }
     public IActionJudgment<TCategory, InputState, GameState>[] Judgments { get; set; }
     public CharacterSpawnController? SpawnController { get; set; }
     public bool IsActive { get; set; }
     public bool IsMarkedForDeletion { get; }
+}
+```
+
+### Collision/
+
+外部からの衝突結果を受け取り、メッセージシステムに伝達する薄いレイヤー。
+
+**重要**: 衝突検出自体はGameLoop外部（CollisionSystemを使用したゲームコード）で行う。
+GameLoopは衝突結果の受け取りとメッセージ化のみを担当する。
+
+| クラス | 責務 |
+|--------|------|
+| `CollisionPair` | 衝突ペア（EntityIdA, EntityIdB, Point, Normal） |
+| `ICollisionSource` | 衝突結果の取得元（ゲーム側で実装） |
+
+```csharp
+// CollisionPairの構造
+public readonly struct CollisionPair
+{
+    public readonly int EntityIdA;
+    public readonly int EntityIdB;
+    public readonly Vector3 Point;   // 接触点
+    public readonly Vector3 Normal;  // 接触法線
+}
+
+// ICollisionSourceはゲーム側で実装
+public interface ICollisionSource
+{
+    IReadOnlyList<CollisionPair> GetCollisions();
+    void Clear();
 }
 ```
 
@@ -70,7 +99,7 @@ public sealed class EntityContext<TCategory>
 
 | フェーズ | クラス | 責務 |
 |----------|--------|------|
-| 1. Collision | `CollisionSystem<TCategory>` | 衝突ボリューム収集、衝突検出、ICollisionMessageEmitterでコマンド発行 |
+| 1. Collision | `CollisionSystem` | ICollisionSourceから衝突結果を取得、ICollisionMessageEmitterでコマンド発行 |
 | 2. Message | `MessageSystem` | WaveProcessorでMessageHandlerQueue処理 |
 | 3. Decision | `DecisionSystem<TCategory>` | ActionSelectorでアクション選択【読み取り専用】【並列可】 |
 | 4. Execution | `ExecutionSystem<TCategory>` | ActionStateMachineでアクション実行 |
@@ -96,7 +125,7 @@ CharacterSpawnSystemとの連携。
 |------------------|------|
 | `IInputProvider` | Entity用入力状態の取得 |
 | `ICharacterStateProvider` | キャラクター状態の取得 |
-| `IEntityPositionProvider` | Entity位置の取得 |
+| `ICollisionMessageEmitter` | 衝突結果からコマンドを発行 |
 | `IActionFactory<TCategory>` | アクションID→IExecutableAction変換 |
 
 ## 使用例
@@ -105,8 +134,11 @@ CharacterSpawnSystemとの連携。
 
 ```csharp
 using Tomato.GameLoop;
+using Tomato.GameLoop.Context;
+using Tomato.GameLoop.Collision;
+using Tomato.GameLoop.Phases;
+using Tomato.GameLoop.Providers;
 using Tomato.SystemPipeline;
-using Tomato.CollisionSystem;
 using Tomato.CommandGenerator;
 
 // 1. カテゴリ定義
@@ -119,8 +151,14 @@ var registry = new EntityContextRegistry<ActionCategory>();
 var messageQueue = new MessageHandlerQueue();
 var waveProcessor = new WaveProcessor(maxWaveDepth: 100);
 
-// 4. 依存コンポーネント作成
-var positionProvider = new MyPositionProvider();
+// 4. 衝突ソース（ゲーム側で実装）
+// CollisionSystemを使用して衝突検出を行い、CollisionPairのリストを提供
+var collisionSource = new MyCollisionSource();
+
+// 5. 衝突メッセージエミッター作成（衝突をゲーム固有コマンドに変換）
+var collisionEmitter = new MyCollisionMessageEmitter(messageQueue);
+
+// 6. 依存コンポーネント作成
 var inputProvider = new MyInputProvider();
 var characterStateProvider = new MyCharacterStateProvider();
 var actionFactory = new MyActionFactory();
@@ -128,24 +166,8 @@ var dependencyResolver = new MyDependencyResolver();
 var positionReconciler = new MyPositionReconciler();
 var despawner = new MyEntityDespawner();
 
-// 5. 衝突メッセージエミッター作成（ゲーム固有のコマンドをエンキュー）
-var collisionEmitter = new CallbackCollisionMessageEmitter(info =>
-{
-    // 衝突情報からゲーム固有のコマンドをエンキュー
-    messageQueue.Enqueue<DamageCommand>(cmd =>
-    {
-        cmd.Target = info.Target;
-        cmd.Source = info.Source;
-        cmd.Amount = info.Amount;
-    });
-});
-
-// 6. 各システム作成
-var collisionSystem = new CollisionSystem<ActionCategory>(
-    registry,
-    new CollisionDetector(),
-    positionProvider,
-    collisionEmitter);
+// 7. 各システム作成
+var collisionSystem = new CollisionSystem(collisionSource, collisionEmitter);
 
 var messageSystem = new MessageSystem(waveProcessor, messageQueue);
 
@@ -168,7 +190,7 @@ var cleanupSystem = new CleanupSystem<ActionCategory>(
     registry,
     despawner);
 
-// 7. グループ構築
+// 8. グループ構築
 var updateGroup = new SystemGroup(
     collisionSystem,
     messageSystem,
@@ -179,8 +201,100 @@ var lateUpdateGroup = new SystemGroup(
     reconciliationSystem,
     cleanupSystem);
 
-// 8. パイプライン作成
+// 9. パイプライン作成
 var pipeline = new Pipeline(registry);
+```
+
+### ICollisionSource実装例
+
+```csharp
+using Tomato.GameLoop.Collision;
+using Tomato.CollisionSystem;
+
+// CollisionSystemを使用した衝突ソースの実装例
+public class MyCollisionSource : ICollisionSource
+{
+    private readonly SpatialWorld _hitboxWorld;
+    private readonly SpatialWorld _hurtboxWorld;
+    private readonly List<CollisionPair> _collisions = new();
+
+    public MyCollisionSource()
+    {
+        _hitboxWorld = new SpatialWorld(gridSize: 16f);
+        _hurtboxWorld = new SpatialWorld(gridSize: 16f);
+    }
+
+    // フレーム開始時に各SpatialWorldを更新
+    public void UpdateWorlds(/* entity positions and shapes */)
+    {
+        // 攻撃判定と食らい判定を別々のWorldで管理
+        _hitboxWorld.Clear();
+        _hurtboxWorld.Clear();
+        // ... 各Entityの形状を登録
+    }
+
+    // フレーム中に衝突検出
+    public void DetectCollisions()
+    {
+        _collisions.Clear();
+
+        // hitbox vs hurtbox の衝突判定
+        foreach (var hitbox in _hitboxWorld.GetAllEntries())
+        {
+            var nearbyHurtboxes = _hurtboxWorld.QuerySphere(hitbox.Position, hitbox.Radius);
+            foreach (var hurtbox in nearbyHurtboxes)
+            {
+                if (ShapeIntersection.SphereSphere(
+                    hitbox.Position, hitbox.Radius,
+                    hurtbox.Position, hurtbox.Radius,
+                    out var point, out var normal))
+                {
+                    _collisions.Add(new CollisionPair(
+                        hitbox.EntityId,
+                        hurtbox.EntityId,
+                        point,
+                        normal));
+                }
+            }
+        }
+    }
+
+    public IReadOnlyList<CollisionPair> GetCollisions() => _collisions;
+    public void Clear() => _collisions.Clear();
+}
+```
+
+### ICollisionMessageEmitter実装例
+
+```csharp
+using Tomato.GameLoop.Collision;
+using Tomato.GameLoop.Providers;
+using Tomato.CommandGenerator;
+
+public class MyCollisionMessageEmitter : ICollisionMessageEmitter
+{
+    private readonly MessageHandlerQueue _messageQueue;
+
+    public MyCollisionMessageEmitter(MessageHandlerQueue messageQueue)
+    {
+        _messageQueue = messageQueue;
+    }
+
+    public void EmitMessages(IReadOnlyList<CollisionPair> collisions)
+    {
+        foreach (var collision in collisions)
+        {
+            // ゲーム固有のコマンドをエンキュー
+            _messageQueue.Enqueue<DamageCommand>(cmd =>
+            {
+                cmd.AttackerEntityId = collision.EntityIdA;
+                cmd.TargetEntityId = collision.EntityIdB;
+                cmd.HitPoint = collision.Point;
+                cmd.HitNormal = collision.Normal;
+            });
+        }
+    }
+}
 ```
 
 ### CharacterSpawnSystemとの接続
@@ -208,6 +322,10 @@ characterSpawnController.RequestState(CharacterRequestState.None);
 ```csharp
 void Update(float deltaTime)
 {
+    // 衝突検出（CollisionSystem使用、GameLoop外部で実行）
+    collisionSource.UpdateWorlds(/* ... */);
+    collisionSource.DetectCollisions();
+
     // Update: Collision → Message → Decision → Execution
     pipeline.Execute(updateGroup, deltaTime);
 }
@@ -252,7 +370,7 @@ GameLoop.Core
 ├── SystemPipeline.Core            (Pipeline, SystemGroup, ISystem)
 ├── ActionSelector                 (ActionSelector, IActionJudgment)
 ├── ActionExecutionSystem.Core     (ActionStateMachine, IExecutableAction)
-├── CollisionSystem.Core           (CollisionDetector, CollisionVolume)
+├── Tomato.Math                    (Vector3)
 └── CharacterSpawnSystem.Core      (CharacterSpawnController)
 ```
 
@@ -268,11 +386,11 @@ dotnet test libs/orchestration/GameLoop/GameLoop.Tests/
 | テストファイル | テスト数 | 対象 |
 |---------------|---------|------|
 | EntityContextRegistryTests | 8 | コンテキスト管理 |
-| SpawnBridgeTests | 28 | CharacterSpawnSystem連携 |
-| CleanupPhaseProcessorTests | 6 | 削除処理 |
-| CollisionPhaseProcessorTests | 10 | 衝突判定フェーズ |
+| SpawnBridgeTests | 27 | CharacterSpawnSystem連携 |
+| CleanupPhaseProcessorTests | 10 | 削除処理 |
+| CollisionPhaseProcessorTests | 6 | 衝突フェーズ |
 
-**合計: 52テスト**
+**合計: 51テスト**
 
 ## ディレクトリ構造
 
@@ -284,6 +402,9 @@ GameLoop/
 │   ├── Context/
 │   │   ├── EntityContext.cs           # Entity単位コンテキスト
 │   │   └── EntityContextRegistry.cs   # IEntityRegistry実装
+│   ├── Collision/
+│   │   ├── CollisionPair.cs           # 衝突ペア構造体
+│   │   └── ICollisionSource.cs        # 衝突ソースインターフェース
 │   ├── Phases/
 │   │   ├── CollisionPhaseProcessor.cs # 第1フェーズ（ISerialSystem）
 │   │   ├── MessagePhaseProcessor.cs   # 第2フェーズ（ISerialSystem）
@@ -299,7 +420,7 @@ GameLoop/
 │   └── Providers/
 │       ├── IInputProvider.cs
 │       ├── ICharacterStateProvider.cs
-│       ├── IEntityPositionProvider.cs
+│       ├── ICollisionMessageEmitter.cs
 │       └── IActionFactory.cs
 └── GameLoop.Tests/
     ├── GameLoop.Tests.csproj
@@ -313,6 +434,15 @@ GameLoop/
 ```
 
 ## 設計上の決定事項
+
+### 衝突検出の外部化
+
+**衝突検出はGameLoop外部で行う**。GameLoopは検出結果の受け取りとメッセージ化のみを担当する。
+
+理由:
+- ゲームによって衝突レイヤーの構成（hitbox/hurtbox, 環境衝突等）が異なる
+- SpatialWorldの分離戦略（レイヤー別World vs 単一World）はゲーム側の判断
+- GameLoopは汎用的なフレームワークとして、衝突検出の詳細に依存しない
 
 ### CommandQueueパターンの採用
 
@@ -345,6 +475,7 @@ CharacterSpawnSystemとの疎結合を実現。StateChangedイベントを監視
 - [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) - 全体アーキテクチャ
 - [action-game-design.md](../../docs/plans/action-game-design.md) - ゲームループ設計
 - [SystemPipeline README](../../foundation/SystemPipeline/README.md) - パイプラインシステム
+- [CollisionSystem README](../../systems/CollisionSystem/README.md) - 空間インデックスと衝突検出
 
 ## ライセンス
 
