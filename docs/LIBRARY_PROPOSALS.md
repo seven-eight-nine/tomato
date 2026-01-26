@@ -12,75 +12,41 @@
 
 ---
 
-## 1. InventorySystem
+## 1. InventorySystem ✅ 実装済み
 
-### 概要
+> **注**: このシステムは `libs/systems/InventorySystem/` に実装済みです。
 
-アイテムの所持・管理を担当するシステム。スタック、重量、スロット制限など、インベントリ管理に必要な機能を提供する。
+### 実装された機能
 
-### 主要機能
+- 汎用インベントリ（IInventory<TItem>インターフェース）
+- アイテムの追加・削除・クエリ
+- バリデーションシステム（容量制限、カスタムルール）
+- トランザクションベースの操作
+- スナップショットと復元
+- クラフティング機能（ICraftingRecipe、CraftingManager、CraftingPlanner）
+- シリアライゼーション対応
 
-- スタック管理（最大スタック数、分割、合算）
-- 重量/容量制限
-- スロットベースの配置（グリッド、リスト）
-- アイテムの移動・入れ替え
-- 装備スロットとの連携
-- フィルタ・ソート機能
-- ドラッグ＆ドロップ操作のサポート
-
-### コア構造案
+### コア構造
 
 ```csharp
-public interface IInventory
+// 実装済みのインターフェース
+public interface IInventory<TItem> : ISerializable, ISnapshotable<IInventory<TItem>>
+    where TItem : class, IInventoryItem
 {
-    int Capacity { get; }
+    InventoryId Id { get; }
     int Count { get; }
-    float CurrentWeight { get; }
-    float MaxWeight { get; }
+    bool HasSpace { get; }
 
-    AddResult TryAdd(ItemInstance item, int count = 1);
-    RemoveResult TryRemove(ItemId id, int count = 1);
-    bool Contains(ItemId id, int count = 1);
-
-    IEnumerable<InventorySlot> GetSlots();
-    IEnumerable<InventorySlot> Filter(Predicate<ItemInstance> predicate);
+    IValidationResult CanAdd(TItem item, AddContext? context = null);
+    AddResult TryAdd(TItem item, AddContext? context = null);
+    RemoveResult TryRemove(ItemInstanceId instanceId, int count = 1);
 }
 
-public readonly struct InventorySlot
-{
-    public int SlotIndex { get; }
-    public ItemInstance? Item { get; }
-    public int Count { get; }
-}
-
-public readonly struct ItemInstance
-{
-    public ItemId Id { get; }
-    public ItemDefinition Definition { get; }
-    public IReadOnlyDictionary<string, object>? DynamicProperties { get; }
-}
-
-public sealed class ItemDefinition
-{
-    public ItemId Id { get; }
-    public string Name { get; }
-    public int MaxStack { get; }
-    public float Weight { get; }
-    public ItemCategory Category { get; }
-    public IReadOnlyList<ItemTag> Tags { get; }
-}
+// クラフティング
+public interface ICraftingRecipe { ... }
+public class CraftingManager { ... }
+public class CraftingPlanner { ... }
 ```
-
-### 設計ポイント
-
-- **不変アイテム定義**: ItemDefinitionは不変、インスタンス固有データはDynamicPropertiesで保持
-- **操作結果の明示**: TryAdd/TryRemoveは結果型を返し、失敗理由を明確化
-- **装備との分離**: 装備スロットは別インターフェース（IEquipmentSlots）で管理
-
-### 関連システム
-
-- CraftingSystem（素材消費/生成）
-- LootTableSystem（アイテム獲得）
 
 ---
 
@@ -187,11 +153,52 @@ public sealed class SkillNode
 
 ---
 
-## 3. BehaviorTreeSystem
+## 3. BehaviorTreeSystem ✅ FlowTreeとして実装済み
+
+> **注**: このシステムは `libs/foundation/FlowTree/` に **FlowTree** として実装済みです。
+
+### 実装された機能
+
+- BehaviorTree風のノードベースフロー制御
+- Compositeノード: Sequence, Selector, Race, Join, RandomSelector, ShuffledSelector, WeightedRandomSelector, RoundRobinSelector
+- Decoratorノード: Inverter, Succeeder, Failer, Repeat, Retry, RepeatUntilSuccess, RepeatUntilFail, Timeout, Delay, Guard, Event
+- Leafノード: Success, Failure, Wait, WaitUntil, Yield, Action, Condition, SubTree, Return
+- DSLビルダーによる直感的なツリー構築
+- コールスタックによるサブツリー呼び出し
+- ゼロアロケーション設計
+
+### コア構造
+
+```csharp
+// FlowTree API
+var tree = new FlowTree("MyAI")
+    .Build(
+        Flow.Selector(
+            Flow.Sequence(
+                Flow.Condition(ctx => IsEnemyVisible(ctx)),
+                Flow.Selector(
+                    Flow.Sequence(
+                        Flow.Condition(ctx => IsInRange(ctx)),
+                        Flow.Action(ctx => Attack(ctx))
+                    ),
+                    Flow.Action(ctx => MoveToEnemy(ctx))
+                )
+            ),
+            Flow.Action(ctx => Patrol(ctx))
+        )
+    );
+
+// 実行
+var status = tree.Tick(deltaTime);
+```
+
+---
+
+## 3b. BehaviorTreeSystem（追加提案）
 
 ### 概要
 
-AIの行動決定を行うビヘイビアツリーシステム。ノードベースの階層構造でAIロジックを構築する。
+FlowTreeの上位互換として、より高度なAI機能が必要な場合の追加提案。
 
 ### 主要機能
 
@@ -1224,6 +1231,17 @@ public static class ProgressionIds
 
 ---
 
+## 実装状況
+
+### ✅ 実装済み
+
+| システム | 場所 | 備考 |
+|---------|------|------|
+| InventorySystem | libs/systems/InventorySystem/ | クラフティング機能も含む |
+| BehaviorTreeSystem | libs/foundation/FlowTree/ | FlowTreeとして実装 |
+
+---
+
 ## 優先度検討
 
 ### 高（基盤システム）
@@ -1232,7 +1250,6 @@ public static class ProgressionIds
 |---------|------|
 | StatSystem | 他システムの基盤、StatusEffectSystemと密接 |
 | ProgressionSystem | RPGの根幹、StatSystemと連携 |
-| InventorySystem | アイテム系の基盤 |
 
 ### 中（ゲームプレイ拡張）
 
@@ -1241,13 +1258,11 @@ public static class ProgressionIds
 | AbilitySystem | ActionSelector拡張、戦闘の幅 |
 | LootTableSystem | InventorySystemと連携、報酬設計 |
 | QuestSystem | ゲーム進行の管理 |
-| CraftingSystem | InventorySystem拡張 |
 
 ### 低（特定ジャンル向け）
 
 | システム | 理由 |
 |---------|------|
-| BehaviorTreeSystem | AI重視のゲーム向け |
 | DialogueSystem | ストーリー重視のゲーム向け |
 | FormationSystem | RTS/タクティクス向け |
 | FactionSystem | 派閥要素があるゲーム向け |

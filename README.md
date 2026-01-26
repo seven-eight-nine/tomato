@@ -10,7 +10,7 @@ TDD（テスト駆動開発）で構築された、決定論的で拡張可能�
 ## 特徴
 
 - **決定論的なゲームループ**: 同じ入力に対して常に同じ結果を保証
-- **Wave型メッセージシステム**: Entity間の状態変更を波単位で処理
+- **Step型メッセージシステム**: Entity間の状態変更をStep単位で処理
 - **ECSスタイルのシステムパイプライン**: Serial/Parallel/MessageQueueの3種類の処理パターン
 - **Source Generator活用**: EntityHandle、MessageHandler、MessageQueueSystem、DeepCloneを自動生成
 - **モジュラーアーキテクチャ**: 各システムが独立してテスト可能
@@ -56,7 +56,7 @@ GameLoopOrchestrator.Tick(deltaTime)
 │
 ├─ Update:
 │   ├─ CollisionPhase      衝突判定・メッセージ発行
-│   ├─ MessagePhase        Wave処理（状態変更はここでのみ）
+│   ├─ MessagePhase        Step処理（状態変更はここでのみ）
 │   ├─ DecisionPhase       行動決定（読み取り専用）
 │   └─ ExecutionPhase      行動実行
 │
@@ -212,7 +212,7 @@ pipeline.Execute(updateGroup, deltaTime);
 |---------|-----------------|------|
 | **Serial** | `ISerialSystem` | 全エンティティを順番に処理 |
 | **Parallel** | `IParallelSystem` | 各エンティティを並列に処理 |
-| **MessageQueue** | `IMessageQueueSystem` | メッセージをWave単位で処理 |
+| **MessageQueue** | `IMessageQueueSystem` | メッセージをStep単位で処理 |
 
 ### FlowTree
 
@@ -385,12 +385,12 @@ void LateUpdate(float deltaTime) => orchestrator.LateUpdate(deltaTime);
 Entityの論理状態（HP等）はメッセージ処理（MessagePhase）でのみ変更される。
 これにより決定論性とデバッグの容易さを実現。
 
-### Wave処理
+### Step処理
 
 ```
-Wave 0: 全Entityの今Waveのメッセージを処理
-        ↓ 新規メッセージは次Waveへ
-Wave 1: 全Entityの次Waveのメッセージを処理
+Step 0: 全Entityの今Stepのメッセージを処理
+        ↓ 新規メッセージは次Stepへ
+Step 1: 全Entityの次Stepのメッセージを処理
         ↓
       収束まで繰り返し
 ```

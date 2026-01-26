@@ -4,7 +4,7 @@ ECS (Entity Component System) スタイルのシステムパイプラインフ�
 
 ## 特徴
 
-- **3種類の処理パターン**: Serial（直列）、Parallel（並列）、MessageQueue（Wave処理）
+- **3種類の処理パターン**: Serial（直列）、Parallel（並列）、MessageQueue（Step処理）
 - **Source Generator対応**: `[CommandQueue]`属性でシステム実装を自動生成
 - **EntityHandleSystem連携**: `[HasCommandQueue(typeof(T))]`属性でエンティティにキューを追加
 - **シンプルなAPI**: SerialSystemGroup/ParallelSystemGroupで構造を定義し、Pipelineで実行
@@ -194,16 +194,14 @@ public interface IParallelSystem : ISystem
 
 **注意**: スレッドセーフな実装が必要です。共有状態への書き込みは避けてください。
 
-### MessageQueue（Wave処理）
+### MessageQueue（Step処理）
 
-メッセージキューをWave単位で処理します。メッセージ処理中に新たなメッセージが追加されると次のWaveで処理されます。
+メッセージキューをStep単位で処理します。メッセージ処理中に新たなメッセージが追加されると次のStepで処理されます。
 
 ```csharp
 public interface IMessageQueueSystem : ISystem
 {
-    int MaxWaveDepth { get; }
-    IMessageHandlerRegistry HandlerRegistry { get; }
-    void ProcessWaves(IEntityRegistry registry, in SystemContext context);
+    void ProcessMessages(IEntityRegistry registry, in SystemContext context);
 }
 ```
 

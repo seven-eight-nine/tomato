@@ -205,6 +205,7 @@ public class ActionStateMachineTests
     private class TestableAction : IExecutableAction<TestCategory>
     {
         public string ActionId { get; }
+        public string Label => ActionId;
         public TestCategory Category { get; }
         public float ElapsedTime { get; private set; }
         public int ElapsedFrames { get; private set; }

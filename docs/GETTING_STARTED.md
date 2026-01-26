@@ -44,7 +44,13 @@ YourGame/
   <ProjectReference Include="../libs/tomato/libs/systems/ReconciliationSystem/ReconciliationSystem.Core/ReconciliationSystem.Core.csproj" />
 
   <!-- 統合システム -->
-  <ProjectReference Include="../libs/tomato/libs/orchestration/EntitySystem/EntitySystem.Core/EntitySystem.Core.csproj" />
+  <ProjectReference Include="../libs/tomato/libs/orchestration/GameLoop/GameLoop.Core/GameLoop.Core.csproj" />
+
+  <!-- オプション：追加システム -->
+  <ProjectReference Include="../libs/tomato/libs/systems/InventorySystem/InventorySystem.Core/InventorySystem.Core.csproj" />
+  <ProjectReference Include="../libs/tomato/libs/systems/TimelineSystem/TimelineSystem.Core/TimelineSystem.Core.csproj" />
+  <ProjectReference Include="../libs/tomato/libs/systems/HierarchicalStateMachine/HierarchicalStateMachine.Core/HierarchicalStateMachine.Core.csproj" />
+  <ProjectReference Include="../libs/tomato/libs/foundation/FlowTree/FlowTree.Core/FlowTree.Core.csproj" />
 </ItemGroup>
 ```
 
@@ -57,7 +63,7 @@ YourGame/
 EntityHandleSystemを使用してEntityを定義する。Source Generatorによりハンドルとアリーナが自動生成される。
 
 ```csharp
-using EntityHandleSystem;
+using Tomato.EntityHandleSystem;
 
 // Entity定義
 [Entity(InitialCapacity = 100)]
@@ -126,8 +132,8 @@ if (handle.TryGetHealth(out int health))
 Tomatoでは状態変更を`CommandQueue`を通じて行う。コマンドキューはEntity単位で管理され、各Entityが独自のキューを持つ。
 
 ```csharp
-using CommandGenerator;
-using EntityHandleSystem;
+using Tomato.CommandGenerator;
+using Tomato.EntityHandleSystem;
 
 // CommandQueueの定義
 [CommandQueue]
@@ -193,19 +199,19 @@ Source Generatorにより、各コマンドに以下の機能が自動生成さ�
 - オブジェクトプーリング（コマンド生成のGC負荷を軽減）
 - 優先度順のソート処理
 
-**重要**: コマンドの実行は `WaveProcessor` によって行われます。`MessageSystem`（自動生成される`GameCommandQueueSystem`）がゲームループ内で自動的に処理します。
+**重要**: コマンドの実行は `StepProcessor` によって行われます。`MessageSystem`（自動生成される`GameCommandQueueSystem`）がゲームループ内で自動的に処理します。
 
 ### 4. ゲームループのセットアップ
 
 Tomatoでは`Pipeline`と`SystemGroup`を使ってゲームループを構築する。
 
 ```csharp
-using EntitySystem.Context;
-using EntitySystem.Phases;
-using EntitySystem.Providers;
-using SystemPipeline;
-using CommandGenerator;
-using CollisionSystem;
+using Tomato.GameLoop.Context;
+using Tomato.GameLoop.Phases;
+using Tomato.GameLoop.Providers;
+using Tomato.SystemPipeline;
+using Tomato.CommandGenerator;
+using Tomato.CollisionSystem;
 
 // アクションカテゴリの定義
 public enum ActionCategory { FullBody, Upper, Lower }
@@ -224,7 +230,7 @@ public class Game
 
         // 2. メッセージ処理コンポーネント作成
         var handlerRegistry = new GameMessageHandlerRegistry();
-        var waveProcessor = new WaveProcessor(maxWaveDepth: 100);
+        var stepProcessor = new StepProcessor(maxStepDepth: 100);
 
         // 3. 依存オブジェクト作成
         var positionProvider = new GamePositionProvider();
@@ -318,7 +324,7 @@ Tomatoでは、Entityの状態変更は`CommandQueue`を通じて行います。
 **重要**: コマンドは即時処理されません。`Enqueue<T>()`はキューに追加するだけで、実際の処理は`MessageSystem`の実行タイミング（ゲームループのMessagePhase）で行われます。また、キュー内のコマンドは**優先度順にソート**されて処理されるため、Enqueueした順序で処理されるとは限りません。優先度は`[Command<T>(Priority = N)]`で指定します。
 
 ```
-handle.GameCommandQueue.Enqueue<T>() → キューに蓄積 → MessagePhaseでWave処理 → Command.ExecuteCommand()
+handle.GameCommandQueue.Enqueue<T>() → キューに蓄積 → MessagePhaseでStep処理 → Command.ExecuteCommand()
 ```
 
 `CollisionSystem`は衝突検出時にコマンドを発行するシステムの一例です。Hitbox vs Hurtboxの衝突が検出されると、`ICollisionMessageEmitter`を通じてターゲットEntityのCommandQueueにダメージコマンドがEnqueueされます。
@@ -341,8 +347,8 @@ public enum ActionCategory
 ### 2. ActionSelectorの使用
 
 ```csharp
-using gamelib;
-using ActionExecutionSystem;
+using Tomato.ActionSelector;
+using Tomato.ActionExecutionSystem;
 
 // ActionSelector作成
 var selector = new ActionSelector<ActionCategory, InputState, GameState>();
@@ -400,6 +406,75 @@ if (machine.IsRunning(ActionCategory.Upper))
     {
         // コンボ遷移可能
     }
+}
+```
+
+### 4. MotionGraphの使用
+
+MotionGraphはHierarchicalStateMachineを基盤としたフレームベースのモーション状態管理。フレーム経過やモーション完了などの情報を提供する。
+
+**責務分担**: アクション選択はActionSelectorの責務。MotionGraphはキャンセル可能かどうかの情報（ElapsedFrames等）を提供するだけ。
+
+```csharp
+using Tomato.ActionExecutionSystem.MotionGraph;
+using Tomato.HierarchicalStateMachine;
+using Tomato.TimelineSystem;
+
+// モーション定義を作成
+var idleDefinition = new MotionDefinition("Idle", totalFrames: 60, new Sequence());
+var walkDefinition = new MotionDefinition("Walk", totalFrames: 30, new Sequence());
+
+// 状態を作成
+var idleState = new MotionState(idleDefinition);
+var walkState = new MotionState(walkDefinition);
+
+// 状態グラフを構築
+var graph = new StateGraph<MotionContext>()
+    .AddState(idleState)
+    .AddState(walkState)
+    .AddTransition(new Transition<MotionContext>(
+        "Idle", "Walk", 1f,
+        MotionTransitionCondition.Always()))
+    .AddTransition(new Transition<MotionContext>(
+        "Walk", "Idle", 1f,
+        MotionTransitionCondition.IsComplete()));
+
+// ステートマシンを作成・初期化
+var machine = new MotionStateMachine(graph);
+machine.Initialize("Idle");
+
+// ゲームループでの使用例（6フェーズに従う）
+void DecisionPhase(float deltaTime)
+{
+    // 1. ジャッジメントリストを構築
+    judgmentList.Clear();
+
+    // 2. キャンセル可能ならコンボ系ジャッジメントを追加
+    bool canCancel = machine.ElapsedFrames >= 15;
+    if (canCancel)
+    {
+        judgmentList.Add(attack2Judgment);
+        judgmentList.Add(attack3Judgment);
+    }
+
+    // 3. 他の遷移（ダメージ、ガード等）は常に追加
+    judgmentList.Add(damageReactionJudgment);
+    judgmentList.Add(guardJudgment);
+
+    // 4. ActionSelectorは常に回る
+    selectionResult = actionSelector.ProcessFrame(judgmentList, frameState);
+}
+
+void ExecutionPhase(float deltaTime)
+{
+    // 5. 選択されたアクションに遷移
+    if (selectionResult.TryGetRequested(category, out var selected))
+    {
+        machine.ForceTransitionTo(selected.ActionId);
+    }
+
+    // 6. モーションを更新
+    machine.Update(deltaTime);
 }
 ```
 

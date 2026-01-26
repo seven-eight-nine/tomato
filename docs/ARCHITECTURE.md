@@ -20,7 +20,7 @@
 
 #### テスト駆動開発（TDD）
 
-全てのコードはテストファーストで開発される。1,603のテストが設計の正しさを証明する。
+全てのコードはテストファーストで開発される。1,800以上のテストが設計の正しさを証明する。
 
 ### ドメイン駆動設計（DDD）
 
@@ -28,7 +28,7 @@
 
 | コンテキスト | システム | 責務 |
 |-------------|---------|------|
-| 統合コンテキスト | **EntitySystem** | 6フェーズゲームループの統括、全システム連携 |
+| 統合コンテキスト | **GameLoop** | 6フェーズゲームループの統括、全システム連携 |
 | パイプラインコンテキスト | SystemPipeline | ECSスタイルのシステム実行パイプライン |
 | 衝突コンテキスト | CollisionSystem | 空間的な衝突判定とメッセージ発行 |
 | 戦闘コンテキスト | CombatSystem | 攻撃とダメージ処理、多段ヒット制御 |
@@ -36,8 +36,16 @@
 | 行動コンテキスト | ActionSelector, ActionExecutionSystem | 行動の決定と実行 |
 | 依存ソートコンテキスト | DependencySortSystem | 汎用トポロジカルソートと循環検出 |
 | 調停コンテキスト | ReconciliationSystem | 位置調停と押し出し処理 |
-| エンティティコンテキスト | EntityHandleSystem | Entityの生成・管理・コンポーネント |
+| エンティティコンテキスト | EntityHandleSystem, HandleSystem | Entityの生成・管理・コンポーネント |
 | スポーンコンテキスト | CharacterSpawnSystem | キャラクターのリソース管理とスポーン |
+| 状態機械コンテキスト | HierarchicalStateMachine | 階層的状態マシンとパスファインディング |
+| フロー制御コンテキスト | FlowTree | BehaviorTree風フロー制御とDSL |
+| タイムラインコンテキスト | TimelineSystem | シーケンス/クリップベースのタイムライン管理 |
+| インベントリコンテキスト | InventorySystem | アイテム管理、スタック、クラフティング |
+| 直列化コンテキスト | SerializationSystem | バイナリシリアライズ/デシリアライズ |
+| ステータスコンテキスト | StatusEffectSystem | バフ/デバフ効果の管理 |
+| クローンコンテキスト | DeepCloneGenerator | Source Generatorによる深いコピー生成 |
+| 数学コンテキスト | Tomato.Math | Vector3, AABB等の数学ユーティリティ |
 
 ### 決定論性
 
@@ -56,7 +64,7 @@
 
 #### SystemPipeline: ECSスタイルのシステムパイプライン
 
-- 3種類の処理パターン: Serial（直列）、Parallel（並列）、MessageQueue（Wave処理）
+- 3種類の処理パターン: Serial（直列）、Parallel（並列）、MessageQueue（Step処理）
 - IEntityQueryによるエンティティフィルタリング
 - QueryCacheによる同一フレーム内クエリ結果キャッシュ
 - `[HasCommandQueue]`属性によるEntity単位のキュー管理
@@ -68,10 +76,17 @@
 - 優先度は絶対値で定義（疎結合）
 - 相対参照を禁止し、追加・削除が他に影響しない設計
 
-#### CommandGenerator: Wave型処理
+#### ActionExecutionSystem: モーション駆動アクション実行
+
+- ActionStateMachineによるカテゴリ別アクション管理
+- MotionGraphによるフレームベースのモーション状態管理
+- HierarchicalStateMachineをラップしたMotionStateMachine
+- TimelineSystemによるフレームイベント管理
+
+#### CommandGenerator: Step型処理
 
 - 状態変更はメッセージ処理でのみ発生
-- Wave単位で処理し、決定論性を保証
+- Step単位で処理し、決定論性を保証
 - 優先度ベースの処理順序
 
 #### CollisionSystem: 責務の分離
@@ -87,19 +102,59 @@
 - ターゲット判定はアプリ側に委譲（AttackInfo.CanTarget）
 - 多段ヒット制御（HittableCount、IntervalTime）
 
-#### EntitySystem: 統合レイヤー
+#### GameLoop: 統合レイヤー
 
 - 6フェーズゲームループの統括（Collision→Message→Decision→Execution→Reconciliation→Cleanup）
 - EntityContext によるEntity単位のコンテキスト管理
 - IEntityMessageRegistry実装でCommandGeneratorと連携
 - SpawnBridgeによるCharacterSpawnSystemとの疎結合
 
+#### FlowTree: フロー制御
+
+- BehaviorTree風のノードベースフロー制御
+- Composite（Sequence, Selector, Race, Join等）、Decorator（Inverter, Repeat, Timeout等）、Leaf（Action, Condition, Wait等）ノード
+- DSLビルダーによる直感的なツリー構築
+- コールスタックによるサブツリー呼び出し
+
+#### HierarchicalStateMachine: 階層的状態マシン
+
+- 階層的な状態定義とネスト
+- A*ベースのパスファインディングによる状態遷移
+- ヒューリスティック関数のカスタマイズ
+- グラフ可視化サポート
+
+#### TimelineSystem: タイムライン管理
+
+- トラック/クリップベースのシーケンサー
+- インスタントクリップと範囲クリップのサポート
+- ループ設定とブレンド計算
+- シリアライズ対応
+
+#### InventorySystem: インベントリ管理
+
+- 汎用インベントリ（追加、削除、クエリ）
+- スタック管理とバリデーション
+- トランザクションベースの操作
+- クラフティング機能（レシピ、プランナー）
+- スナップショットと復元
+
+#### SerializationSystem: シリアライゼーション
+
+- バイナリシリアライズ/デシリアライズ
+- ISerializableインターフェース
+
+#### DeepCloneGenerator: 深いコピー生成
+
+- Source Generatorによる自動生成
+- 循環参照の検出とトラッキング
+- コレクション対応
+
 #### CharacterSpawnSystem: リソースライフサイクル
 
 - 状態マシンによるリソースロード/アンロードの管理
 - データリソースとGameObjectリソースの分離
 - 非同期ロード対応
-- EntitySystemとの連携（SpawnBridge経由）
+- GameLoopとの連携（SpawnBridge経由）
 
 ---
 
@@ -107,8 +162,8 @@
 
 ```
                           ┌─────────────────────────┐
-                          │       EntitySystem      │
-                          │  (GameLoopOrchestrator) │
+                          │        GameLoop         │
+                          │   (PhaseProcessors)     │
                           └───────────┬─────────────┘
                                       │
        ┌──────────────┬───────────────┼───────────────┬──────────────┐
@@ -127,19 +182,24 @@
       │              │              │              │              │
       └──────────────┴──────────────┴──────┬───────┴──────────────┘
                                            │
-                                           ▼
-                               ┌─────────────────────┐
-                               │   SystemPipeline    │
-                               │  (Pipeline/Group)   │
-                               └──────────┬──────────┘
-                                          │
-                                          ▼
-                                ┌─────────────────┐
-                                │EntityHandleSystem│
-                                └─────────────────┘
+       ┌───────────────────────────────────┼───────────────────────────────────┐
+       │                                   │                                   │
+       ▼                                   ▼                                   ▼
+┌─────────────────┐             ┌─────────────────────┐             ┌─────────────────┐
+│   FlowTree      │             │   SystemPipeline    │             │ Hierarchical    │
+│  (BehaviorTree) │             │  (Pipeline/Group)   │             │ StateMachine    │
+└─────────────────┘             └──────────┬──────────┘             └─────────────────┘
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+          ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+          │EntityHandleSystem│   │InventorySystem  │   │ TimelineSystem  │
+          │  HandleSystem    │   │SerializationSys │   │                 │
+          └─────────────────┘   └─────────────────┘   └─────────────────┘
 ```
 
-EntitySystemは全システムの統合レイヤーとして機能し、6フェーズゲームループを統括する。SystemPipelineはECSスタイルの実行基盤を提供する。
+GameLoopは全システムの統合レイヤーとして機能し、6フェーズゲームループを統括する。SystemPipelineはECSスタイルの実行基盤を提供する。
 
 ---
 
@@ -157,10 +217,10 @@ EntitySystemは全システムの統合レイヤーとして機能し、6フェ�
 │   - 衝突結果からメッセージを発行                        │
 ├─────────────────────────────────────────────────────────┤
 │ MessagePhase                                            │
-│   - 波ごとにメッセージを処理                            │
+│   - Stepごとにメッセージを処理                          │
 │   - 優先度順（高→低）で処理                             │
-│   - 新メッセージは次波へ                                │
-│   - 全波完了まで繰り返し                                │
+│   - 新メッセージは次Stepへ                              │
+│   - 全Step完了まで繰り返し                              │
 │   - 【状態変更はここでのみ】                            │
 ├─────────────────────────────────────────────────────────┤
 │ DecisionPhase                                           │
@@ -276,14 +336,14 @@ public readonly struct CollisionVolume
 
 ---
 
-## Wave処理
+## Step処理
 
 ### 概念
 
 ```
 時間軸 ────────────────────────────────────────────▶
 
-Wave 0          Wave 1          Wave 2
+Step 0          Step 1          Step 2
 ┌───────┐       ┌───────┐       ┌───────┐
 │Entity1│       │Entity1│       │       │
 │ Msg A │──┐    │ Msg C │       │       │
@@ -301,7 +361,7 @@ Wave 0          Wave 1          Wave 2
 
 1. 全EntityのキューからメッセージをDequeue
 2. 優先度順にハンドラを実行
-3. ハンドラ内で発生した新メッセージは次Waveへ
+3. ハンドラ内で発生した新メッセージは次Stepへ
 4. 収束（全キュー空）まで繰り返し
 5. 最大深度超過時はDepthExceededを返す
 
@@ -395,6 +455,41 @@ SelectionResult (カテゴリ毎の勝者)
 │   └─ CurrentAction: Walk (Frame 0)      │
 └─────────────────────────────────────────┘
 ```
+
+### MotionGraph（ActionExecutionSystem）
+
+HierarchicalStateMachineを基盤としたフレームベースのモーション状態管理。
+
+**責務分担**: アクション選択はActionSelectorの責務。MotionGraphはキャンセル可能かどうかの情報（ElapsedFrames等）を提供するだけで、次のアクションを決定しない。ActionSelectorは常に回り、キャンセル可能な場合はコンボ系ジャッジメントを追加、ダメージ遷移等は常に追加という形でジャッジメントリストを構築する。
+
+```
+┌─────────────────────────────────────────┐
+│         MotionStateMachine              │
+├─────────────────────────────────────────┤
+│ CurrentState: Attack1                   │
+│   └─ MotionState                        │
+│        └─ MotionDefinition              │
+│             ├─ MotionId: "Attack1"      │
+│             ├─ TotalFrames: 30          │
+│             └─ Timeline (Sequence)      │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│      MotionTransitionCondition          │
+├─────────────────────────────────────────┤
+│ - IsComplete(): モーション完了時        │
+│ - Always() / Never()                    │
+│ - AfterFrame(n): 指定フレーム以降       │
+│ - InFrameRange(start, end)              │
+│ - And() / Or(): 条件の組み合わせ        │
+└─────────────────────────────────────────┘
+```
+
+- **MotionStateMachine**: HierarchicalStateMachineをラップしたモーション専用ステートマシン
+- **MotionState**: IState<MotionContext>の実装、フレーム管理とTimeline連携
+- **MotionDefinition**: モーションID、総フレーム数、Timelineを保持
+- **MotionTransitionCondition**: フレームベースの汎用遷移条件ユーティリティ
+- **IMotionExecutor**: モーション開始/更新/終了のコールバック
 
 ---
 
@@ -510,7 +605,7 @@ public interface IDamageCalculator
 | フェーズ | 並列化 | 備考 |
 |----------|--------|------|
 | CollisionPhase | ○ | Entity単位で並列化可能 |
-| MessagePhase | △ | Wave内は並列可、Wave間は逐次 |
+| MessagePhase | △ | Step内は並列可、Step間は逐次 |
 | DecisionPhase | ○ | 読み取り専用のため安全 |
 | ExecutionPhase | ○ | 位置競合はLateUpdateで調停 |
 | ReconciliationPhase | △ | 依存順に逐次処理 |

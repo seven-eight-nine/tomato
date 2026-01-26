@@ -352,7 +352,7 @@ handle.TryExecute<PositionComponent>((ref PositionComponent pos) =>
 
 ## CommandQueue連携
 
-`[HasCommandQueue]`属性を使用して、エンティティにCommandQueueを追加できます。各Entityが独自のキューを持ち、Wave処理による決定論的なメッセージ処理を実現します。
+`[HasCommandQueue]`属性を使用して、エンティティにCommandQueueを追加できます。各Entityが独自のキューを持ち、Step処理による決定論的なメッセージ処理を実現します。
 
 ### CommandQueueの定義
 
@@ -422,7 +422,7 @@ handle2.GameCommandQueue.Enqueue<DamageCommand>(cmd => {
     cmd.Amount = 30;
 });
 
-// SystemPipelineでWave処理
+// SystemPipelineでStep処理
 // GameCommandQueueSystemはSource Generatorが自動生成
 var messageSystem = new GameCommandQueueSystem(handlerRegistry);
 pipeline.Execute(systemGroup, deltaTime);

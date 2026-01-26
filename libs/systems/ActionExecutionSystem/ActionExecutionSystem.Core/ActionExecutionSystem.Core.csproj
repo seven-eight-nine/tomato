@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Tomato.ActionExecutionSystem</RootNamespace>
@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../ActionSelector/ActionSelector.Core/ActionSelector.Core.csproj" />
+    <ProjectReference Include="../../HierarchicalStateMachine/HierarchicalStateMachine.Core/HierarchicalStateMachine.Core.csproj" />
+    <ProjectReference Include="../../TimelineSystem/TimelineSystem.Core/TimelineSystem.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -9,9 +9,9 @@ namespace Tomato.CommandGenerator.Tests.Runtime;
 public class EnqueueTimingTests
 {
     [Fact]
-    public void EnqueueTiming_NextWave_IsDefaultValue()
+    public void EnqueueTiming_NextStep_IsDefaultValue()
     {
-        Assert.Equal(0, (int)EnqueueTiming.NextWave);
+        Assert.Equal(0, (int)EnqueueTiming.NextStep);
     }
 
     [Fact]
@@ -22,20 +22,20 @@ public class EnqueueTimingTests
 }
 
 /// <summary>
-/// WaveProcessable統合テスト用のキュー
+/// StepProcessable統合テスト用のキュー
 /// </summary>
 [CommandQueue]
-public partial class WaveTestQueue
+public partial class StepTestQueue
 {
     [CommandMethod]
     public partial void Execute();
 }
 
 /// <summary>
-/// WaveProcessable統合テスト用のコマンド
+/// StepProcessable統合テスト用のコマンド
 /// </summary>
-[Command<WaveTestQueue>(Priority = 0)]
-public partial class WaveTestCommand
+[Command<StepTestQueue>(Priority = 0)]
+public partial class StepTestCommand
 {
     public int Value;
     public static int ExecutedSum;
@@ -47,27 +47,27 @@ public partial class WaveTestCommand
 }
 
 /// <summary>
-/// IWaveProcessable統合テスト
+/// IStepProcessable統合テスト
 /// </summary>
-public class WaveProcessableIntegrationTests
+public class StepProcessableIntegrationTests
 {
-    public WaveProcessableIntegrationTests()
+    public StepProcessableIntegrationTests()
     {
-        WaveTestCommand.ExecutedSum = 0;
+        StepTestCommand.ExecutedSum = 0;
     }
 
     [Fact]
-    public void GeneratedQueue_ShouldImplementIWaveProcessable()
+    public void GeneratedQueue_ShouldImplementIStepProcessable()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        Assert.IsAssignableFrom<IWaveProcessable>(queue);
+        Assert.IsAssignableFrom<IStepProcessable>(queue);
     }
 
     [Fact]
     public void GeneratedQueue_HasPendingCommands_ShouldReturnFalse_WhenEmpty()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
         Assert.False(queue.HasPendingCommands);
     }
@@ -75,9 +75,9 @@ public class WaveProcessableIntegrationTests
     [Fact]
     public void GeneratedQueue_HasPendingCommands_ShouldReturnTrue_AfterEnqueue()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1);
 
         Assert.True(queue.HasPendingCommands);
     }
@@ -85,62 +85,62 @@ public class WaveProcessableIntegrationTests
     [Fact]
     public void GeneratedQueue_OnEnqueue_ShouldBeCalledWhenEnqueuing()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
         bool callbackCalled = false;
         queue.OnEnqueue = _ => callbackCalled = true;
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1);
 
         Assert.True(callbackCalled);
     }
 
     [Fact]
-    public void GeneratedQueue_EnqueueNextFrame_ShouldNotAffectCurrentWave()
+    public void GeneratedQueue_EnqueueNextFrame_ShouldNotAffectCurrentStep()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
-        queue.MergePendingToCurrentWave();
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
+        queue.MergePendingToCurrentStep();
         queue.Execute();
 
         // 次フレームキューに入っているのでCurrentには来ない
-        Assert.Equal(0, WaveTestCommand.ExecutedSum);
+        Assert.Equal(0, StepTestCommand.ExecutedSum);
     }
 
     [Fact]
     public void GeneratedQueue_EnqueueNextFrame_ShouldBeMergedOnNextFrame()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 5, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 5, EnqueueTiming.NextFrame);
 
         // フレーム開始処理
         queue.MergeNextFrameToPending();
-        queue.MergePendingToCurrentWave();
+        queue.MergePendingToCurrentStep();
         queue.Execute();
 
-        Assert.Equal(5, WaveTestCommand.ExecutedSum);
+        Assert.Equal(5, StepTestCommand.ExecutedSum);
     }
 
     [Fact]
-    public void GeneratedQueue_EnqueueNextWave_ShouldBeProcessedInCurrentFrame()
+    public void GeneratedQueue_EnqueueNextStep_ShouldBeProcessedInCurrentFrame()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 3, EnqueueTiming.NextWave);
-        queue.MergePendingToCurrentWave();
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 3, EnqueueTiming.NextStep);
+        queue.MergePendingToCurrentStep();
         queue.Execute();
 
-        Assert.Equal(3, WaveTestCommand.ExecutedSum);
+        Assert.Equal(3, StepTestCommand.ExecutedSum);
     }
 
     [Fact]
     public void GeneratedQueue_NextFrameCount_ShouldReturnCorrectCount()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 2, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 2, EnqueueTiming.NextFrame);
 
         Assert.Equal(2, queue.NextFrameCount);
     }
@@ -148,10 +148,10 @@ public class WaveProcessableIntegrationTests
     [Fact]
     public void GeneratedQueue_Count_ShouldIncludeNextFrameQueue()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextWave);
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 2, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextStep);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 2, EnqueueTiming.NextFrame);
 
         Assert.Equal(2, queue.Count);
     }
@@ -159,44 +159,44 @@ public class WaveProcessableIntegrationTests
     [Fact]
     public void GeneratedQueue_Clear_ShouldClearNextFrameQueue()
     {
-        var queue = new WaveTestQueue();
+        var queue = new StepTestQueue();
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 1, EnqueueTiming.NextFrame);
         queue.Clear();
 
         Assert.Equal(0, queue.NextFrameCount);
     }
 
     [Fact]
-    public void WaveProcessor_WithGeneratedQueue_ShouldWork()
+    public void StepProcessor_WithGeneratedQueue_ShouldWork()
     {
-        var processor = new WaveProcessor();
-        var queue = new WaveTestQueue();
+        var processor = new StepProcessor();
+        var queue = new StepTestQueue();
         processor.Register(queue);
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 10);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 10);
 
         // OnEnqueueでアクティブになっているはず
         Assert.Equal(1, processor.ActiveQueueCount);
 
-        var result = processor.ProcessAllWaves(q =>
+        var result = processor.ProcessAllSteps(q =>
         {
-            ((WaveTestQueue)q).MergePendingToCurrentWave();
-            ((WaveTestQueue)q).Execute();
+            ((StepTestQueue)q).MergePendingToCurrentStep();
+            ((StepTestQueue)q).Execute();
         });
 
-        Assert.Equal(WaveProcessingResult.Completed, result);
-        Assert.Equal(10, WaveTestCommand.ExecutedSum);
+        Assert.Equal(StepProcessingResult.Completed, result);
+        Assert.Equal(10, StepTestCommand.ExecutedSum);
     }
 
     [Fact]
-    public void WaveProcessor_BeginFrame_ShouldMergeNextFrameCommands()
+    public void StepProcessor_BeginFrame_ShouldMergeNextFrameCommands()
     {
-        var processor = new WaveProcessor();
-        var queue = new WaveTestQueue();
+        var processor = new StepProcessor();
+        var queue = new StepTestQueue();
         processor.Register(queue);
 
-        queue.Enqueue<WaveTestCommand>(cmd => cmd.Value = 7, EnqueueTiming.NextFrame);
+        queue.Enqueue<StepTestCommand>(cmd => cmd.Value = 7, EnqueueTiming.NextFrame);
 
         // まだアクティブではない（OnEnqueueは呼ばれるが、HasPendingはfalse）
         // 次フレームキューはHasPendingに含まれない
@@ -204,13 +204,13 @@ public class WaveProcessableIntegrationTests
         processor.BeginFrame();
 
         // BeginFrame後にアクティブになるはず
-        var result = processor.ProcessAllWaves(q =>
+        var result = processor.ProcessAllSteps(q =>
         {
-            ((WaveTestQueue)q).MergePendingToCurrentWave();
-            ((WaveTestQueue)q).Execute();
+            ((StepTestQueue)q).MergePendingToCurrentStep();
+            ((StepTestQueue)q).Execute();
         });
 
-        Assert.Equal(WaveProcessingResult.Completed, result);
-        Assert.Equal(7, WaveTestCommand.ExecutedSum);
+        Assert.Equal(StepProcessingResult.Completed, result);
+        Assert.Equal(7, StepTestCommand.ExecutedSum);
     }
 }

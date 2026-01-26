@@ -156,17 +156,17 @@ public class SignalCommandTests
     public void SignalCommand_NextFrameTiming_AlsoTracked()
     {
         // Arrange
-        var waveProcessor = new WaveProcessor(10);
+        var stepProcessor = new StepProcessor(10);
         var queue = new MessageHandlerQueue();
-        waveProcessor.Register(queue);
+        stepProcessor.Register(queue);
         int executeCount = 0;
 
         // Act - NextFrame タイミングでエンキュー
         var result1 = queue.Enqueue<SignalCommand>(cmd => cmd.OnExecute = () => executeCount++, EnqueueTiming.NextFrame);
         var result2 = queue.Enqueue<SignalCommand>(cmd => cmd.OnExecute = () => executeCount++, EnqueueTiming.NextFrame);
 
-        waveProcessor.BeginFrame();
-        waveProcessor.ProcessAllWaves(_ => queue.Execute());
+        stepProcessor.BeginFrame();
+        stepProcessor.ProcessAllSteps(_ => queue.Execute());
 
         // Assert - 最初のみ成功
         Assert.True(result1);

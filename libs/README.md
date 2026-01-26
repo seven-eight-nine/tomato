@@ -6,6 +6,9 @@
 
 ```
 libs/
+├── common/                  # 共通ユーティリティ
+│   └── Tomato.Math/         # 数学ユーティリティ（Vector3, AABB等）
+│
 ├── foundation/              # 基盤システム（他の多くが依存）
 │   ├── HandleSystem/        # 汎用ハンドルパターン（Source Generator）
 │   ├── EntityHandleSystem/  # Entity専用ハンドル（HandleSystem依存）
@@ -24,7 +27,9 @@ libs/
 │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ
 │   ├── InventorySystem/     # アイテム・インベントリ管理
 │   ├── ReconciliationSystem/ # 位置調停・依存順処理
-│   └── SerializationSystem/ # 高性能バイナリシリアライズ
+│   ├── SerializationSystem/ # 高性能バイナリシリアライズ
+│   ├── TimelineSystem/      # タイムライン/シーケンサー
+│   └── HierarchicalStateMachine/ # 階層的状態マシン
 │
 └── orchestration/           # 統合・オーケストレーション
     └── GameLoop/        # 6フェーズゲームループ統合
@@ -32,13 +37,19 @@ libs/
 
 ## システム一覧
 
+### common/ - 共通ユーティリティ
+
+| システム | 説明 |
+|---------|------|
+| **Tomato.Math** | Vector3, AABB, MathUtils等の数学ユーティリティ |
+
 ### foundation/ - 基盤システム
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
 | **HandleSystem** | 汎用ハンドルパターン（IHandle, IArena, ArenaBase）、エンティティ以外にも適用可能（Source Generator） | 25 |
 | **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
-| **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 243 |
+| **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 247 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
 | **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 148 |
 | **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 82 |
@@ -49,7 +60,7 @@ libs/
 | システム | 説明 | テスト数 |
 |---------|------|---------|
 | **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 66 |
-| **ActionExecutionSystem** | アクション実行・ステートマシン管理 | 46 |
+| **ActionExecutionSystem** | アクション実行・ステートマシン・MotionGraph | 119 |
 | **CharacterSpawnSystem** | キャラクター生成・リソース管理 | 269 |
 | **CollisionSystem** | 衝突判定・空間検索統合（CollisionDetector, SpatialWorld） | 50+ |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
@@ -57,6 +68,8 @@ libs/
 | **InventorySystem** | アイテム・インベントリ管理 | 101 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停（DependencySortSystem使用） | 11 |
 | **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 21 |
+| **TimelineSystem** | トラック/クリップベースのタイムライン/シーケンサー | 63 |
+| **HierarchicalStateMachine** | 階層的状態マシン、A*パスファインディング | 67 |
 
 ### orchestration/ - 統合システム
 
@@ -64,7 +77,7 @@ libs/
 |---------|------|---------|
 | **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 56 |
 
-**合計: 1,644 テスト**
+**合計: 1,800+ テスト**
 
 ## 主要な使用例
 
@@ -190,6 +203,45 @@ mainTree
     .Complete();
 ```
 
+### MotionGraph（ActionExecutionSystem）
+
+```csharp
+using Tomato.ActionExecutionSystem;
+using Tomato.ActionExecutionSystem.MotionGraph;
+
+// ActionDefinitionRegistryを作成
+var registry = new ActionDefinitionRegistry<ActionCategory>();
+registry.Register(new ActionDefinition<ActionCategory>(
+    actionId: "Attack1",
+    category: ActionCategory.Upper,
+    totalFrames: 30,
+    cancelWindow: new FrameWindow(15, 25)));
+
+// MotionGraphを構築
+var graph = MotionBasedActionController<ActionCategory>.BuildGraphFromRegistry(
+    registry,
+    builder => builder
+        .AddAction("Attack1")
+        .AddAction("Attack2")
+        .AddAction("Idle")
+        .AddCancelTransition("Attack1", "Attack2")  // キャンセル遷移
+        .AddCompletionTransition("Attack1", "Idle") // 完了遷移
+);
+
+// コントローラー作成
+var controller = new MotionBasedActionController<ActionCategory>(graph, registry);
+controller.Initialize("Idle", ActionCategory.Upper);
+
+// フレーム更新
+controller.Update(deltaTime);
+
+// キャンセル遷移を試みる
+if (controller.IsInCancelWindow())
+{
+    controller.TryTransitionToAction("Attack2");
+}
+```
+
 ### DependencySortSystem
 
 ```csharp
@@ -297,7 +349,7 @@ SystemPipeline.Core
 
 CommandGenerator.Core
 ├── MessageQueue
-├── WaveProcessor
+├── StepProcessor
 └── IMessageDispatcher
 
 FlowTree.Core (独立・外部依存なし)
@@ -316,6 +368,16 @@ DeepCloneGenerator (Source Generator)
 ├── [DeepClonable]
 ├── [CloneWith] / [CloneIgnore]
 └── DeepClone() メソッド生成
+
+ActionExecutionSystem.Core
+├── ActionStateMachine / IExecutableAction
+├── MotionGraph (HierarchicalStateMachineに依存)
+│   ├── MotionStateMachine / MotionDefinition
+│   └── MotionBasedActionController
+└── Timeline (TimelineSystemに依存)
+    ├── CancelWindowTrack/Clip
+    ├── HitboxWindowTrack/Clip
+    └── InvincibleWindowTrack/Clip
 
 その他のシステムはEntityHandleSystem.Attributesに依存:
 ├── CollisionSystem.Core

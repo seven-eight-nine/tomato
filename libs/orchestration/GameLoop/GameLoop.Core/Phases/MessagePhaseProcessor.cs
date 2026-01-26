@@ -8,11 +8,11 @@ namespace Tomato.GameLoop.Phases;
 
 /// <summary>
 /// メッセージ処理システム。
-/// WaveProcessorを使用してMessageHandlerQueueをWave単位で処理する。
+/// StepProcessorを使用してMessageHandlerQueueをStep単位で処理する。
 /// </summary>
 public sealed class MessageSystem : ISerialSystem
 {
-    private readonly WaveProcessor _waveProcessor;
+    private readonly StepProcessor _waveProcessor;
     private readonly MessageHandlerQueue _queue;
 
     /// <inheritdoc/>
@@ -29,14 +29,14 @@ public sealed class MessageSystem : ISerialSystem
     /// <summary>
     /// MessageSystemを生成する。
     /// </summary>
-    /// <param name="waveProcessor">Wave処理用プロセッサ</param>
+    /// <param name="waveProcessor">Step処理用プロセッサ</param>
     /// <param name="queue">メッセージハンドラキュー</param>
-    public MessageSystem(WaveProcessor waveProcessor, MessageHandlerQueue queue)
+    public MessageSystem(StepProcessor waveProcessor, MessageHandlerQueue queue)
     {
         _waveProcessor = waveProcessor ?? throw new ArgumentNullException(nameof(waveProcessor));
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
 
-        // WaveProcessorにキューを登録
+        // StepProcessorにキューを登録
         _waveProcessor.Register(_queue);
     }
 
@@ -46,8 +46,8 @@ public sealed class MessageSystem : ISerialSystem
         IReadOnlyList<AnyHandle> entities,
         in SystemContext context)
     {
-        // WaveProcessorを使用してWave処理
-        var result = _waveProcessor.ProcessAllWaves(q =>
+        // StepProcessorを使用してStep処理
+        var result = _waveProcessor.ProcessAllSteps(q =>
         {
             if (q is MessageHandlerQueue mhq)
             {
@@ -56,8 +56,8 @@ public sealed class MessageSystem : ISerialSystem
         });
 
         LastResult = new MessagePhaseResult(
-            _waveProcessor.CurrentWaveDepth,
-            result == WaveProcessingResult.DepthExceeded);
+            _waveProcessor.CurrentStepDepth,
+            result == StepProcessingResult.DepthExceeded);
     }
 }
 
@@ -66,15 +66,15 @@ public sealed class MessageSystem : ISerialSystem
 /// </summary>
 public readonly struct MessagePhaseResult
 {
-    /// <summary>処理したWave数。</summary>
-    public readonly int WaveCount;
+    /// <summary>処理したStep数。</summary>
+    public readonly int StepCount;
 
     /// <summary>最大深度に達したかどうか。</summary>
     public readonly bool MaxDepthReached;
 
     public MessagePhaseResult(int waveCount, bool maxDepthReached)
     {
-        WaveCount = waveCount;
+        StepCount = waveCount;
         MaxDepthReached = maxDepthReached;
     }
 }

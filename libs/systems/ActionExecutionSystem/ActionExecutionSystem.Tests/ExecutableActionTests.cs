@@ -164,7 +164,7 @@ public class ExecutableActionTests
         Assert.True(action.CanCancel);
         var judgments = action.GetTransitionableJudgments();
         Assert.Equal(1, judgments.Length);
-        Assert.Equal("Attack2", judgments[0].ActionId);
+        Assert.Equal("Attack2", judgments[0].Label);
     }
 
     [Fact]

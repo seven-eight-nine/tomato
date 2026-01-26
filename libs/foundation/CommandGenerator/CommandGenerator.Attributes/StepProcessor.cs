@@ -1,46 +1,47 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace Tomato.CommandGenerator;
 
 /// <summary>
-/// コマンドキューのWave処理を管理するプロセッサ。
-/// 複数のCommandQueueを登録し、Wave単位で処理を実行する。
+/// コマンドキューのStep処理を管理するプロセッサ。
+/// 複数のCommandQueueを登録し、Step単位で処理を実行する。
 ///
-/// <para>Wave処理の流れ:</para>
+/// <para>Step処理の流れ:</para>
 /// <list type="number">
 ///   <item>Enqueue時にキューがアクティブとしてマークされる</item>
-///   <item>ProcessAllWaves()でアクティブなキューのみを処理</item>
-///   <item>各Waveで全キューのコマンドを実行</item>
+///   <item>ProcessAllSteps()でアクティブなキューのみを処理</item>
+///   <item>各Stepで全キューのコマンドを実行</item>
 ///   <item>収束（全キューが空）まで繰り返し</item>
 /// </list>
 ///
 /// <para>フレーム処理の流れ:</para>
 /// <list type="number">
 ///   <item>BeginFrame(): 次フレームキューをPendingにマージ</item>
-///   <item>ProcessAllWaves(): Wave処理を収束まで実行</item>
+///   <item>ProcessAllSteps(): Step処理を収束まで実行</item>
 ///   <item>（次フレームでBeginFrame()が呼ばれる）</item>
 /// </list>
 /// </summary>
-public sealed class WaveProcessor
+public sealed class StepProcessor
 {
-    private readonly HashSet<IWaveProcessable> _registeredQueues = new();
-    private readonly HashSet<IWaveProcessable> _activeQueues = new();
-    private readonly List<IWaveProcessable> _processingList = new(16);
-    private readonly int _maxWaveDepth;
-    private int _currentWaveDepth;
+    private readonly HashSet<IStepProcessable> _registeredQueues = new();
+    private readonly HashSet<IStepProcessable> _activeQueues = new();
+    private readonly List<IStepProcessable> _processingList = new(16);
+    private readonly int _maxStepDepth;
+    private int _currentStepDepth;
     private bool _isProcessing;
 
     /// <summary>
-    /// 現在のWave深度
+    /// 現在のStep深度
     /// </summary>
-    public int CurrentWaveDepth => _currentWaveDepth;
+    public int CurrentStepDepth => _currentStepDepth;
 
     /// <summary>
-    /// 最大Wave深度
+    /// 最大Step深度
     /// </summary>
-    public int MaxWaveDepth => _maxWaveDepth;
+    public int MaxStepDepth => _maxStepDepth;
 
     /// <summary>
     /// 登録されているキュー数
@@ -53,22 +54,28 @@ public sealed class WaveProcessor
     public int ActiveQueueCount => _activeQueues.Count;
 
     /// <summary>
-    /// Wave開始時に呼び出されるコールバック（デバッグ用）
+    /// Step開始時に呼び出されるコールバック（デバッグ用）
     /// </summary>
-    public Action<int>? OnWaveStart { get; set; }
+    public Action<int>? OnStepStart { get; set; }
 
     /// <summary>
-    /// Wave深度超過時に呼び出されるコールバック
+    /// Step深度超過時に呼び出されるコールバック
     /// </summary>
     public Action<int>? OnDepthExceeded { get; set; }
 
     /// <summary>
-    /// WaveProcessorを生成する
+    /// 並列処理を有効にするかどうか。
+    /// trueの場合、各Step内で複数のキューを並列に処理する。
     /// </summary>
-    /// <param name="maxWaveDepth">最大Wave深度（デフォルト100）</param>
-    public WaveProcessor(int maxWaveDepth = 100)
+    public bool EnableParallelProcessing { get; set; }
+
+    /// <summary>
+    /// StepProcessorを生成する
+    /// </summary>
+    /// <param name="maxStepDepth">最大Step深度（デフォルト100）</param>
+    public StepProcessor(int maxStepDepth = 100)
     {
-        _maxWaveDepth = maxWaveDepth;
+        _maxStepDepth = maxStepDepth;
     }
 
     /// <summary>
@@ -77,7 +84,7 @@ public sealed class WaveProcessor
     /// Enqueue時に自動的にアクティブとしてマークされる。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Register(IWaveProcessable queue)
+    public void Register(IStepProcessable queue)
     {
         if (_registeredQueues.Add(queue))
         {
@@ -89,7 +96,7 @@ public sealed class WaveProcessor
     /// コマンドキューの登録を解除する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Unregister(IWaveProcessable queue)
+    public void Unregister(IStepProcessable queue)
     {
         if (_registeredQueues.Remove(queue))
         {
@@ -103,7 +110,7 @@ public sealed class WaveProcessor
     /// Enqueue時に自動的に呼び出される。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void MarkActive(IWaveProcessable queue)
+    public void MarkActive(IStepProcessable queue)
     {
         _activeQueues.Add(queue);
     }
@@ -143,11 +150,11 @@ public sealed class WaveProcessor
     }
 
     /// <summary>
-    /// 単一Waveを処理する。
+    /// 単一Stepを処理する。
     /// </summary>
     /// <param name="executeAction">各キューに対して実行するアクション</param>
     /// <returns>処理が行われた場合true、全キューが空の場合false</returns>
-    public bool ProcessSingleWave(Action<IWaveProcessable> executeAction)
+    public bool ProcessSingleStep(Action<IStepProcessable> executeAction)
     {
         if (_activeQueues.Count == 0)
         {
@@ -170,19 +177,28 @@ public sealed class WaveProcessor
             return false;
         }
 
-        _currentWaveDepth++;
-        OnWaveStart?.Invoke(_currentWaveDepth);
+        _currentStepDepth++;
+        OnStepStart?.Invoke(_currentStepDepth);
 
         // 各キューのPendingをCurrentにマージ
         for (int i = 0; i < _processingList.Count; i++)
         {
-            _processingList[i].MergePendingToCurrentWave();
+            _processingList[i].MergePendingToCurrentStep();
         }
 
         // 各キューを実行
-        for (int i = 0; i < _processingList.Count; i++)
+        if (EnableParallelProcessing && _processingList.Count > 1)
         {
-            executeAction(_processingList[i]);
+            // 並列実行
+            Parallel.ForEach(_processingList, executeAction);
+        }
+        else
+        {
+            // 逐次実行（既存動作）
+            for (int i = 0; i < _processingList.Count; i++)
+            {
+                executeAction(_processingList[i]);
+            }
         }
 
         // 空になったキューをアクティブから除外
@@ -192,36 +208,36 @@ public sealed class WaveProcessor
     }
 
     /// <summary>
-    /// 全Waveを処理する（収束まで）。
+    /// 全Stepを処理する（収束まで）。
     /// </summary>
     /// <param name="executeAction">各キューに対して実行するアクション</param>
     /// <returns>処理結果</returns>
-    public WaveProcessingResult ProcessAllWaves(Action<IWaveProcessable> executeAction)
+    public StepProcessingResult ProcessAllSteps(Action<IStepProcessable> executeAction)
     {
         if (_isProcessing)
         {
-            throw new InvalidOperationException("WaveProcessor is already processing. Recursive call is not allowed.");
+            throw new InvalidOperationException("StepProcessor is already processing. Recursive call is not allowed.");
         }
 
         _isProcessing = true;
-        _currentWaveDepth = 0;
+        _currentStepDepth = 0;
 
         try
         {
             while (HasPendingCommands())
             {
-                if (_currentWaveDepth >= _maxWaveDepth)
+                if (_currentStepDepth >= _maxStepDepth)
                 {
-                    OnDepthExceeded?.Invoke(_currentWaveDepth);
-                    return WaveProcessingResult.DepthExceeded;
+                    OnDepthExceeded?.Invoke(_currentStepDepth);
+                    return StepProcessingResult.DepthExceeded;
                 }
 
-                ProcessSingleWave(executeAction);
+                ProcessSingleStep(executeAction);
             }
 
-            return _currentWaveDepth == 0
-                ? WaveProcessingResult.Empty
-                : WaveProcessingResult.Completed;
+            return _currentStepDepth == 0
+                ? StepProcessingResult.Empty
+                : StepProcessingResult.Completed;
         }
         finally
         {
@@ -235,14 +251,14 @@ public sealed class WaveProcessor
     public void Clear()
     {
         _activeQueues.Clear();
-        _currentWaveDepth = 0;
+        _currentStepDepth = 0;
     }
 }
 
 /// <summary>
-/// Wave処理の結果
+/// Step処理の結果
 /// </summary>
-public enum WaveProcessingResult
+public enum StepProcessingResult
 {
     /// <summary>
     /// 処理するコマンドがなかった
@@ -255,7 +271,7 @@ public enum WaveProcessingResult
     Completed,
 
     /// <summary>
-    /// Wave深度が上限を超えた
+    /// Step深度が上限を超えた
     /// </summary>
     DepthExceeded
 }

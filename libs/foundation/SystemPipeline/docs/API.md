@@ -123,25 +123,25 @@ public void OrderEntities(IReadOnlyList<AnyHandle> input, List<AnyHandle> output
 
 ### IMessageQueueSystem
 
-Wave処理システムのインターフェース。
+Step処理システムのインターフェース。
 
 ```csharp
 public interface IMessageQueueSystem : ISystem
 {
-    int MaxWaveDepth { get; }
+    int MaxStepDepth { get; }
     IMessageHandlerRegistry HandlerRegistry { get; }
-    void ProcessWaves(IEntityRegistry registry, in SystemContext context);
+    void ProcessSteps(IEntityRegistry registry, in SystemContext context);
 }
 ```
 
 | プロパティ | 型 | 説明 |
 |-----------|-----|------|
-| `MaxWaveDepth` | `int` | 最大Wave数（無限ループ防止） |
+| `MaxStepDepth` | `int` | 最大Step数（無限ループ防止） |
 | `HandlerRegistry` | `IMessageHandlerRegistry` | メッセージハンドラ |
 
 | メソッド | 説明 |
 |---------|------|
-| `ProcessWaves` | Wave単位でメッセージを処理 |
+| `ProcessSteps` | Step単位でメッセージを処理 |
 
 ---
 
@@ -410,7 +410,7 @@ public static class SystemExecutor
 | `Execute` | システムの型に応じた適切な実行メソッドを呼び出す |
 
 **実行フロー:**
-1. `IMessageQueueSystem` → `ProcessWaves`
+1. `IMessageQueueSystem` → `ProcessSteps`
 2. `IOrderedSerialSystem` → `OrderEntities` + `ProcessSerial`
 3. `ISerialSystem` → `ProcessSerial`
 4. `IParallelSystem` → `Parallel.For` + `ProcessEntity`
@@ -483,13 +483,13 @@ public readonly struct AnyHandle
 [AttributeUsage(AttributeTargets.Struct)]
 public class MessageQueueAttribute : Attribute
 {
-    public int MaxWaveDepth { get; set; } = 100;
+    public int MaxStepDepth { get; set; } = 100;
 }
 ```
 
 | プロパティ | 型 | デフォルト | 説明 |
 |-----------|-----|----------|------|
-| `MaxWaveDepth` | `int` | `100` | 最大Wave深度 |
+| `MaxStepDepth` | `int` | `100` | 最大Step深度 |
 
 **使用例:**
 
@@ -497,7 +497,7 @@ public class MessageQueueAttribute : Attribute
 [MessageQueue]
 public partial struct DamageQueue { }
 
-[MessageQueue(MaxWaveDepth = 50)]
+[MessageQueue(MaxStepDepth = 50)]
 public partial struct EventQueue { }
 ```
 
@@ -666,10 +666,10 @@ queue.Enqueue(new DamageMessage { Amount = 50 });
 Unknown system type: {TypeName}. System must implement ISerialSystem, IParallelSystem, or IMessageQueueSystem.
 ```
 
-### IMessageQueueSystem.ProcessWaves
+### IMessageQueueSystem.ProcessSteps
 
-最大Wave深度を超えた場合、`InvalidOperationException`をスロー:
+最大Step深度を超えた場合、`InvalidOperationException`をスロー:
 
 ```
-Maximum wave depth ({MaxWaveDepth}) exceeded. Possible infinite loop.
+Maximum wave depth ({MaxStepDepth}) exceeded. Possible infinite loop.
 ```

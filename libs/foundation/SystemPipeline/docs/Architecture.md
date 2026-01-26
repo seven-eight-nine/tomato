@@ -114,26 +114,26 @@ var group = new SerialSystemGroup(
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### MessageQueue System (Wave Processing)
+### MessageQueue System (Step Processing)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              MessageQueueSystem.ProcessWaves                 │
+│              MessageQueueSystem.ProcessSteps                 │
 ├─────────────────────────────────────────────────────────────┤
-│  Wave 1:                                                     │
+│  Step 1:                                                     │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │ Entity[0].Queue → Process → (新メッセージ追加可能)   │    │
 │  │ Entity[1].Queue → Process → (新メッセージ追加可能)   │    │
 │  │ Entity[2].Queue → Process → (新メッセージ追加可能)   │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                          ↓                                   │
-│  Wave 2: (Wave 1で追加されたメッセージを処理)               │
+│  Step 2: (Step 1で追加されたメッセージを処理)               │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │ Entity[0].Queue → Process                            │    │
 │  │ Entity[1].Queue → Process                            │    │
 │  └─────────────────────────────────────────────────────┘    │
 │                          ↓                                   │
-│  Wave N: (キューが空になるまで繰り返し)                      │
+│  Step N: (キューが空になるまで繰り返し)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -208,7 +208,7 @@ var group = new SerialSystemGroup(
 ┌────────────────────────────────────────────────────┐
 │ public sealed class DamageQSystem : IMessageQueueSystem │
 │ {                                                   │
-│     public void ProcessWaves(...) { ... }          │
+│     public void ProcessSteps(...) { ... }          │
 │ }                                                   │
 └────────────────────────────────────────────────────┘
 ```

@@ -10,7 +10,7 @@ GameLoopは以下の責務を持つ:
 1. **Entity単位のコンテキスト管理** - ActionStateMachineをEntityに紐付け
 2. **6フェーズゲームループの統括** - Collision→Message→Decision→Execution→Reconciliation→Cleanup
 3. **CharacterSpawnSystemとの連携** - スポーン/デスポーンイベントをEntityContextに橋渡し
-4. **CommandGeneratorとの連携** - MessageHandlerQueueとWaveProcessorによるメッセージ処理
+4. **CommandGeneratorとの連携** - MessageHandlerQueueとStepProcessorによるメッセージ処理
 
 ## アーキテクチャ
 
@@ -20,7 +20,7 @@ GameLoopは以下の責務を持つ:
 ├─────────────────────────────────────────────────────────────────────┤
 │  UpdateGroup:                                                       │
 │    1. CollisionSystem      - 外部衝突結果をメッセージ化             │
-│    2. MessageSystem        - WaveProcessorでメッセージ処理          │
+│    2. MessageSystem        - StepProcessorでメッセージ処理          │
 │    3. DecisionSystem       - アクション選択（読み取り専用）         │
 │    4. ExecutionSystem      - アクション実行                         │
 │                                                                     │
@@ -32,9 +32,9 @@ GameLoopは以下の責務を持つ:
         ┌───────────────────────┼───────────────────────┐
         ▼                       ▼                       ▼
 ┌─────────────────┐   ┌─────────────────────┐   ┌─────────────────┐
-│ EntityContext   │   │ MessageHandlerQueue │   │ WaveProcessor   │
+│ EntityContext   │   │ MessageHandlerQueue │   │ StepProcessor   │
 │ Registry        │   │ [CommandQueue]      │   │                 │
-│                 │   │                     │   │ Wave処理        │
+│                 │   │                     │   │ Step処理        │
 │ Entity管理      │   │ ゲーム固有コマンド  │   │ 収束まで実行    │
 └─────────────────┘   └─────────────────────┘   └─────────────────┘
 ```
@@ -100,7 +100,7 @@ public interface ICollisionSource
 | フェーズ | クラス | 責務 |
 |----------|--------|------|
 | 1. Collision | `CollisionSystem` | ICollisionSourceから衝突結果を取得、ICollisionMessageEmitterでコマンド発行 |
-| 2. Message | `MessageSystem` | WaveProcessorでMessageHandlerQueue処理 |
+| 2. Message | `MessageSystem` | StepProcessorでMessageHandlerQueue処理 |
 | 3. Decision | `DecisionSystem<TCategory>` | ActionSelectorでアクション選択【読み取り専用】【並列可】 |
 | 4. Execution | `ExecutionSystem<TCategory>` | ActionStateMachineでアクション実行 |
 | 5. Reconciliation | `ReconciliationSystem` | 依存順計算、位置調停 |
@@ -149,7 +149,7 @@ var registry = new EntityContextRegistry<ActionCategory>();
 
 // 3. メッセージ処理コンポーネント
 var messageQueue = new MessageHandlerQueue();
-var waveProcessor = new WaveProcessor(maxWaveDepth: 100);
+var waveProcessor = new StepProcessor(maxStepDepth: 100);
 
 // 4. 衝突ソース（ゲーム側で実装）
 // CollisionSystemを使用して衝突検出を行い、CollisionPairのリストを提供
@@ -365,7 +365,7 @@ public class MyEntityInitializer : IEntityInitializer<ActionCategory>
 ```
 GameLoop.Core
 ├── EntityHandleSystem.Attributes  (AnyHandle)
-├── CommandGenerator.Attributes    (WaveProcessor, IWaveProcessable)
+├── CommandGenerator.Attributes    (StepProcessor, IStepProcessable)
 ├── CommandGenerator.Core          (MessageHandlerQueue)
 ├── SystemPipeline.Core            (Pipeline, SystemGroup, ISystem)
 ├── ActionSelector                 (ActionSelector, IActionJudgment)
@@ -449,7 +449,7 @@ GameLoop/
 メッセージ処理は`[CommandQueue]`属性で定義された`MessageHandlerQueue`を使用。
 - ゲーム固有のコマンド（`DamageCommand`, `HealCommand`等）は`[Command<MessageHandlerQueue>]`でゲーム側で定義
 - 優先度付きエンキューと自動プーリング
-- `WaveProcessor`による収束処理
+- `StepProcessor`による収束処理
 
 ### 状態変更の一元化
 

@@ -16,7 +16,7 @@ CommandGeneratorは、コマンドパターンの実装を自動化し、ゲー�
 - **優先度制御** - コマンドの実行順序を細かく制御
 - **メモリ効率** - オブジェクトプーリングによる最適化
 - **型安全** - コンパイル時の型チェック
-- **メッセージシステム** - Entity間通信のためのWave型メッセージ処理
+- **メッセージシステム** - Entity間通信のためのStep型メッセージ処理
 
 ## 特徴
 
@@ -26,7 +26,7 @@ CommandGeneratorは、コマンドパターンの実装を自動化し、ゲー�
 - **複数キュー対応** - 1つのコマンドを複数のキューに登録可能
 - **型安全** - ジェネリクスによる型安全性
 - **メッセージ配送** - AnyHandleベースのEntity間メッセージング
-- **Wave処理** - 決定論的なメッセージ処理
+- **Step処理** - 決定論的なメッセージ処理
 
 ## クイックスタート
 
@@ -313,6 +313,76 @@ void OnReceivePacket(byte[] data)
 }
 ```
 
+## StepProcessor
+
+StepProcessorは複数のコマンドキューを管理し、Step単位で処理を実行するプロセッサです。各Stepで全キューを処理し、新たなコマンドが追加されると次のStepで処理されます。
+
+### 基本的な使用
+
+```csharp
+var processor = new StepProcessor(maxStepDepth: 100);
+
+// キューを登録
+processor.Register(queue1);
+processor.Register(queue2);
+
+// コマンドをエンキュー
+queue1.Enqueue<DamageCommand>(cmd => cmd.Amount = 50);
+queue2.Enqueue<HealCommand>(cmd => cmd.Amount = 30);
+
+// 収束まで処理を実行
+var result = processor.ProcessAllSteps(q =>
+{
+    ((IStepProcessable)q).MergePendingToCurrentStep();
+    // キュー固有の実行処理
+});
+```
+
+### 並列処理オプション
+
+`EnableParallelProcessing`を有効にすると、各Step内で複数のキューを並列に処理します。Step単位での同期は維持されるため、決定論的な動作が保証されます。
+
+```csharp
+var processor = new StepProcessor
+{
+    EnableParallelProcessing = true  // 並列処理を有効化
+};
+
+// 各Step内でqueue1, queue2, queue3が並列処理される
+processor.Register(queue1);
+processor.Register(queue2);
+processor.Register(queue3);
+
+// 実行アクションはスレッドセーフに実装する必要あり
+processor.ProcessAllSteps(q =>
+{
+    // 並列実行される可能性があるため、共有状態への書き込みは避ける
+    ExecuteQueue(q);
+});
+```
+
+| 設定 | 動作 |
+|------|------|
+| `EnableParallelProcessing = false` (デフォルト) | 逐次処理（キューを順番に処理） |
+| `EnableParallelProcessing = true` | Queue単位で並列処理、Step完了後に次のStepへ |
+
+### EnqueueTiming
+
+コマンドのエンキュー時にタイミングを指定できます。
+
+```csharp
+// 次のStepで実行（デフォルト）
+queue.Enqueue<DamageCommand>(cmd => { }, EnqueueTiming.NextStep);
+
+// 次のフレームで実行
+queue.Enqueue<DamageCommand>(cmd => { }, EnqueueTiming.NextFrame);
+```
+
+| タイミング | 説明 |
+|-----------|------|
+| `NextStep` | 同一フレーム内の次Step処理時に実行 |
+| `NextFrame` | 次フレームの先頭Step処理時に実行 |
+
 ## API リファレンス
 
 ### Command属性
@@ -337,6 +407,28 @@ void OnReceivePacket(byte[] data)
 | `Queue.Execute()` | キューのコマンドを実行 |
 | `Queue.Clear()` | Pending/NextFrameキューをクリア |
 | `Queue.ForceClear()` | 全キューを強制クリア |
+
+### StepProcessor
+
+| プロパティ/メソッド | 説明 |
+|-------------------|------|
+| `CurrentStepDepth` | 現在のStep深度 |
+| `MaxStepDepth` | 最大Step深度 |
+| `EnableParallelProcessing` | 並列処理有効化（デフォルト: false） |
+| `Register(queue)` | キューを登録 |
+| `Unregister(queue)` | キューの登録解除 |
+| `BeginFrame()` | フレーム開始処理（NextFrameキューをマージ） |
+| `ProcessSingleStep(action)` | 単一Stepを処理 |
+| `ProcessAllSteps(action)` | 収束まで全Stepを処理 |
+| `Clear()` | アクティブキューをクリア |
+
+### StepProcessingResult
+
+| 値 | 説明 |
+|-----|------|
+| `Empty` | 処理するコマンドがなかった |
+| `Completed` | 正常に収束した |
+| `DepthExceeded` | Step深度が上限を超えた |
 
 ## ベストプラクティス
 

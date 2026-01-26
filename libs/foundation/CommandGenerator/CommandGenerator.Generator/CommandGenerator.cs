@@ -420,14 +420,14 @@ public sealed class CommandGenerator : IIncrementalGenerator
 
         sb.AppendLine($"{indent}/// <summary>");
         sb.AppendLine($"{indent}/// {info.ClassName} を処理するMessageQueueSystem。");
-        sb.AppendLine($"{indent}/// WaveProcessorを内蔵し、コマンドの収束まで処理を実行します。");
+        sb.AppendLine($"{indent}/// StepProcessorを内蔵し、コマンドの収束まで処理を実行します。");
         sb.AppendLine($"{indent}/// </summary>");
         sb.AppendLine($"{indent}public sealed class {systemClassName} : IMessageQueueSystem");
         sb.AppendLine($"{indent}{{");
 
         // Fields
         sb.AppendLine($"{indent2}private readonly {info.ClassName} _queue;");
-        sb.AppendLine($"{indent2}private readonly WaveProcessor _waveProcessor;");
+        sb.AppendLine($"{indent2}private readonly StepProcessor _stepProcessor;");
         sb.AppendLine();
 
         // Properties
@@ -437,8 +437,8 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// <inheritdoc/>");
         sb.AppendLine($"{indent2}public IEntityQuery? Query => null;");
         sb.AppendLine();
-        sb.AppendLine($"{indent2}/// <summary>現在のWave深度</summary>");
-        sb.AppendLine($"{indent2}public int CurrentWaveDepth => _waveProcessor.CurrentWaveDepth;");
+        sb.AppendLine($"{indent2}/// <summary>現在のStep深度</summary>");
+        sb.AppendLine($"{indent2}public int CurrentStepDepth => _stepProcessor.CurrentStepDepth;");
         sb.AppendLine();
         sb.AppendLine($"{indent2}/// <summary>キューを取得します</summary>");
         sb.AppendLine($"{indent2}public {info.ClassName} Queue => _queue;");
@@ -449,12 +449,12 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// {systemClassName}を生成します。");
         sb.AppendLine($"{indent2}/// </summary>");
         sb.AppendLine($"{indent2}/// <param name=\"queue\">処理対象のキュー</param>");
-        sb.AppendLine($"{indent2}/// <param name=\"maxWaveDepth\">最大Wave深度（デフォルト100）</param>");
-        sb.AppendLine($"{indent2}public {systemClassName}({info.ClassName} queue, int maxWaveDepth = 100)");
+        sb.AppendLine($"{indent2}/// <param name=\"maxStepDepth\">最大Step深度（デフォルト100）</param>");
+        sb.AppendLine($"{indent2}public {systemClassName}({info.ClassName} queue, int maxStepDepth = 100)");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}_queue = queue ?? throw new ArgumentNullException(nameof(queue));");
-        sb.AppendLine($"{indent3}_waveProcessor = new WaveProcessor(maxWaveDepth);");
-        sb.AppendLine($"{indent3}_waveProcessor.Register(_queue);");
+        sb.AppendLine($"{indent3}_stepProcessor = new StepProcessor(maxStepDepth);");
+        sb.AppendLine($"{indent3}_stepProcessor.Register(_queue);");
         sb.AppendLine($"{indent2}}}");
         sb.AppendLine();
 
@@ -462,7 +462,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// <inheritdoc/>");
         sb.AppendLine($"{indent2}public void ProcessMessages(IEntityRegistry registry, in SystemContext context)");
         sb.AppendLine($"{indent2}{{");
-        sb.AppendLine($"{indent3}_waveProcessor.BeginFrame();");
+        sb.AppendLine($"{indent3}_stepProcessor.BeginFrame();");
 
         // Generate execute call based on methods
         if (info.Methods.Length > 0)
@@ -480,8 +480,8 @@ public sealed class CommandGenerator : IIncrementalGenerator
             }
             else
             {
-                // 引数なしメソッド（Wave収束まで処理）
-                sb.AppendLine($"{indent3}_waveProcessor.ProcessAllWaves(_ => _queue.{method.MethodName}());");
+                // 引数なしメソッド（Step収束まで処理）
+                sb.AppendLine($"{indent3}_stepProcessor.ProcessAllSteps(_ => _queue.{method.MethodName}());");
             }
         }
         sb.AppendLine($"{indent2}}}");
@@ -526,7 +526,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         var indent3 = indent2 + "    ";
         var indent4 = indent3 + "    ";
 
-        sb.AppendLine($"{indent}public partial class {info.ClassName} : IWaveProcessable");
+        sb.AppendLine($"{indent}public partial class {info.ClassName} : IStepProcessable");
         sb.AppendLine($"{indent}{{");
 
         // Queue Storage
@@ -566,7 +566,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         // キュー関連フィールド
-        sb.AppendLine($"{indent2}// トリプルバッファリング：現在実行中、次Wave用、次フレーム用");
+        sb.AppendLine($"{indent2}// トリプルバッファリング：現在実行中、次Step用、次フレーム用");
         sb.AppendLine($"{indent2}private List<QueueEntry> _currentQueue = new(64);");
         sb.AppendLine($"{indent2}private List<QueueEntry> _pendingQueue = new(64);");
         sb.AppendLine($"{indent2}private List<QueueEntry> _nextFrameQueue = new(64);");
@@ -577,8 +577,8 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}// シグナルコマンド追跡（同一タイプは1つしかキューに入らない）");
         sb.AppendLine($"{indent2}private readonly HashSet<Type> _signalTypes = new();");
         sb.AppendLine();
-        sb.AppendLine($"{indent2}// IWaveProcessable: Enqueue時のコールバック");
-        sb.AppendLine($"{indent2}public Action<IWaveProcessable>? OnEnqueue {{ get; set; }}");
+        sb.AppendLine($"{indent2}// IStepProcessable: Enqueue時のコールバック");
+        sb.AppendLine($"{indent2}public Action<IStepProcessable>? OnEnqueue {{ get; set; }}");
         sb.AppendLine();
         sb.AppendLine($"{indent2}#endregion");
         sb.AppendLine();
@@ -590,10 +590,10 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// コマンドをキューに追加する（マルチスレッドセーフ）");
         sb.AppendLine($"{indent2}/// </summary>");
         sb.AppendLine($"{indent2}/// <param name=\"initializer\">コマンドの初期化処理</param>");
-        sb.AppendLine($"{indent2}/// <param name=\"timing\">実行タイミング（デフォルト: NextWave）</param>");
+        sb.AppendLine($"{indent2}/// <param name=\"timing\">実行タイミング（デフォルト: NextStep）</param>");
         sb.AppendLine($"{indent2}/// <returns>エンキューが成功したかどうか（Signalコマンドで既に同タイプがある場合はfalse）</returns>");
         sb.AppendLine($"{indent2}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine($"{indent2}public bool Enqueue<TCommand>(Action<TCommand> initializer, EnqueueTiming timing = EnqueueTiming.NextWave)");
+        sb.AppendLine($"{indent2}public bool Enqueue<TCommand>(Action<TCommand> initializer, EnqueueTiming timing = EnqueueTiming.NextStep)");
         sb.AppendLine($"{indent3}where TCommand : class, {info.InterfaceName}, ICommandPoolable<TCommand>, new()");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}// プールから取得");
@@ -637,7 +637,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent4}}}");
         sb.AppendLine($"{indent3}}}");
         sb.AppendLine();
-        sb.AppendLine($"{indent3}// WaveProcessorに通知");
+        sb.AppendLine($"{indent3}// StepProcessorに通知");
         sb.AppendLine($"{indent3}OnEnqueue?.Invoke(this);");
         sb.AppendLine($"{indent3}return true;");
         sb.AppendLine($"{indent2}}}");
@@ -658,7 +658,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}private void PrepareExecution()");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}// Pendingキューをswap（アロケーション回避）");
-        sb.AppendLine($"{indent3}// pendingが空なら何もしない（MergePendingToCurrentWave後の重複呼び出し対策）");
+        sb.AppendLine($"{indent3}// pendingが空なら何もしない（MergePendingToCurrentStep後の重複呼び出し対策）");
         sb.AppendLine($"{indent3}lock (_pendingLock)");
         sb.AppendLine($"{indent3}{{");
         sb.AppendLine($"{indent4}if (_pendingQueue.Count > 0)");
@@ -795,8 +795,8 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}#endregion");
         sb.AppendLine();
 
-        // IWaveProcessable実装
-        sb.AppendLine($"{indent2}#region IWaveProcessable Implementation");
+        // IStepProcessable実装
+        sb.AppendLine($"{indent2}#region IStepProcessable Implementation");
         sb.AppendLine();
         sb.AppendLine($"{indent2}/// <summary>");
         sb.AppendLine($"{indent2}/// 処理待ちのコマンドがあるかどうか");
@@ -817,7 +817,7 @@ public sealed class CommandGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent2}/// PendingQueueをCurrentQueueにswapする");
         sb.AppendLine($"{indent2}/// </summary>");
         sb.AppendLine($"{indent2}[MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine($"{indent2}public void MergePendingToCurrentWave()");
+        sb.AppendLine($"{indent2}public void MergePendingToCurrentStep()");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}lock (_pendingLock)");
         sb.AppendLine($"{indent3}{{");

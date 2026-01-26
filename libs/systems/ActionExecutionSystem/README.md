@@ -1,6 +1,6 @@
 # ActionExecutionSystem
 
-ActionSelectorで決定された行動を実行し、状態機械を管理するシステム。第四更新（ExecutionPhase）を担当する。
+ActionSelectorで決定された行動を実行し、状態機械を管理するシステム。
 
 ## 設計原則
 
@@ -13,37 +13,25 @@ ActionSelectorで決定された行動を実行し、状態機械を管理する
 ## アーキテクチャ
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                 ActionExecutionSystem                    │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │            ActionStateMachine<TCategory>         │   │
-│  │  - カテゴリ単位のアクション状態管理              │   │
-│  │  - アクションの開始/更新/終了                   │   │
-│  │  - Executorへのコールバック                     │   │
-│  └─────────────────────────────────────────────────┘   │
-│                         │                                │
-│                         ▼                                │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │    IExecutableAction<TCategory> (実行中アクション) │   │
-│  │  - ActionId, Category                            │   │
-│  │  - ElapsedTime/ElapsedFrames                     │   │
-│  │  - IsComplete, CanCancel                         │   │
-│  │  - MotionData (移動データ)                       │   │
-│  │  - GetTransitionableJudgments() (コンボ遷移)     │   │
-│  └─────────────────────────────────────────────────┘   │
-│                         │                                │
-│                         ▼                                │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │         ActionDefinition<TCategory>              │   │
-│  │  - TotalFrames                                   │   │
-│  │  - CancelWindow (キャンセル可能フレーム)        │   │
-│  │  - HitboxWindow (ヒットボックス発生)            │   │
-│  │  - InvincibleWindow (無敵フレーム)              │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                   ActionExecutionSystem                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │           ActionStateMachine<TCategory>                  │   │
+│  │  - カテゴリ単位のアクション状態管理                      │   │
+│  │  - アクションの開始/更新/終了                            │   │
+│  │  - Executorへのコールバック                              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    MotionGraph                           │   │
+│  │  - HierarchicalStateMachineベースのモーション管理        │   │
+│  │  - フレームベースの状態遷移                              │   │
+│  │  - TimelineSystemによるフレームイベント                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## コンポーネント
@@ -70,6 +58,17 @@ ActionSelectorで決定された行動を実行し、状態機械を管理する
 - `MotionFrame` - 1フレームのモーション
 - `LinearMotionData` - 線形補間モーション
 - `ConstantMotionData` - 一定値モーション
+
+### MotionGraph
+
+HierarchicalStateMachineをベースにしたフレームベースのモーション状態管理。
+
+- `MotionStateMachine` - モーション専用のステートマシン
+- `MotionState` - モーション状態（IState<MotionContext>実装）
+- `MotionContext` - モーション状態管理用コンテキスト
+- `MotionDefinition` - モーション定義（ID、フレーム数、タイムライン）
+- `MotionTransitionCondition` - 遷移条件ユーティリティ
+- `IMotionExecutor` - モーション実行コールバック
 
 ## 使用例
 
@@ -113,6 +112,118 @@ if (!machine.IsRunning(ActionCategory.Upper))
 }
 ```
 
+### MotionGraphによるモーション管理
+
+MotionGraphはフレームベースのモーション状態を管理する。アクション選択の判断はActionSelectorの責務であり、MotionGraphはキャンセル可能かどうかの情報（ElapsedFrames等）を提供するだけ。ActionSelectorは常に回り、キャンセル可能な場合はコンボ系ジャッジメントを追加、ダメージ遷移等は常に追加という形でジャッジメントリストを構築する。
+
+```csharp
+using Tomato.ActionExecutionSystem.MotionGraph;
+using Tomato.HierarchicalStateMachine;
+using Tomato.TimelineSystem;
+
+// モーション定義を作成
+var idleDefinition = new MotionDefinition(
+    motionId: "Idle",
+    totalFrames: 60,
+    timeline: new Sequence());
+
+var walkDefinition = new MotionDefinition(
+    motionId: "Walk",
+    totalFrames: 30,
+    timeline: new Sequence());
+
+// 状態を作成
+var idleState = new MotionState(idleDefinition);
+var walkState = new MotionState(walkDefinition);
+
+// 状態グラフを構築
+var graph = new StateGraph<MotionContext>()
+    .AddState(idleState)
+    .AddState(walkState)
+    .AddTransition(new Transition<MotionContext>(
+        "Idle", "Walk", 1f,
+        MotionTransitionCondition.Always()))
+    .AddTransition(new Transition<MotionContext>(
+        "Walk", "Idle", 1f,
+        MotionTransitionCondition.IsComplete()));
+
+// ステートマシンを作成・初期化
+var machine = new MotionStateMachine(graph);
+machine.Initialize("Idle");
+
+// 毎フレーム更新
+machine.Update(deltaTime);
+
+// 遷移を試行
+if (machine.TryTransitionTo("Walk"))
+{
+    Console.WriteLine("Transitioned to Walk");
+}
+
+// 現在のモーション完了チェック
+if (machine.IsCurrentMotionComplete())
+{
+    Console.WriteLine("Motion completed");
+}
+```
+
+### 遷移条件の組み合わせ
+
+```csharp
+// フレーム条件
+var afterFrame30 = MotionTransitionCondition.AfterFrame(30);
+
+// フレーム範囲条件
+var inRange = MotionTransitionCondition.InFrameRange(10, 50);
+
+// モーション完了条件
+var isComplete = MotionTransitionCondition.IsComplete();
+
+// 条件の組み合わせ
+var combined = MotionTransitionCondition.And(
+    MotionTransitionCondition.AfterFrame(20),
+    MotionTransitionCondition.InFrameRange(20, 40));
+
+var either = MotionTransitionCondition.Or(
+    MotionTransitionCondition.IsComplete(),
+    MotionTransitionCondition.AfterFrame(60));
+```
+
+### IMotionExecutorによるコールバック
+
+```csharp
+public class CharacterMotionExecutor : IMotionExecutor
+{
+    private readonly IAnimationController _animation;
+
+    public CharacterMotionExecutor(IAnimationController animation)
+    {
+        _animation = animation;
+    }
+
+    public void OnMotionStart(string motionId)
+    {
+        _animation.Play(motionId);
+    }
+
+    public void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime)
+    {
+        // フレームごとの処理
+    }
+
+    public void OnMotionEnd(string motionId)
+    {
+        // クリーンアップ
+    }
+}
+
+// Executorを設定
+var executor = new CharacterMotionExecutor(animationController);
+var machine = new MotionStateMachine(graph, executor);
+// または
+machine.SetExecutor(executor);
+```
+
 ### ActionSelectorとの統合
 
 ```csharp
@@ -133,74 +244,6 @@ if (result.TryGetRequested(ActionCategory.Upper, out var requested))
 }
 ```
 
-### コンボ遷移
-
-```csharp
-// Attack1 -> Attack2 への遷移を設定
-var attack2Judgment = new SimpleJudgment<ActionCategory>(
-    "Attack2", ActionCategory.Upper, ActionPriority.Normal);
-
-var attack1Action = new StandardExecutableAction<ActionCategory>(
-    attack1Definition,
-    transitionTargets: new[] { attack2Judgment });
-
-machine.StartAction(ActionCategory.Upper, attack1Action);
-
-// フレーム更新
-while (!attack1Action.IsComplete)
-{
-    machine.Update(deltaTime);
-
-    // CancelWindow内であれば遷移可能
-    if (attack1Action.CanCancel)
-    {
-        var transitions = attack1Action.GetTransitionableJudgments();
-        var comboResult = engine.ProcessFrame(transitions.ToArray(), state);
-
-        if (comboResult.TryGetRequested(ActionCategory.Upper, out var combo))
-        {
-            // Attack2に遷移
-            var nextDef = registry.Get(combo.ActionId)!;
-            machine.StartAction(ActionCategory.Upper,
-                new StandardExecutableAction<ActionCategory>(nextDef));
-            break;
-        }
-    }
-}
-```
-
-### Executorによるカスタム処理
-
-```csharp
-public class CharacterExecutor : IActionExecutor<ActionCategory>
-{
-    private readonly IAnimationController _animation;
-
-    public void OnActionStart(IExecutableAction<ActionCategory> action)
-    {
-        _animation.Play(action.ActionId);
-    }
-
-    public void OnActionUpdate(IExecutableAction<ActionCategory> action, float deltaTime)
-    {
-        // モーションデータがあれば適用
-        if (action.MotionData != null)
-        {
-            var frame = action.MotionData.Evaluate(action.ElapsedTime);
-            ApplyRootMotion(frame.DeltaPosition);
-        }
-    }
-
-    public void OnActionEnd(IExecutableAction<ActionCategory> action)
-    {
-        // クリーンアップ
-    }
-}
-
-// Executorを登録
-machine.RegisterExecutor(ActionCategory.Upper, new CharacterExecutor());
-```
-
 ## 処理フロー
 
 1. `ActionSelector.ProcessFrame()` でアクションを選択
@@ -214,14 +257,16 @@ machine.RegisterExecutor(ActionCategory.Upper, new CharacterExecutor());
 ## テスト
 
 ```bash
-dotnet test libs/ActionExecutionSystem/ActionExecutionSystem.Tests/
+dotnet test libs/systems/ActionExecutionSystem/ActionExecutionSystem.Tests/
 ```
 
-現在のテスト数: 46
+現在のテスト数: 81
 
 ## 依存関係
 
-- ActionSelector - アクション選択システム（IRunningAction, IActionJudgment）
+- ActionSelector - アクション選択システム
+- HierarchicalStateMachine - 階層型ステートマシン（MotionGraph用）
+- TimelineSystem - フレームベースのイベント管理（MotionGraph用）
 
 ## ディレクトリ構造
 
@@ -244,8 +289,15 @@ ActionExecutionSystem/
 │   │   ├── MotionFrame.cs
 │   │   ├── LinearMotionData.cs
 │   │   └── ConstantMotionData.cs
-│   └── Frame/
-│       └── FrameWindow.cs
+│   ├── Frame/
+│   │   └── FrameWindow.cs
+│   └── MotionGraph/
+│       ├── IMotionExecutor.cs
+│       ├── MotionContext.cs
+│       ├── MotionDefinition.cs
+│       ├── MotionState.cs
+│       ├── MotionStateMachine.cs
+│       └── MotionTransitionCondition.cs
 └── ActionExecutionSystem.Tests/
     ├── ActionExecutionSystem.Tests.csproj
     ├── FrameWindowTests.cs
@@ -253,7 +305,12 @@ ActionExecutionSystem/
     ├── ExecutableActionTests.cs
     ├── ActionStateMachineTests.cs
     ├── MotionDataTests.cs
-    └── ActionSelectorIntegrationTests.cs
+    ├── ActionSelectorIntegrationTests.cs
+    └── MotionGraph/
+        ├── MotionContextTests.cs
+        ├── MotionStateTests.cs
+        ├── MotionStateMachineTests.cs
+        └── MotionTransitionConditionTests.cs
 ```
 
 ## ライセンス

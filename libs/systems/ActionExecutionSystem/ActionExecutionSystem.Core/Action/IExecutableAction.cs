@@ -10,6 +10,9 @@ namespace Tomato.ActionExecutionSystem;
 public interface IExecutableAction<TCategory> : IRunningAction<TCategory>
     where TCategory : struct, Enum
 {
+    /// <summary>アクションID。</summary>
+    string ActionId { get; }
+
     /// <summary>カテゴリ。</summary>
     TCategory Category { get; }
 

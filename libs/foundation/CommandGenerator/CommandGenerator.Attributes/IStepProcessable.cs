@@ -3,10 +3,10 @@ using System;
 namespace Tomato.CommandGenerator;
 
 /// <summary>
-/// WaveProcessorによって処理可能なコマンドキューのインターフェース。
+/// StepProcessorによって処理可能なコマンドキューのインターフェース。
 /// CommandQueue属性を持つクラスに自動実装される。
 /// </summary>
-public interface IWaveProcessable
+public interface IStepProcessable
 {
     /// <summary>
     /// 処理待ちのコマンドがあるかどうか。
@@ -16,9 +16,9 @@ public interface IWaveProcessable
 
     /// <summary>
     /// PendingQueueのコマンドをCurrentQueueにマージする。
-    /// Wave処理の開始時に呼び出される。
+    /// Step処理の開始時に呼び出される。
     /// </summary>
-    void MergePendingToCurrentWave();
+    void MergePendingToCurrentStep();
 
     /// <summary>
     /// NextFrameQueueのコマンドをPendingQueueにマージする。
@@ -28,8 +28,8 @@ public interface IWaveProcessable
 
     /// <summary>
     /// Enqueue時に呼び出されるコールバック。
-    /// WaveProcessorがこのキューをアクティブとしてマークするために使用。
+    /// StepProcessorがこのキューをアクティブとしてマークするために使用。
     /// nullの場合は何も呼び出されない。
     /// </summary>
-    Action<IWaveProcessable>? OnEnqueue { get; set; }
+    Action<IStepProcessable>? OnEnqueue { get; set; }
 }
