@@ -104,6 +104,7 @@ public class LoaderTests
 
         loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
 
         Assert.True(resource.StartCalled);
 
@@ -119,6 +120,7 @@ public class LoaderTests
 
         loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         var result = loader.Tick();
 
         Assert.True(result);
@@ -137,6 +139,7 @@ public class LoaderTests
 
         loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         var result = loader.Tick();
 
         Assert.False(result);
@@ -157,12 +160,15 @@ public class LoaderTests
         loader.Request("slow");
         loader.Execute();
 
+        catalog.Tick();
         Assert.False(loader.Tick()); // Tick 1
         Assert.Equal(1, loader.LoadedCount);
 
+        catalog.Tick();
         Assert.False(loader.Tick()); // Tick 2
         Assert.Equal(1, loader.LoadedCount);
 
+        catalog.Tick();
         Assert.True(loader.Tick()); // Tick 3
         Assert.Equal(2, loader.LoadedCount);
         Assert.Equal(LoaderState.Loaded, loader.State);
@@ -182,8 +188,11 @@ public class LoaderTests
         loader.Request("test/resource");
         loader.Execute();
 
+        catalog.Tick();
         Assert.False(loader.Tick()); // Fail 1
+        catalog.Tick();
         Assert.False(loader.Tick()); // Fail 2
+        catalog.Tick();
         Assert.True(loader.Tick());  // Success
 
         Assert.Equal(2, resource.FailCount);
@@ -201,9 +210,11 @@ public class LoaderTests
 
         loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         loader.Dispose();
+        catalog.Tick();
 
         Assert.True(resource.UnloadCalled);
     }
@@ -218,9 +229,11 @@ public class LoaderTests
 
         loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         loader.Dispose();
+        catalog.Tick();
 
         Assert.True(resource.UnloadCalled);
     }
@@ -305,11 +318,15 @@ public class LoaderTests
         Assert.Equal(2, loader.RequestCount);
 
         // Tick should process both
-        Assert.False(loader.Tick()); // b loaded, a still loading
+        catalog.Tick();
+        Assert.False(loader.Tick()); // a tick 1, b pending (added during loading)
+
+        catalog.Tick();
+        Assert.False(loader.Tick()); // a tick 2, b tick 1 (loaded)
         Assert.Equal(1, loader.LoadedCount);
 
-        Assert.False(loader.Tick()); // a still loading
-        Assert.True(loader.Tick());  // a loaded
+        catalog.Tick();
+        Assert.True(loader.Tick());  // a tick 3 (loaded)
 
         Assert.Equal(2, loader.LoadedCount);
 
@@ -328,10 +345,12 @@ public class LoaderTests
 
         loader.Request("resource/a");
         loader.Execute();
+        catalog.Tick();
         loader.Tick(); // a loaded
 
         loader.Request("resource/b");
         loader.Execute(); // Should only start b
+        catalog.Tick();
 
         Assert.True(resourceA.StartCalled);
         Assert.True(resourceB.StartCalled);
@@ -401,10 +420,13 @@ public class LoaderTests
         loader.Request("slow");
         loader.Execute();
 
+        catalog.Tick();
         loader.Tick(); // fast loads
         Assert.Equal(3, loader.LoadedPoints);
 
+        catalog.Tick();
         loader.Tick();
+        catalog.Tick();
         loader.Tick(); // slow loads
         Assert.Equal(10, loader.LoadedPoints);
 
@@ -452,11 +474,14 @@ public class LoaderTests
         Assert.Equal(0f, loader.Progress);
 
         // After small loads (1 of 10 points)
+        catalog.Tick();
         loader.Tick();
         Assert.Equal(0.1f, loader.Progress);
 
         // After all loads
+        catalog.Tick();
         loader.Tick();
+        catalog.Tick();
         loader.Tick();
         Assert.Equal(1f, loader.Progress);
 
@@ -472,6 +497,7 @@ public class LoaderTests
 
         loader.Request("resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         Assert.Equal(1f, loader.Progress);

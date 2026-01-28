@@ -45,6 +45,9 @@ public class EntityGenerator : ISourceGenerator
                 return;
             }
 
+            // Track groups for derived attributes
+            Dictionary<string, GroupInfo> groups = new Dictionary<string, GroupInfo>();
+
             foreach (TypeDeclarationSyntax typeDeclaration in receiver.CandidateTypes)
             {
                 SemanticModel semanticModel = compilation.GetSemanticModel(typeDeclaration.SyntaxTree);
@@ -55,12 +58,54 @@ public class EntityGenerator : ISourceGenerator
                     continue;
                 }
 
-                AttributeData entityAttribute = classSymbol.GetAttributes()
-                    .FirstOrDefault(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, entityAttributeSymbol));
+                // Find an attribute that is EntityAttribute or inherits from it
+                AttributeData entityAttribute = null;
+                INamedTypeSymbol derivedAttributeType = null;
+                bool isDerivedAttribute = false;
+
+                foreach (AttributeData attr in classSymbol.GetAttributes())
+                {
+                    if (attr.AttributeClass == null)
+                    {
+                        continue;
+                    }
+
+                    // Check for exact match with EntityAttribute
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, entityAttributeSymbol))
+                    {
+                        entityAttribute = attr;
+                        isDerivedAttribute = false;
+                        break;
+                    }
+
+                    // Check if the attribute inherits from EntityAttribute
+                    if (InheritsFrom(attr.AttributeClass, entityAttributeSymbol))
+                    {
+                        entityAttribute = attr;
+                        derivedAttributeType = attr.AttributeClass;
+                        isDerivedAttribute = true;
+                        break;
+                    }
+                }
 
                 if (entityAttribute == null)
                 {
                     continue;
+                }
+
+                // Extract group info for derived attributes
+                string groupName = null;
+                if (isDerivedAttribute && derivedAttributeType != null)
+                {
+                    groupName = ExtractGroupName(derivedAttributeType);
+                    string groupNamespace = derivedAttributeType.ContainingNamespace?.ToDisplayString();
+                    string attributeFullName = derivedAttributeType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                    if (!groups.ContainsKey(groupName))
+                    {
+                        groups[groupName] = new GroupInfo(groupName, groupNamespace, attributeFullName);
+                    }
+                    groups[groupName].Entities.Add(classSymbol);
                 }
 
                 // Extract attribute parameters
@@ -176,12 +221,24 @@ public class EntityGenerator : ISourceGenerator
                 }
 
                 // Generate code
-                string source = GenerateEntityCode(classSymbol, initialCapacity, arenaName, entityMethods, components, commandQueues);
+                string source = GenerateEntityCode(classSymbol, initialCapacity, arenaName, entityMethods, components, commandQueues, groupName);
 
                 string fileName = $"{classSymbol.ContainingNamespace?.ToDisplayString() ?? ""}.{classSymbol.Name}.g.cs";
                 fileName = fileName.TrimStart('.');
 
                 context.AddSource(fileName, SourceText.From(source, Encoding.UTF8));
+            }
+
+            // Generate group types (I{GroupName}Arena interface and {GroupName}AnyHandle struct)
+            foreach (KeyValuePair<string, GroupInfo> kvp in groups)
+            {
+                GroupInfo group = kvp.Value;
+                string groupSource = GenerateGroupCode(group);
+
+                string groupFileName = $"{group.Namespace ?? ""}.{group.GroupName}Group.g.cs";
+                groupFileName = groupFileName.TrimStart('.');
+
+                context.AddSource(groupFileName, SourceText.From(groupSource, Encoding.UTF8));
             }
         }
 
@@ -191,7 +248,8 @@ public class EntityGenerator : ISourceGenerator
             string customArenaName,
             List<EntityMethodInfo> entityMethods,
             List<ComponentInfo> components,
-            List<CommandQueueInfo> commandQueues)
+            List<CommandQueueInfo> commandQueues,
+            string groupName)
         {
             string typeName = classSymbol.Name;
             string fullTypeName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -217,12 +275,12 @@ public class EntityGenerator : ISourceGenerator
             }
 
             // Generate Handle struct
-            GenerateHandleStruct(sb, typeName, handleName, arenaName, entityMethods, components, commandQueues, hasNamespace);
+            GenerateHandleStruct(sb, typeName, handleName, arenaName, entityMethods, components, commandQueues, hasNamespace, groupName);
 
             sb.AppendLine();
 
             // Generate Arena class
-            GenerateArenaClass(sb, typeName, handleName, arenaName, initialCapacity, components, commandQueues, hasNamespace);
+            GenerateArenaClass(sb, typeName, handleName, arenaName, initialCapacity, components, commandQueues, hasNamespace, groupName);
 
             // Generate Entity partial class/struct with _selfHandle (if Entity has components)
             if (components.Count > 0)
@@ -248,7 +306,8 @@ public class EntityGenerator : ISourceGenerator
             List<EntityMethodInfo> entityMethods,
             List<ComponentInfo> components,
             List<CommandQueueInfo> commandQueues,
-            bool hasNamespace)
+            bool hasNamespace,
+            string groupName)
         {
             string indent = hasNamespace ? "    " : "";
 
@@ -300,6 +359,16 @@ public class EntityGenerator : ISourceGenerator
             sb.AppendLine($"{indent}        return new Tomato.EntityHandleSystem.AnyHandle(_arena, _index, _generation);");
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
+
+            // ToGroupAnyHandle method (if entity belongs to a group)
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                sb.AppendLine($"{indent}    public {groupName}AnyHandle To{groupName}AnyHandle()");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine($"{indent}        return new {groupName}AnyHandle(_arena, _index, _generation);");
+                sb.AppendLine($"{indent}    }}");
+                sb.AppendLine();
+            }
 
             // IEquatable<T>.Equals
             sb.AppendLine($"{indent}    public bool Equals({handleName} other)");
@@ -783,7 +852,8 @@ public class EntityGenerator : ISourceGenerator
             int initialCapacity,
             List<ComponentInfo> components,
             List<CommandQueueInfo> commandQueues,
-            bool hasNamespace)
+            bool hasNamespace,
+            string groupName)
         {
             string indent = hasNamespace ? "    " : "";
 
@@ -794,6 +864,14 @@ public class EntityGenerator : ISourceGenerator
             interfaceList.Append(", ");
             interfaceList.Append(handleName);
             interfaceList.Append(">, Tomato.EntityHandleSystem.IEntityArena");
+
+            // Add group interface if entity belongs to a group
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                interfaceList.Append(", I");
+                interfaceList.Append(groupName);
+                interfaceList.Append("Arena");
+            }
 
             foreach (ComponentInfo component in components)
             {
@@ -1290,6 +1368,800 @@ public class EntityGenerator : ISourceGenerator
             sb.AppendLine($"{indent}    }}");
         }
 
+        /// <summary>
+        /// Generates the group-specific types: I{GroupName}Arena interface and {GroupName}AnyHandle struct.
+        /// </summary>
+        private string GenerateGroupCode(GroupInfo group)
+        {
+            string groupName = group.GroupName;
+            string namespaceName = group.Namespace;
+            bool hasNamespace = !string.IsNullOrEmpty(namespaceName) && namespaceName != "<global namespace>";
+
+            StringBuilder sb = new StringBuilder();
+
+            sb.AppendLine("// <auto-generated />");
+            sb.AppendLine("#pragma warning disable CS0618 // Type or member is obsolete");
+            sb.AppendLine("#pragma warning disable CS0219 // Variable is assigned but never used");
+            sb.AppendLine("#pragma warning disable CS8019 // Unnecessary using directive");
+            sb.AppendLine();
+            sb.AppendLine("using System;");
+            sb.AppendLine();
+
+            if (hasNamespace)
+            {
+                sb.AppendLine($"namespace {namespaceName}");
+                sb.AppendLine("{");
+            }
+
+            string indent = hasNamespace ? "    " : "";
+
+            // Generate I{GroupName}Arena interface
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// {groupName} グループ Arena のマーカーインターフェース。");
+            sb.AppendLine($"{indent}/// このグループに属する全ての Arena が実装します。");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}public interface I{groupName}Arena : Tomato.EntityHandleSystem.IEntityArena {{ }}");
+            sb.AppendLine();
+
+            // Generate {GroupName}AnyHandle struct
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// {groupName} グループ固有の型消去ハンドル。");
+            sb.AppendLine($"{indent}/// 同グループ内の異なるエンティティ型を一つのコンテナに格納し、横串操作ができます。");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}public readonly struct {groupName}AnyHandle");
+            sb.AppendLine($"{indent}    : Tomato.EntityHandleSystem.IEntityHandle, System.IEquatable<{groupName}AnyHandle>");
+            sb.AppendLine($"{indent}{{");
+
+            // Fields
+            sb.AppendLine($"{indent}    private readonly I{groupName}Arena _arena;");
+            sb.AppendLine($"{indent}    private readonly int _index;");
+            sb.AppendLine($"{indent}    private readonly int _generation;");
+            sb.AppendLine();
+
+            // Constructor
+            sb.AppendLine($"{indent}    public {groupName}AnyHandle(I{groupName}Arena arena, int index, int generation)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        _arena = arena;");
+            sb.AppendLine($"{indent}        _index = index;");
+            sb.AppendLine($"{indent}        _generation = generation;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // IsValid property
+            sb.AppendLine($"{indent}    public bool IsValid => _arena != null && ((Tomato.HandleSystem.IArena)_arena).IsValid(_index, _generation);");
+            sb.AppendLine();
+
+            // Invalid static property
+            sb.AppendLine($"{indent}    public static {groupName}AnyHandle Invalid => default;");
+            sb.AppendLine();
+
+            // Internal Arena property (for Container access)
+            sb.AppendLine($"{indent}    internal I{groupName}Arena Arena => _arena;");
+            sb.AppendLine();
+
+            // Index property
+            sb.AppendLine($"{indent}    public int Index => _index;");
+            sb.AppendLine();
+
+            // Generation property
+            sb.AppendLine($"{indent}    public int Generation => _generation;");
+            sb.AppendLine();
+
+            // ToAnyHandle method (convert to global AnyHandle)
+            sb.AppendLine($"{indent}    /// <summary>グローバル AnyHandle への変換</summary>");
+            sb.AppendLine($"{indent}    public Tomato.EntityHandleSystem.AnyHandle ToAnyHandle()");
+            sb.AppendLine($"{indent}        => new Tomato.EntityHandleSystem.AnyHandle(");
+            sb.AppendLine($"{indent}            (Tomato.EntityHandleSystem.IEntityArena)_arena, _index, _generation);");
+            sb.AppendLine();
+
+            // TryAs method
+            sb.AppendLine($"{indent}    public bool TryAs<TArena>(out TArena arena) where TArena : class, Tomato.EntityHandleSystem.IEntityArena");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        arena = _arena as TArena;");
+            sb.AppendLine($"{indent}        return arena != null;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // TryExecute method
+            sb.AppendLine($"{indent}    public bool TryExecute<TComponent>(Tomato.HandleSystem.RefAction<TComponent> action)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        if (_arena is Tomato.EntityHandleSystem.IComponentArena<TComponent> componentArena)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            return componentArena.TryExecuteComponent(_index, _generation, action);");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}        return false;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Equals method
+            sb.AppendLine($"{indent}    public bool Equals({groupName}AnyHandle other)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        return ReferenceEquals(_arena, other._arena)");
+            sb.AppendLine($"{indent}            && _index == other._index");
+            sb.AppendLine($"{indent}            && _generation == other._generation;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Object.Equals override
+            sb.AppendLine($"{indent}    public override bool Equals(object obj)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        return obj is {groupName}AnyHandle other && Equals(other);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // GetHashCode override
+            sb.AppendLine($"{indent}    public override int GetHashCode()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        unchecked");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            int hash = 17;");
+            sb.AppendLine($"{indent}            hash = hash * 31 + (_arena?.GetHashCode() ?? 0);");
+            sb.AppendLine($"{indent}            hash = hash * 31 + _index;");
+            sb.AppendLine($"{indent}            hash = hash * 31 + _generation;");
+            sb.AppendLine($"{indent}            return hash;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Equality operators
+            sb.AppendLine($"{indent}    public static bool operator ==({groupName}AnyHandle left, {groupName}AnyHandle right) => left.Equals(right);");
+            sb.AppendLine($"{indent}    public static bool operator !=({groupName}AnyHandle left, {groupName}AnyHandle right) => !left.Equals(right);");
+
+            sb.AppendLine($"{indent}}}");
+
+            sb.AppendLine();
+
+            // Generate {GroupName}Container class
+            GenerateGroupContainer(sb, group, indent);
+
+            if (hasNamespace)
+            {
+                sb.AppendLine("}");
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Generates the {GroupName}Container class for sorted storage of group handles.
+        /// </summary>
+        private void GenerateGroupContainer(StringBuilder sb, GroupInfo group, string indent)
+        {
+            string groupName = group.GroupName;
+
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// {groupName} グループのハンドルを Arena 順・Index 順でソートして格納するコンテナ。");
+            sb.AppendLine($"{indent}/// キャッシュ効率の最大化とコンポーネントベースのクエリをサポートします。");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}public sealed class {groupName}Container");
+            sb.AppendLine($"{indent}{{");
+
+            // ArenaSegment struct
+            sb.AppendLine($"{indent}    private struct ArenaSegment");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        public I{groupName}Arena Arena;");
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle[] Handles;");
+            sb.AppendLine($"{indent}        public int Count;");
+            sb.AppendLine($"{indent}        public int FreeCount;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public int Capacity => Handles?.Length ?? 0;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Fields
+            sb.AppendLine($"{indent}    private ArenaSegment[] _segments;");
+            sb.AppendLine($"{indent}    private int _segmentCount;");
+            sb.AppendLine($"{indent}    private readonly System.Collections.Generic.Dictionary<I{groupName}Arena, int> _arenaToSegmentIndex;");
+            sb.AppendLine($"{indent}    private int _totalCount;");
+            sb.AppendLine();
+
+            // Constructor
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 新しい {groupName}Container を作成します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public {groupName}Container()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        _segments = new ArenaSegment[4];");
+            sb.AppendLine($"{indent}        _segmentCount = 0;");
+            sb.AppendLine($"{indent}        _arenaToSegmentIndex = new System.Collections.Generic.Dictionary<I{groupName}Arena, int>();");
+            sb.AppendLine($"{indent}        _totalCount = 0;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Count property
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// コンテナ内の有効なハンドル数を取得します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public int Count => _totalCount;");
+            sb.AppendLine();
+
+            // Add method
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// ハンドルをコンテナに追加します。Arena 順・Index 順でソートされた位置に挿入されます。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    /// <param name=\"handle\">追加するハンドル</param>");
+            sb.AppendLine($"{indent}    public void Add({groupName}AnyHandle handle)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        if (!handle.IsValid) return;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        var arena = handle.Arena;");
+            sb.AppendLine($"{indent}        if (arena == null) return;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Get or create segment for this arena");
+            sb.AppendLine($"{indent}        if (!_arenaToSegmentIndex.TryGetValue(arena, out int segmentIndex))");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            segmentIndex = CreateSegment(arena);");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        ref var segment = ref _segments[segmentIndex];");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Binary search for insertion position (sorted by Index)");
+            sb.AppendLine($"{indent}        int insertPos = BinarySearchInsertPosition(ref segment, handle.Index);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Ensure capacity");
+            sb.AppendLine($"{indent}        if (segment.Count >= segment.Capacity)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            int newCapacity = segment.Capacity == 0 ? 4 : segment.Capacity * 2;");
+            sb.AppendLine($"{indent}            var newHandles = new {groupName}AnyHandle[newCapacity];");
+            sb.AppendLine($"{indent}            if (segment.Handles != null)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                System.Array.Copy(segment.Handles, newHandles, segment.Count);");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            segment.Handles = newHandles;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Shift elements and insert");
+            sb.AppendLine($"{indent}        if (insertPos < segment.Count)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            System.Array.Copy(segment.Handles, insertPos, segment.Handles, insertPos + 1, segment.Count - insertPos);");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}        segment.Handles[insertPos] = handle;");
+            sb.AppendLine($"{indent}        segment.Count++;");
+            sb.AppendLine($"{indent}        _totalCount++;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Remove method
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// ハンドルをコンテナから削除します（遅延削除：スロットを無効としてマーク）。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    /// <param name=\"handle\">削除するハンドル</param>");
+            sb.AppendLine($"{indent}    /// <returns>削除された場合は true</returns>");
+            sb.AppendLine($"{indent}    public bool Remove({groupName}AnyHandle handle)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        var arena = handle.Arena;");
+            sb.AppendLine($"{indent}        if (arena == null) return false;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        if (!_arenaToSegmentIndex.TryGetValue(arena, out int segmentIndex))");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            return false;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        ref var segment = ref _segments[segmentIndex];");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Binary search for the handle");
+            sb.AppendLine($"{indent}        int pos = BinarySearchExact(ref segment, handle.Index, handle.Generation);");
+            sb.AppendLine($"{indent}        if (pos < 0) return false;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Mark as removed (set to default/invalid)");
+            sb.AppendLine($"{indent}        segment.Handles[pos] = default;");
+            sb.AppendLine($"{indent}        segment.FreeCount++;");
+            sb.AppendLine($"{indent}        _totalCount--;");
+            sb.AppendLine($"{indent}        return true;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Clear method
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// コンテナをクリアします。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public void Clear()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        for (int i = 0; i < _segmentCount; i++)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _segments[i].Count = 0;");
+            sb.AppendLine($"{indent}            _segments[i].FreeCount = 0;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}        _segmentCount = 0;");
+            sb.AppendLine($"{indent}        _arenaToSegmentIndex.Clear();");
+            sb.AppendLine($"{indent}        _totalCount = 0;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Compact method
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 無効なスロットを除去してコンパクト化します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public void Compact()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        for (int s = 0; s < _segmentCount; s++)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            ref var segment = ref _segments[s];");
+            sb.AppendLine($"{indent}            if (segment.FreeCount == 0) continue;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}            int writePos = 0;");
+            sb.AppendLine($"{indent}            for (int readPos = 0; readPos < segment.Count; readPos++)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                if (segment.Handles[readPos].IsValid)");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    if (writePos != readPos)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        segment.Handles[writePos] = segment.Handles[readPos];");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    writePos++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            segment.Count = writePos;");
+            sb.AppendLine($"{indent}            segment.FreeCount = 0;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // GetEnumerator
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 全ての有効なハンドルをイテレートする列挙子を取得します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public Enumerator GetEnumerator() => new Enumerator(this);");
+            sb.AppendLine();
+
+            // GetIterator
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// フレーム分散更新用のイテレータを取得します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    /// <param name=\"skip\">スキップするスロット数（0で全て、1で1つおき）</param>");
+            sb.AppendLine($"{indent}    /// <param name=\"offset\">開始オフセット</param>");
+            sb.AppendLine($"{indent}    public Iterator GetIterator(int skip = 0, int offset = 0) => new Iterator(this, skip, offset);");
+            sb.AppendLine();
+
+            // Query<T>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定したコンポーネントを持つエンティティのみをフィルタリングして返します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public QueryView<TComponent> Query<TComponent>()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        return new QueryView<TComponent>(this);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Query<T1, T2>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定した2つのコンポーネントを両方持つエンティティのみをフィルタリングして返します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public QueryView<TComponent1, TComponent2> Query<TComponent1, TComponent2>()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        return new QueryView<TComponent1, TComponent2>(this);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Query<T1, T2, T3>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定した3つのコンポーネントを全て持つエンティティのみをフィルタリングして返します。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public QueryView<TComponent1, TComponent2, TComponent3> Query<TComponent1, TComponent2, TComponent3>()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        return new QueryView<TComponent1, TComponent2, TComponent3>(this);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Private helper methods
+            sb.AppendLine($"{indent}    private int CreateSegment(I{groupName}Arena arena)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        if (_segmentCount >= _segments.Length)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            var newSegments = new ArenaSegment[_segments.Length * 2];");
+            sb.AppendLine($"{indent}            System.Array.Copy(_segments, newSegments, _segments.Length);");
+            sb.AppendLine($"{indent}            _segments = newSegments;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        int index = _segmentCount++;");
+            sb.AppendLine($"{indent}        _segments[index] = new ArenaSegment");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            Arena = arena,");
+            sb.AppendLine($"{indent}            Handles = new {groupName}AnyHandle[4],");
+            sb.AppendLine($"{indent}            Count = 0,");
+            sb.AppendLine($"{indent}            FreeCount = 0");
+            sb.AppendLine($"{indent}        }};");
+            sb.AppendLine($"{indent}        _arenaToSegmentIndex[arena] = index;");
+            sb.AppendLine($"{indent}        return index;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            sb.AppendLine($"{indent}    private static int BinarySearchInsertPosition(ref ArenaSegment segment, int index)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        int lo = 0;");
+            sb.AppendLine($"{indent}        int hi = segment.Count - 1;");
+            sb.AppendLine($"{indent}        while (lo <= hi)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            int mid = lo + (hi - lo) / 2;");
+            sb.AppendLine($"{indent}            int midIndex = segment.Handles[mid].Index;");
+            sb.AppendLine($"{indent}            if (midIndex < index)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                lo = mid + 1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            else");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                hi = mid - 1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}        return lo;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            sb.AppendLine($"{indent}    private static int BinarySearchExact(ref ArenaSegment segment, int index, int generation)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        int lo = 0;");
+            sb.AppendLine($"{indent}        int hi = segment.Count - 1;");
+            sb.AppendLine($"{indent}        while (lo <= hi)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            int mid = lo + (hi - lo) / 2;");
+            sb.AppendLine($"{indent}            var h = segment.Handles[mid];");
+            sb.AppendLine($"{indent}            if (h.Index == index && h.Generation == generation)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                return mid;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            if (h.Index < index)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                lo = mid + 1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            else");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                hi = mid - 1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}        return -1;");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // Internal accessor for segments (used by QueryView)
+            sb.AppendLine($"{indent}    internal int SegmentCount => _segmentCount;");
+            sb.AppendLine($"{indent}    internal I{groupName}Arena GetSegmentArena(int segmentIndex) => _segments[segmentIndex].Arena;");
+            sb.AppendLine($"{indent}    internal int GetSegmentHandleCount(int segmentIndex) => _segments[segmentIndex].Count;");
+            sb.AppendLine($"{indent}    internal {groupName}AnyHandle GetSegmentHandle(int segmentIndex, int handleIndex) => _segments[segmentIndex].Handles[handleIndex];");
+            sb.AppendLine();
+
+            // Enumerator struct
+            GenerateContainerEnumerator(sb, groupName, indent);
+            sb.AppendLine();
+
+            // Iterator struct
+            GenerateContainerIterator(sb, groupName, indent);
+            sb.AppendLine();
+
+            // QueryView structs
+            GenerateQueryViews(sb, groupName, indent);
+
+            sb.AppendLine($"{indent}}}");
+        }
+
+        private void GenerateContainerEnumerator(StringBuilder sb, string groupName, string indent)
+        {
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// {groupName}Container の列挙子。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public struct Enumerator");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private int _segmentIndex;");
+            sb.AppendLine($"{indent}        private int _handleIndex;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal Enumerator({groupName}Container container)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentIndex = 0;");
+            sb.AppendLine($"{indent}            _handleIndex = -1;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle Current => _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public bool MoveNext()");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _handleIndex++;");
+            sb.AppendLine($"{indent}                while (_handleIndex < _container.GetSegmentHandleCount(_segmentIndex))");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    if (_container.GetSegmentHandle(_segmentIndex, _handleIndex).IsValid)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        return true;");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    _handleIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}                _handleIndex = -1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            return false;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+        }
+
+        private void GenerateContainerIterator(StringBuilder sb, string groupName, string indent)
+        {
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// フレーム分散更新用のイテレータ。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public struct Iterator");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly int _step;");
+            sb.AppendLine($"{indent}        private int _globalIndex;");
+            sb.AppendLine($"{indent}        private int _segmentIndex;");
+            sb.AppendLine($"{indent}        private int _handleIndex;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal Iterator({groupName}Container container, int skip, int offset)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _step = skip + 1;");
+            sb.AppendLine($"{indent}            _globalIndex = offset - _step;");
+            sb.AppendLine($"{indent}            _segmentIndex = 0;");
+            sb.AppendLine($"{indent}            _handleIndex = -1;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle Current => _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public bool MoveNext()");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            while (true)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _globalIndex += _step;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}                // Find the segment and handle at globalIndex");
+            sb.AppendLine($"{indent}                int remaining = _globalIndex;");
+            sb.AppendLine($"{indent}                _segmentIndex = 0;");
+            sb.AppendLine($"{indent}                while (_segmentIndex < _container.SegmentCount)");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    int segCount = _container.GetSegmentHandleCount(_segmentIndex);");
+            sb.AppendLine($"{indent}                    if (remaining < segCount)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        _handleIndex = remaining;");
+            sb.AppendLine($"{indent}                        var handle = _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine($"{indent}                        if (handle.IsValid)");
+            sb.AppendLine($"{indent}                        {{");
+            sb.AppendLine($"{indent}                            return true;");
+            sb.AppendLine($"{indent}                        }}");
+            sb.AppendLine($"{indent}                        // Skip invalid, continue to next step");
+            sb.AppendLine($"{indent}                        break;");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    remaining -= segCount;");
+            sb.AppendLine($"{indent}                    _segmentIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}                if (_segmentIndex >= _container.SegmentCount)");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    return false;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+        }
+
+        private void GenerateQueryViews(StringBuilder sb, string groupName, string indent)
+        {
+            // QueryView<T>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定したコンポーネントを持つエンティティのみをフィルタリングするビュー。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public readonly ref struct QueryView<TComponent>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryView({groupName}Container container)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = new bool[container.SegmentCount];");
+            sb.AppendLine($"{indent}            for (int i = 0; i < container.SegmentCount; i++)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _segmentMatches[i] = container.GetSegmentArena(i) is Tomato.EntityHandleSystem.IComponentArena<TComponent>;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public QueryEnumerator<TComponent> GetEnumerator() => new QueryEnumerator<TComponent>(_container, _segmentMatches);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // QueryView<T1, T2>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定した2つのコンポーネントを持つエンティティのみをフィルタリングするビュー。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public readonly ref struct QueryView<TComponent1, TComponent2>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryView({groupName}Container container)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = new bool[container.SegmentCount];");
+            sb.AppendLine($"{indent}            for (int i = 0; i < container.SegmentCount; i++)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                var arena = container.GetSegmentArena(i);");
+            sb.AppendLine($"{indent}                _segmentMatches[i] = arena is Tomato.EntityHandleSystem.IComponentArena<TComponent1>");
+            sb.AppendLine($"{indent}                    && arena is Tomato.EntityHandleSystem.IComponentArena<TComponent2>;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public QueryEnumerator<TComponent1, TComponent2> GetEnumerator() => new QueryEnumerator<TComponent1, TComponent2>(_container, _segmentMatches);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // QueryView<T1, T2, T3>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 指定した3つのコンポーネントを持つエンティティのみをフィルタリングするビュー。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public readonly ref struct QueryView<TComponent1, TComponent2, TComponent3>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryView({groupName}Container container)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = new bool[container.SegmentCount];");
+            sb.AppendLine($"{indent}            for (int i = 0; i < container.SegmentCount; i++)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                var arena = container.GetSegmentArena(i);");
+            sb.AppendLine($"{indent}                _segmentMatches[i] = arena is Tomato.EntityHandleSystem.IComponentArena<TComponent1>");
+            sb.AppendLine($"{indent}                    && arena is Tomato.EntityHandleSystem.IComponentArena<TComponent2>");
+            sb.AppendLine($"{indent}                    && arena is Tomato.EntityHandleSystem.IComponentArena<TComponent3>;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public QueryEnumerator<TComponent1, TComponent2, TComponent3> GetEnumerator() => new QueryEnumerator<TComponent1, TComponent2, TComponent3>(_container, _segmentMatches);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // QueryEnumerator<T>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// クエリ結果の列挙子。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public ref struct QueryEnumerator<TComponent>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine($"{indent}        private int _segmentIndex;");
+            sb.AppendLine($"{indent}        private int _handleIndex;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryEnumerator({groupName}Container container, bool[] segmentMatches)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = segmentMatches;");
+            sb.AppendLine($"{indent}            _segmentIndex = 0;");
+            sb.AppendLine($"{indent}            _handleIndex = -1;");
+            sb.AppendLine($"{indent}            // Skip to first matching segment");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle Current => _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public bool MoveNext()");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _handleIndex++;");
+            sb.AppendLine($"{indent}                while (_handleIndex < _container.GetSegmentHandleCount(_segmentIndex))");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    if (_container.GetSegmentHandle(_segmentIndex, _handleIndex).IsValid)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        return true;");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    _handleIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                // Move to next matching segment");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}                while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    _segmentIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _handleIndex = -1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            return false;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // QueryEnumerator<T1, T2>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 2コンポーネントクエリ結果の列挙子。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public ref struct QueryEnumerator<TComponent1, TComponent2>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine($"{indent}        private int _segmentIndex;");
+            sb.AppendLine($"{indent}        private int _handleIndex;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryEnumerator({groupName}Container container, bool[] segmentMatches)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = segmentMatches;");
+            sb.AppendLine($"{indent}            _segmentIndex = 0;");
+            sb.AppendLine($"{indent}            _handleIndex = -1;");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle Current => _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public bool MoveNext()");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _handleIndex++;");
+            sb.AppendLine($"{indent}                while (_handleIndex < _container.GetSegmentHandleCount(_segmentIndex))");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    if (_container.GetSegmentHandle(_segmentIndex, _handleIndex).IsValid)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        return true;");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    _handleIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}                while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    _segmentIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _handleIndex = -1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            return false;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+
+            // QueryEnumerator<T1, T2, T3>
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 3コンポーネントクエリ結果の列挙子。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public ref struct QueryEnumerator<TComponent1, TComponent2, TComponent3>");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        private readonly {groupName}Container _container;");
+            sb.AppendLine($"{indent}        private readonly bool[] _segmentMatches;");
+            sb.AppendLine($"{indent}        private int _segmentIndex;");
+            sb.AppendLine($"{indent}        private int _handleIndex;");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        internal QueryEnumerator({groupName}Container container, bool[] segmentMatches)");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            _container = container;");
+            sb.AppendLine($"{indent}            _segmentMatches = segmentMatches;");
+            sb.AppendLine($"{indent}            _segmentIndex = 0;");
+            sb.AppendLine($"{indent}            _handleIndex = -1;");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public {groupName}AnyHandle Current => _container.GetSegmentHandle(_segmentIndex, _handleIndex);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        public bool MoveNext()");
+            sb.AppendLine($"{indent}        {{");
+            sb.AppendLine($"{indent}            while (_segmentIndex < _container.SegmentCount)");
+            sb.AppendLine($"{indent}            {{");
+            sb.AppendLine($"{indent}                _handleIndex++;");
+            sb.AppendLine($"{indent}                while (_handleIndex < _container.GetSegmentHandleCount(_segmentIndex))");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    if (_container.GetSegmentHandle(_segmentIndex, _handleIndex).IsValid)");
+            sb.AppendLine($"{indent}                    {{");
+            sb.AppendLine($"{indent}                        return true;");
+            sb.AppendLine($"{indent}                    }}");
+            sb.AppendLine($"{indent}                    _handleIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _segmentIndex++;");
+            sb.AppendLine($"{indent}                while (_segmentIndex < _container.SegmentCount && !_segmentMatches[_segmentIndex])");
+            sb.AppendLine($"{indent}                {{");
+            sb.AppendLine($"{indent}                    _segmentIndex++;");
+            sb.AppendLine($"{indent}                }}");
+            sb.AppendLine($"{indent}                _handleIndex = -1;");
+            sb.AppendLine($"{indent}            }}");
+            sb.AppendLine($"{indent}            return false;");
+            sb.AppendLine($"{indent}        }}");
+            sb.AppendLine($"{indent}    }}");
+        }
+
         private string GetTypeFullName(ITypeSymbol typeSymbol)
         {
             // Use minimal qualified format for cleaner output
@@ -1468,7 +2340,8 @@ public class EntityGenerator : ISourceGenerator
         }
 
         /// <summary>
-        /// Syntax receiver that collects candidate classes and structs with [Entity] attribute.
+        /// Syntax receiver that collects candidate classes and structs with [Entity] attribute
+        /// or any attribute that might inherit from EntityAttribute.
         /// </summary>
         private class EntitySyntaxReceiver : ISyntaxReceiver
         {
@@ -1481,22 +2354,11 @@ public class EntityGenerator : ISourceGenerator
                     (syntaxNode is ClassDeclarationSyntax || syntaxNode is StructDeclarationSyntax))
                 {
                     // Check if the type has any attributes
+                    // We collect all types with attributes and filter in semantic analysis phase
+                    // to support derived attributes like [PlayerEntity] that inherit from [Entity]
                     if (typeDeclaration.AttributeLists.Count > 0)
                     {
-                        // Check if any attribute might be [Entity]
-                        foreach (AttributeListSyntax attributeList in typeDeclaration.AttributeLists)
-                        {
-                            foreach (AttributeSyntax attribute in attributeList.Attributes)
-                            {
-                                string name = attribute.Name.ToString();
-                                if (name == "Entity" || name == "EntityAttribute" ||
-                                    name.EndsWith(".Entity") || name.EndsWith(".EntityAttribute"))
-                                {
-                                    CandidateTypes.Add(typeDeclaration);
-                                    return;
-                                }
-                            }
-                        }
+                        CandidateTypes.Add(typeDeclaration);
                     }
                 }
             }
@@ -1517,5 +2379,59 @@ public class EntityGenerator : ISourceGenerator
                 QueueName = queueType.Name;
                 QueueFullName = queueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             }
+        }
+
+        /// <summary>
+        /// Information about an Entity Group (derived from EntityAttribute).
+        /// </summary>
+        private class GroupInfo
+        {
+            public string GroupName { get; }
+            public string Namespace { get; }
+            public string AttributeFullName { get; }
+            public List<INamedTypeSymbol> Entities { get; } = new List<INamedTypeSymbol>();
+
+            public GroupInfo(string groupName, string namespaceName, string attributeFullName)
+            {
+                GroupName = groupName;
+                Namespace = namespaceName;
+                AttributeFullName = attributeFullName;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a type inherits from a specified base type.
+        /// </summary>
+        private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
+        {
+            if (type == null || baseType == null)
+            {
+                return false;
+            }
+
+            INamedTypeSymbol current = type.BaseType;
+            while (current != null)
+            {
+                if (SymbolEqualityComparer.Default.Equals(current, baseType))
+                {
+                    return true;
+                }
+                current = current.BaseType;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Extracts the group name from a derived attribute type.
+        /// e.g., "PlayerEntityAttribute" -> "PlayerEntity"
+        /// </summary>
+        private static string ExtractGroupName(INamedTypeSymbol attributeType)
+        {
+            string name = attributeType.Name;
+            if (name.EndsWith("Attribute"))
+            {
+                return name.Substring(0, name.Length - "Attribute".Length);
+            }
+            return name;
         }
     }

@@ -53,6 +53,7 @@ public class ResourceHandleTests
 
         var handle = loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         Assert.True(handle.IsLoaded);
@@ -70,6 +71,7 @@ public class ResourceHandleTests
 
         var handle = loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         Assert.True(handle.TryGet<string>(out var resource));
@@ -102,6 +104,7 @@ public class ResourceHandleTests
 
         var handle = loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         Assert.False(handle.TryGet<int[]>(out var resource));
@@ -119,6 +122,7 @@ public class ResourceHandleTests
 
         var handle = loader.Request("test/resource");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         var resource = handle.GetResourceUnsafe();

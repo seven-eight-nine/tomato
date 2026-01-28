@@ -472,8 +472,7 @@ CharacterSpawnSystemとの疎結合を実現。StateChangedイベントを監視
 
 ## 関連ドキュメント
 
-- [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) - 全体アーキテクチャ
-- [action-game-design.md](../../docs/plans/action-game-design.md) - ゲームループ設計
+- [ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) - 全体アーキテクチャ
 - [SystemPipeline README](../../foundation/SystemPipeline/README.md) - パイプラインシステム
 - [CollisionSystem README](../../systems/CollisionSystem/README.md) - 空間インデックスと衝突検出
 

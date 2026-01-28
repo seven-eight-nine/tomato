@@ -164,9 +164,14 @@ namespace Tomato.DeepCloneGenerator
 
         // Deep Clone types
         /// <summary>
-        /// Type implements IDeepCloneable or has [DeepClonable].
+        /// Type has [DeepClonable] attribute - use generated DeepCloneInternal().
         /// </summary>
         DeepCloneable,
+
+        /// <summary>
+        /// Type implements IDeepCloneable manually (without [DeepClonable]) - use user-defined DeepClone().
+        /// </summary>
+        CustomDeepCloneable,
 
         // Generics
         /// <summary>

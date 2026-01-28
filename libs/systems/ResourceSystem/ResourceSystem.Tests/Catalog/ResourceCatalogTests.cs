@@ -114,6 +114,8 @@ public class ResourceCatalogTests
 
         var loader = new ResourceLoader(catalog);
         loader.Request("test/resource");
+        loader.Execute();
+        catalog.Tick();
 
         Assert.Throws<InvalidOperationException>(() => catalog.Unregister("test/resource"));
 

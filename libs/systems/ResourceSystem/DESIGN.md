@@ -76,13 +76,14 @@ var bgmHandle = loader.Request("audio/bgm");
 
 // ロード開始・完了待ち
 loader.Execute();
-while (!loader.Tick()) { /* 進捗表示など */ }
+while (true) { catalog.Tick(); if (loader.Tick()) break; /* 進捗表示など */ }
 
 // 使用
 if (texHandle.TryGet<Texture>(out var tex)) DrawSprite(tex);
 
 // 解放
 loader.Dispose();
+catalog.Tick();
 ```
 
 ---
@@ -192,10 +193,11 @@ public ResourceLoadState Tick(ResourceCatalog catalog)
         _dependencyLoader = new Loader(catalog);
         _dependencyLoader.Request("texture/diffuse");
         _dependencyLoader.Execute();
+        return ResourceLoadState.Loading;
     }
 
-    // 依存のロード完了を待つ
-    if (!_dependencyLoader.Tick())
+    // 依存のロード完了を待つ（Tick()は呼ばない、AllLoadedで確認）
+    if (!_dependencyLoader.AllLoaded)
         return ResourceLoadState.Loading;
 
     // 全部揃った
@@ -207,6 +209,7 @@ public ResourceLoadState Tick(ResourceCatalog catalog)
 - 依存は実行時に発見できる（事前定義不要）
 - 循環依存も参照カウントで安全に処理
 - 依存の深さに制限なし
+- CatalogがすべてのリソースのTickを一括管理
 
 ### 原則5: 同期ポイントとしてのTick
 
@@ -217,7 +220,10 @@ public ResourceLoadState Tick(ResourceCatalog catalog)
 // ゲームループ
 void Update()
 {
-    // ロード処理を1ステップ進める
+    // リソースのロード処理を進める（Catalogが一括管理）
+    catalog.Tick();
+
+    // ローダーの状態チェック
     if (loader.State == LoaderState.Loading)
     {
         loader.Tick();
@@ -231,6 +237,7 @@ void Update()
 - ロード処理のタイミングを制御可能
 - フレームレートへの影響を予測可能
 - デバッグしやすい
+- 同一リソースが複数のLoaderからTickされることを防止
 
 ---
 
@@ -253,9 +260,12 @@ void Update()
 │  IResourceを登録し、内部でResourceEntryを生成・管理             │
 │  ・Register(key, IResource)                                  │
 │  ・Contains(key)                                             │
+│  ・Tick() → リクエスト処理 + 全リソースのTick                   │
 │  ・internal: GetEntry(key) → ResourceEntry                   │
+│  ・internal: RequestLoad/Unload(entry)                       │
 ├──────────────────────────────────────────────────────────────┤
 │  内部: Dictionary<string, ResourceEntry>                     │
+│  内部: _pendingRequests / _processingRequests (ダブルバッファ)  │
 └──────────────────────────────────────────────────────────────┘
                                │
                                │ 参照
@@ -483,7 +493,8 @@ public class StagedModelResource : IResource<Model>
                 return ResourceLoadState.Loading;
 
             case Stage.LoadingTextures:
-                if (!_textureLoader!.Tick())
+                // 依存ローダーのTick()は呼ばない（catalog.Tick()が担当）
+                if (!_textureLoader!.AllLoaded)
                     return ResourceLoadState.Loading;
 
                 _stage = Stage.Creating;
@@ -540,6 +551,12 @@ public sealed class ResourceCatalog
 
     /// <summary>登録されている全キーを取得</summary>
     public IReadOnlyCollection<string> GetAllKeys();
+
+    /// <summary>
+    /// 保留中のリクエストを処理し、ロード中のリソースをTickする
+    /// 毎フレーム1回呼び出す
+    /// </summary>
+    public void Tick();
 }
 ```
 
@@ -567,7 +584,13 @@ foreach (var key in catalog.GetAllKeys())
 // texture/enemy
 // audio/bgm
 
-// 登録解除（参照カウントが0でないと例外）
+// ゲームループでTick
+void Update()
+{
+    catalog.Tick();  // リソースのロード/アンロード処理を進める
+}
+
+// 登録解除（参照カウントが0でないと例外、Tick()後に呼ぶ）
 catalog.Unregister("audio/bgm");
 ```
 
@@ -615,14 +638,27 @@ public sealed class Loader : IDisposable
     /// <summary>ロード進捗（0.0～1.0）</summary>
     public float Progress { get; }
 
-    /// <summary>リソースのロードをリクエスト</summary>
+    /// <summary>
+    /// リソースのロードをリクエスト
+    /// Catalogへの送信はExecute()で行われる
+    /// </summary>
     /// <exception cref="KeyNotFoundException">キーが存在しない</exception>
     public ResourceHandle Request(string resourceKey);
 
-    /// <summary>ロード開始</summary>
+    /// <summary>
+    /// リソースのロードを即座にリクエスト（依存ローダー用）
+    /// Catalogへ即座に送信される
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">キーが存在しない</exception>
+    public ResourceHandle RequestImmediate(string resourceKey);
+
+    /// <summary>ロード開始（保留中のリクエストをCatalogに送信）</summary>
     public void Execute();
 
-    /// <summary>Tick処理。全完了でtrueを返す</summary>
+    /// <summary>
+    /// Tick処理。全完了でtrueを返す
+    /// リソースのTickはCatalog.Tick()が担当する
+    /// </summary>
     public bool Tick();
 
     /// <summary>全リソース解放してDispose</summary>
@@ -649,18 +685,20 @@ public enum LoaderState : byte
 │   ↓                                                          │
 │ State = Idle                                                 │
 │   ↓                                                          │
-│ Request("key1")  →  RefCount++                               │
-│ Request("key2")  →  RefCount++                               │
+│ Request("key1")  →  _pendingLoads に追加                     │
+│ Request("key2")  →  _pendingLoads に追加                     │
 │   ↓                                                          │
-│ Execute()  →  State = Loading                                │
+│ Execute()  →  RequestLoad を Catalog に送信, State = Loading │
 │   ↓                                                          │
 │ ┌─── 毎フレーム ───────────────────────────────────────────┐ │
-│ │ Tick()  →  Tick()を各リソースに対して呼び出し             │ │
+│ │ catalog.Tick()  →  RefCount++ + Start/Tick を一括処理    │ │
+│ │ loader.Tick()   →  AllLoaded を確認                       │ │
 │ │   ↓                                                       │ │
 │ │ 全完了 → State = Loaded, Tick() returns true              │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │   ↓                                                          │
-│ Dispose()  →  RefCount--, State = Idle                       │
+│ Dispose()  →  RequestUnload を Catalog に送信, State = Idle  │
+│ catalog.Tick()  →  RefCount-- (0なら Unload)                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -679,6 +717,7 @@ loader.Execute();
 // 毎フレーム
 while (loader.State == LoaderState.Loading)
 {
+    catalog.Tick();  // リソースのロード処理を進める
     if (loader.Tick())
     {
         Console.WriteLine("All loaded!");
@@ -692,6 +731,7 @@ if (handle1.TryGet<Texture>(out var tex)) { /* ... */ }
 
 // 解放
 loader.Dispose();
+catalog.Tick();  // アンロード処理を実行
 ```
 
 ### 使用例: ロード中に追加
@@ -705,8 +745,9 @@ loader.Execute();
 // ロード中に追加リクエスト
 loader.Request("texture/enemy");
 
-// 次のTick()で追加リソースもロード開始される
-while (!loader.Tick()) { }
+// 次のloader.Tick()でリクエストがCatalogに送信され、
+// その次のcatalog.Tick()でロード開始される
+while (true) { catalog.Tick(); if (loader.Tick()) break; }
 ```
 
 ---
@@ -747,7 +788,7 @@ Console.WriteLine(handle.State);     // Unloaded
 
 // ロード後
 loader.Execute();
-while (!loader.Tick()) { }
+while (true) { catalog.Tick(); if (loader.Tick()) break; }
 
 Console.WriteLine(handle.IsLoaded);  // True
 Console.WriteLine(handle.State);     // Loaded
@@ -793,12 +834,14 @@ handle.TryGet<Texture>(out var tex); // False, tex = null
 操作                              | RefCount | リソース状態
 ----------------------------------|----------|---------------
 初期状態                          | 0        | Unloaded
-LoaderA.Request("tex")            | 1        | -
-LoaderA.Execute()                 | 1        | Loading
-LoaderA.Tick() → Loaded           | 1        | Loaded
-LoaderB.Request("tex")            | 2        | Loaded (再ロードしない)
-LoaderA.Dispose()                 | 1        | Loaded (まだ保持)
-LoaderB.Dispose()                 | 0        | Unloaded (解放)
+LoaderA.Request("tex")            | 0        | -（リクエスト登録のみ）
+LoaderA.Execute()                 | 0        | -（Catalogに送信）
+catalog.Tick()                    | 1        | Loading（RefCount++後にStart）
+catalog.Tick() → Loaded           | 1        | Loaded
+LoaderB.Request("tex")            | 1        | Loaded
+LoaderB.Execute() + catalog.Tick()| 2        | Loaded (再ロードしない)
+LoaderA.Dispose() + catalog.Tick()| 1        | Loaded (まだ保持)
+LoaderB.Dispose() + catalog.Tick()| 0        | Unloaded (解放)
 ```
 
 ### 同一Loader内での重複リクエスト
@@ -824,26 +867,29 @@ var loaderA = new Loader(catalog);
 var loaderB = new Loader(catalog);
 
 // 両方が同じリソースをリクエスト
-loaderA.Request("texture/shared");  // RefCount=1
-loaderB.Request("texture/shared");  // RefCount=2
+loaderA.Request("texture/shared");
+loaderB.Request("texture/shared");
 
 // Aをロード
 loaderA.Execute();
-while (!loaderA.Tick()) { }
+while (true) { catalog.Tick(); if (loaderA.Tick()) break; }  // RefCount=1
 
 // Bはリクエストした時点で既にLoaded
 loaderB.Execute();
+catalog.Tick();  // RefCount=2
 Console.WriteLine(loaderB.Tick());  // True（即座に完了）
 
 // Aを解放
-loaderA.Dispose();  // RefCount=1
+loaderA.Dispose();
+catalog.Tick();  // RefCount=1
 
 // リソースはまだ使用可能
 var handleB = loaderB.Request("texture/shared");
 Console.WriteLine(handleB.IsLoaded);  // True
 
 // Bを解放
-loaderB.Dispose();  // RefCount=0 → 実際にUnload()が呼ばれる
+loaderB.Dispose();
+catalog.Tick();  // RefCount=0 → 実際にUnload()が呼ばれる
 ```
 
 ---
@@ -853,6 +899,7 @@ loaderB.Dispose();  // RefCount=0 → 実際にUnload()が呼ばれる
 ### 基本パターン
 
 Tick内で依存リソース用のLoaderを作成する。
+依存LoaderのTick()は呼ばない（Catalog.Tick()が一括で担当）。
 
 ```csharp
 public class MaterialResource : IResource<Material>
@@ -861,6 +908,8 @@ public class MaterialResource : IResource<Material>
     private readonly string _normalPath;
     private Material? _material;
     private Loader? _dependencyLoader;
+    private ResourceHandle _diffuseHandle;
+    private ResourceHandle _normalHandle;
 
     public MaterialResource(string diffuse, string normal)
     {
@@ -876,21 +925,19 @@ public class MaterialResource : IResource<Material>
         if (_dependencyLoader == null)
         {
             _dependencyLoader = new Loader(catalog);
-            _dependencyLoader.Request(_diffusePath);
-            _dependencyLoader.Request(_normalPath);
+            _diffuseHandle = _dependencyLoader.Request(_diffusePath);
+            _normalHandle = _dependencyLoader.Request(_normalPath);
             _dependencyLoader.Execute();
+            return ResourceLoadState.Loading;
         }
 
-        // 依存のロード完了を待つ
-        if (!_dependencyLoader.Tick())
+        // 依存のロード完了を待つ（Tick()は呼ばない、AllLoadedで確認）
+        if (!_dependencyLoader.AllLoaded)
             return ResourceLoadState.Loading;
 
         // 依存が揃ったのでマテリアルを作成
-        _dependencyLoader.TryGetHandle(_diffusePath, out var diffuseHandle);
-        _dependencyLoader.TryGetHandle(_normalPath, out var normalHandle);
-
-        diffuseHandle.TryGet<Texture>(out var diffuse);
-        normalHandle.TryGet<Texture>(out var normal);
+        _diffuseHandle.TryGet<Texture>(out var diffuse);
+        _normalHandle.TryGet<Texture>(out var normal);
 
         _material = CreateMaterial(diffuse, normal);
         return ResourceLoadState.Loaded;
@@ -922,6 +969,7 @@ public class PrefabResource : IResource<Prefab>
     private Task<PrefabData>? _loadTask;
     private Loader? _dependencyLoader;
     private PrefabData? _data;
+    private Dictionary<string, ResourceHandle>? _dependencyHandles;
 
     public void Start()
     {
@@ -946,24 +994,36 @@ public class PrefabResource : IResource<Prefab>
         if (_dependencyLoader == null)
         {
             _dependencyLoader = new Loader(catalog);
+            _dependencyHandles = new Dictionary<string, ResourceHandle>();
 
             // ファイルから判明した依存をロード
             foreach (var dep in _data.Dependencies)
             {
-                _dependencyLoader.Request(dep);
+                _dependencyHandles[dep] = _dependencyLoader.Request(dep);
             }
             _dependencyLoader.Execute();
+            return ResourceLoadState.Loading;
         }
 
-        if (!_dependencyLoader.Tick())
+        // 依存のロード完了を待つ（Tick()は呼ばない、AllLoadedで確認）
+        if (!_dependencyLoader.AllLoaded)
             return ResourceLoadState.Loading;
 
         // Phase 3: Prefab作成
-        _prefab = CreatePrefab(_data, _dependencyLoader);
+        _prefab = CreatePrefab(_data, _dependencyHandles);
         return ResourceLoadState.Loaded;
     }
 
-    // ...
+    public Prefab? GetResource() => _prefab;
+
+    public void Unload()
+    {
+        _dependencyLoader?.Dispose();
+        _dependencyLoader = null;
+        _dependencyHandles = null;
+        ReleasePrefab(_prefab);
+        _prefab = null;
+    }
 }
 ```
 
@@ -997,12 +1057,13 @@ loader.Execute();           // State = Loading
 loader.Request("B");        // ← ロード中に追加
 
 // 動作:
-// ・Request("B")は即座にリクエストリストに追加
-// ・Bの参照カウント+1
-// ・BがまだUnloadedなら、次のTick()でStart()が呼ばれる
+// ・Request("B")は _pendingLoads に追加
+// ・次のloader.Tick()で RequestLoad がCatalogに送信される
+// ・その次のcatalog.Tick()でBの参照カウント+1
+// ・BがまだUnloadedなら、同じcatalog.Tick()でStart()が呼ばれる
 // ・BがLoadingまたはLoadedなら、参照カウント+1のみ
 // ・LoaderのStateはLoadingのまま継続
-// ・A, B両方がLoadedになるまでTick()はfalseを返す
+// ・A, B両方がLoadedになるまでloader.Tick()はfalseを返す
 ```
 
 ### 2. ロード中にDisposeしたケース
@@ -1010,10 +1071,13 @@ loader.Request("B");        // ← ロード中に追加
 ```csharp
 loader.Request("A");
 loader.Execute();           // State = Loading
+catalog.Tick();             // Aのロード開始
 loader.Dispose();           // ← ロード中にDispose
+catalog.Tick();             // ← アンロード処理を実行
 
 // 動作:
-// ・リクエスト済みの全リソースの参照カウント-1
+// ・Dispose()でExecute済みリソースにRequestUnloadを送信
+// ・catalog.Tick()でリクエスト済みの全リソースの参照カウント-1
 // ・参照カウントが0になったリソースはUnload()を呼び、Unloaded状態に戻す
 // ・LoaderのStateはIdleに戻る
 // ・ロード中だったリソースはキャンセル扱い
@@ -1023,17 +1087,21 @@ loader.Dispose();           // ← ロード中にDispose
 ### 3. 同じキーを複数Loaderにリクエストしたケース
 
 ```csharp
-loaderA.Request("A");     // RefCount=1
-loaderA.Execute();        // Aのロード開始
-loaderB.Request("A");     // RefCount=2
+loaderA.Request("A");
+loaderA.Execute();
+catalog.Tick();           // RefCount=1, Aのロード開始
+loaderB.Request("A");
+loaderB.Execute();
+catalog.Tick();           // RefCount=2
 
 // 動作:
-// ・loaderB.Request("A")は参照カウント+1のみ
+// ・loaderB.Execute()でRequestLoadがCatalogに送信
+// ・catalog.Tick()で参照カウント+1
 // ・Aが既にLoadingまたはLoadedなら、再度Start()は呼ばない
 // ・loaderBからもResourceHandleが返る（同じEntryを参照）
 // ・両方のハンドルから同じリソースにアクセス可能
-// ・loaderA.Dispose()でRefCount=1（リソースは解放されない）
-// ・loaderB.Dispose()でRefCount=0（リソースが実際に解放される）
+// ・loaderA.Dispose() + catalog.Tick()でRefCount=1（リソースは解放されない）
+// ・loaderB.Dispose() + catalog.Tick()でRefCount=0（リソースが実際に解放される）
 ```
 
 ### 4. 存在しないキーをリクエストしたケース
@@ -1064,16 +1132,39 @@ var handle2 = loader.Request("A");  // RefCount=1（変化なし）
 
 ```csharp
 loader.Request("A");
-loader.Execute();           // Aのロード開始
-loader.Request("B");        // 追加リクエスト
-loader.Execute();           // ← 2回目
+loader.Execute();           // AのRequestLoadをCatalogに送信
+catalog.Tick();             // Aのロード開始
+loader.Request("B");        // 追加リクエスト（_pendingLoadsに追加）
+loader.Execute();           // ← 2回目（BのRequestLoadをCatalogに送信）
+catalog.Tick();             // Bのロード開始
 
 // 動作:
-// ・Unloadedのリソースのみ新たにStart()を呼ぶ
-// ・既にLoading/Loadedのリソースは何もしない
-// ・つまり、Bのみロード開始される
+// ・Execute()は_pendingLoadsのリクエストをCatalogに送信
+// ・catalog.Tick()でUnloadedのリソースのみStart()を呼ぶ
+// ・既にLoading/Loadedのリソースは参照カウント+1のみ
 // ・LoaderのStateがIdleならLoadingに変更、既にLoadingなら維持
 ```
+
+### 7. シーン遷移で同一フレームにアンロード→ロードが発生するケース
+
+```csharp
+// シーンAがtexを使用中（RefCount=1, Loaded）
+loaderA.Dispose();                    // RequestUnload("tex")
+loaderB.Request("tex");
+loaderB.Execute();                    // RequestLoad("tex")
+catalog.Tick();                       // ← 同一フレームで処理
+
+// 動作:
+// ・catalog.Tick()でリクエストをグループ化
+// ・"tex"に対して: loadCount=1, unloadCount=1
+// ・netChange = 1 - 1 = 0
+// ・RefCountは変更しない（元のRefCount=1のまま）
+// ・Unloadしない（最適化!）
+// ・entry.StateはLoaded → Startも呼ばない
+// ・リソースはロード済みのまま維持される
+```
+
+この最適化により、シーン遷移時に共有リソースの無駄なアンロード→再ロードを防止できる。
 
 ---
 
@@ -1106,6 +1197,7 @@ public class SceneLoader : IDisposable
 
     public bool UpdateLoad()
     {
+        _catalog.Tick();  // リソースのロード処理を進める
         return _loader?.Tick() ?? true;
     }
 
@@ -1114,6 +1206,7 @@ public class SceneLoader : IDisposable
     public void Dispose()
     {
         _loader?.Dispose();
+        _catalog.Tick();  // アンロード処理を実行
     }
 }
 
@@ -1147,6 +1240,11 @@ public class PreloadManager
     private readonly ResourceCatalog _catalog;
     private Loader? _preloader;
 
+    public PreloadManager(ResourceCatalog catalog)
+    {
+        _catalog = catalog;
+    }
+
     public void PreloadCommon()
     {
         _preloader = new Loader(_catalog);
@@ -1158,6 +1256,7 @@ public class PreloadManager
 
     public void Update()
     {
+        _catalog.Tick();  // リソースのロード処理を進める
         _preloader?.Tick();
     }
 
@@ -1174,6 +1273,11 @@ public class OnDemandLoader
     private readonly ResourceCatalog _catalog;
     private readonly Dictionary<string, ResourceHandle> _handles = new();
     private Loader? _loader;
+
+    public OnDemandLoader(ResourceCatalog catalog)
+    {
+        _catalog = catalog;
+    }
 
     public ResourceHandle GetOrLoad(string key)
     {
@@ -1193,12 +1297,14 @@ public class OnDemandLoader
 
     public void Update()
     {
+        _catalog.Tick();  // リソースのロード処理を進める
         _loader?.Tick();
     }
 
     public void Dispose()
     {
         _loader?.Dispose();
+        _catalog.Tick();  // アンロード処理を実行
         _handles.Clear();
     }
 }
@@ -1235,11 +1341,12 @@ loader.Request("texture/player");
 loader.Execute();  // ← これを忘れていないか
 ```
 
-**3. Tick()を呼んでいるか確認**
+**3. catalog.Tick()を呼んでいるか確認**
 ```csharp
 while (loader.State == LoaderState.Loading)
 {
-    loader.Tick();  // ← 毎フレーム呼ぶ
+    catalog.Tick();  // ← 毎フレーム呼ぶ（リソースのロード処理を進める）
+    loader.Tick();   // ← 毎フレーム呼ぶ（状態チェック）
 }
 ```
 

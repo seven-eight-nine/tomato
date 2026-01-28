@@ -19,11 +19,13 @@ public class IntegrationTests
         // Both loaders request the same resource
         var handleA = loaderA.Request("shared/resource");
         loaderA.Execute();
+        catalog.Tick();
         loaderA.Tick();
 
         var handleB = loaderB.Request("shared/resource");
         // Already loaded, should not call Start again
         loaderB.Execute();
+        catalog.Tick();
 
         // Both handles should see loaded resource
         Assert.True(handleA.IsLoaded);
@@ -35,10 +37,12 @@ public class IntegrationTests
 
         // Dispose A - resource should still be available for B
         loaderA.Dispose();
+        catalog.Tick();
         Assert.False(resource.UnloadCalled); // RefCount still > 0
 
         // Dispose B - resource should now be unloaded
         loaderB.Dispose();
+        catalog.Tick();
         Assert.True(resource.UnloadCalled); // RefCount = 0
     }
 
@@ -56,6 +60,7 @@ public class IntegrationTests
         var handle2 = loader.Request("test/resource");
 
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
 
         // Both handles should work
@@ -66,6 +71,7 @@ public class IntegrationTests
 
         // Single dispose should release the resource
         loader.Dispose();
+        catalog.Tick();
         Assert.True(resource.UnloadCalled);
     }
 
@@ -87,11 +93,18 @@ public class IntegrationTests
         var handle = loader.Request("material/main");
         loader.Execute();
 
-        // First tick: material starts loading, creates internal loader for deps, deps start loading
+        // Frame 1: material Start + Tick → 依存ローダー作成、リクエストをCatalogに送信
+        catalog.Tick();
         Assert.False(loader.Tick());
         Assert.False(handle.IsLoaded);
 
-        // Second tick: deps complete, material completes
+        // Frame 2: deps のAcquire/Start処理 + deps Tick(1回目) + material.Tick(deps未完了)
+        catalog.Tick();
+        Assert.False(loader.Tick());
+        Assert.False(handle.IsLoaded);
+
+        // Frame 3: deps Tick(2回目→Loaded) + material.Tick → deps Loaded を認識 → material Loaded
+        catalog.Tick();
         Assert.True(loader.Tick());
         Assert.True(handle.IsLoaded);
         Assert.True(handle.TryGet<string>(out var material));
@@ -125,6 +138,7 @@ public class IntegrationTests
         Assert.Equal(LoaderState.Loading, loader.State);
 
         // 5. Tick until complete
+        catalog.Tick();
         Assert.True(loader.Tick());
         Assert.Equal(LoaderState.Loaded, loader.State);
         Assert.True(loader.AllLoaded);
@@ -156,14 +170,14 @@ public class IntegrationTests
         loaderA.Request("resource/shared");
         loaderA.Request("resource/sceneA");
         loaderA.Execute();
-        while (!loaderA.Tick()) { }
+        while (true) { catalog.Tick(); if (loaderA.Tick()) break; }
 
         // Scene B starts loading while A is still active
         var loaderB = new ResourceLoader(catalog);
         loaderB.Request("resource/shared"); // Shared between scenes
         loaderB.Request("resource/sceneB");
         loaderB.Execute();
-        while (!loaderB.Tick()) { }
+        while (true) { catalog.Tick(); if (loaderB.Tick()) break; }
 
         // Verify all resources are loaded
         Assert.True(sharedResource.StartCalled);
@@ -172,6 +186,7 @@ public class IntegrationTests
 
         // Dispose Scene A
         loaderA.Dispose();
+        catalog.Tick();
 
         // Shared resource should NOT be unloaded (Scene B still uses it)
         Assert.False(sharedResource.UnloadCalled);
@@ -180,6 +195,7 @@ public class IntegrationTests
 
         // Dispose Scene B
         loaderB.Dispose();
+        catalog.Tick();
 
         // Now all resources should be unloaded
         Assert.True(sharedResource.UnloadCalled);
@@ -203,19 +219,25 @@ public class IntegrationTests
         loader.Execute();
 
         // Tick a few times
-        Assert.False(loader.Tick());
-        Assert.False(loader.Tick());
+        catalog.Tick();
+        Assert.False(loader.Tick()); // slow tick 1
+        catalog.Tick();
+        Assert.False(loader.Tick()); // slow tick 2
 
         // Add fast resource mid-load
         var fastHandle = loader.Request("resource/fast");
 
-        // Continue ticking
-        Assert.False(loader.Tick()); // fast loads
+        // Continue ticking - fast は _pendingLoads に追加されたのでloader.Tickで送信される
+        catalog.Tick();
+        Assert.False(loader.Tick()); // slow tick 3, fast pending送信
+
+        catalog.Tick();
+        Assert.False(loader.Tick()); // slow tick 4, fast tick 1 (loaded)
         Assert.True(fastHandle.IsLoaded);
         Assert.False(loader.AllLoaded); // slow still loading
 
-        Assert.False(loader.Tick());
-        Assert.True(loader.Tick()); // slow finally loads
+        catalog.Tick();
+        Assert.True(loader.Tick()); // slow tick 5 (loaded)
 
         Assert.True(loader.AllLoaded);
         Assert.Equal(2, loader.LoadedCount);
@@ -237,11 +259,15 @@ public class IntegrationTests
         loader.Execute();
 
         // Will fail 3 times then succeed
+        catalog.Tick();
         Assert.False(loader.Tick()); // Fail 1
         Assert.Equal(ResourceLoadState.Failed, handle.State);
 
+        catalog.Tick();
         Assert.False(loader.Tick()); // Fail 2
+        catalog.Tick();
         Assert.False(loader.Tick()); // Fail 3
+        catalog.Tick();
         Assert.True(loader.Tick());  // Success
 
         Assert.True(handle.IsLoaded);
@@ -278,8 +304,10 @@ public class IntegrationTests
         var loader = new ResourceLoader(catalog);
         loader.Request("resource/temp");
         loader.Execute();
+        catalog.Tick();
         loader.Tick();
         loader.Dispose();
+        catalog.Tick();
 
         // Now we can unregister
         catalog.Unregister("resource/temp");

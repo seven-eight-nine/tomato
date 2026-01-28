@@ -233,6 +233,10 @@ namespace Tomato.DeepCloneGenerator
                     GenerateDeepCloneableClone(sb, member, indent);
                     break;
 
+                case CopyStrategy.CustomDeepCloneable:
+                    GenerateCustomDeepCloneableClone(sb, member, indent);
+                    break;
+
                 case CopyStrategy.TypeParameter:
                     GenerateTypeParameterClone(sb, member, indent);
                     break;
@@ -258,7 +262,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -268,13 +272,14 @@ namespace Tomato.DeepCloneGenerator
             {
                 sb.AppendLine($"{indent}    global::System.Array.Copy(this.{name}, clone.{name}, this.{name}.Length);");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    for (int i = 0; i < this.{name}.Length; i++)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (this.{name}[i] != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}[i] = this.{name}[i].DeepCloneInternal();");
+                sb.AppendLine($"{indent}            clone.{name}[i] = this.{name}[i]{cloneMethod};");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}    }}");
             }
@@ -291,7 +296,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
             var isCyclable = member.Option == CloneOption.Cyclable;
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
@@ -302,8 +307,9 @@ namespace Tomato.DeepCloneGenerator
             {
                 sb.AppendLine($"{indent}    clone.{name}.AddRange(this.{name});");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
@@ -316,12 +322,12 @@ namespace Tomato.DeepCloneGenerator
                     sb.AppendLine($"{indent}            }}");
                     sb.AppendLine($"{indent}            else");
                     sb.AppendLine($"{indent}            {{");
-                    sb.AppendLine($"{indent}                clone.{name}.Add(item.DeepCloneInternal());");
+                    sb.AppendLine($"{indent}                clone.{name}.Add(item{cloneMethod});");
                     sb.AppendLine($"{indent}            }}");
                 }
                 else
                 {
-                    sb.AppendLine($"{indent}            clone.{name}.Add(item.DeepCloneInternal());");
+                    sb.AppendLine($"{indent}            clone.{name}.Add(item{cloneMethod});");
                 }
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
@@ -345,7 +351,7 @@ namespace Tomato.DeepCloneGenerator
             var valueType = member.ValueType!;
             var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isValueDeepCloneable = IsDeepCloneable(valueType);
+            var isValueAnyDeepCloneable = IsAnyDeepCloneable(valueType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -359,13 +365,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}[kvp.Key] = kvp.Value;");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isValueDeepCloneable)
+            else if (isValueAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(valueType);
                 sb.AppendLine($"{indent}    foreach (var kvp in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (kvp.Value != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value.DeepCloneInternal();");
+                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value{cloneMethod};");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -389,7 +396,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -399,15 +406,16 @@ namespace Tomato.DeepCloneGenerator
                 // Preserve comparer
                 sb.AppendLine($"{indent}    clone.{name} = new global::System.Collections.Generic.HashSet<{elementTypeName}>(this.{name}, this.{name}.Comparer);");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 // Preserve comparer
                 sb.AppendLine($"{indent}    clone.{name} = new global::System.Collections.Generic.HashSet<{elementTypeName}>(this.{name}.Comparer);");
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Add(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Add(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -429,7 +437,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -442,13 +450,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Enqueue(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Enqueue(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Enqueue(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -472,7 +481,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -488,13 +497,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Push(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in tempArray)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Push(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Push(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -518,7 +528,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -531,13 +541,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.AddLast(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.AddLast(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.AddLast(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -563,7 +574,7 @@ namespace Tomato.DeepCloneGenerator
             var valueType = member.ValueType!;
             var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isValueDeepCloneable = IsDeepCloneable(valueType);
+            var isValueAnyDeepCloneable = IsAnyDeepCloneable(valueType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -577,13 +588,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}[kvp.Key] = kvp.Value;");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isValueDeepCloneable)
+            else if (isValueAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(valueType);
                 sb.AppendLine($"{indent}    foreach (var kvp in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (kvp.Value != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value.DeepCloneInternal();");
+                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value{cloneMethod};");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -609,7 +621,7 @@ namespace Tomato.DeepCloneGenerator
             var valueType = member.ValueType!;
             var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isValueDeepCloneable = IsDeepCloneable(valueType);
+            var isValueAnyDeepCloneable = IsAnyDeepCloneable(valueType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -623,13 +635,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}[kvp.Key] = kvp.Value;");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isValueDeepCloneable)
+            else if (isValueAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(valueType);
                 sb.AppendLine($"{indent}    foreach (var kvp in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (kvp.Value != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value.DeepCloneInternal();");
+                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value{cloneMethod};");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -653,7 +666,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -667,13 +680,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Add(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Add(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Add(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -699,7 +713,7 @@ namespace Tomato.DeepCloneGenerator
             var valueType = member.ValueType!;
             var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isValueDeepCloneable = IsDeepCloneable(valueType);
+            var isValueAnyDeepCloneable = IsAnyDeepCloneable(valueType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -712,13 +726,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}[kvp.Key] = kvp.Value;");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isValueDeepCloneable)
+            else if (isValueAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(valueType);
                 sb.AppendLine($"{indent}    foreach (var kvp in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (kvp.Value != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value.DeepCloneInternal();");
+                sb.AppendLine($"{indent}            clone.{name}[kvp.Key] = kvp.Value{cloneMethod};");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -742,7 +757,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -755,13 +770,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Enqueue(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Enqueue(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Enqueue(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -785,7 +801,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -801,13 +817,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Push(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in tempArray)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Push(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Push(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -831,7 +848,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -844,13 +861,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Add(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Add(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Add(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -874,7 +892,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -887,13 +905,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        tempList.Add(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            tempList.Add(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            tempList.Add(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -918,7 +937,7 @@ namespace Tomato.DeepCloneGenerator
             var name = member.Name;
             var elementType = member.ElementType!;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -931,13 +950,14 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}        clone.{name}.Add(item);");
                 sb.AppendLine($"{indent}    }}");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    foreach (var item in this.{name})");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        if (item != null)");
                 sb.AppendLine($"{indent}        {{");
-                sb.AppendLine($"{indent}            clone.{name}.Add(item.DeepCloneInternal());");
+                sb.AppendLine($"{indent}            clone.{name}.Add(item{cloneMethod});");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}        else");
                 sb.AppendLine($"{indent}        {{");
@@ -967,7 +987,7 @@ namespace Tomato.DeepCloneGenerator
 
             var elementType = innerArrayType.ElementType;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -982,13 +1002,14 @@ namespace Tomato.DeepCloneGenerator
             {
                 sb.AppendLine($"{indent}            global::System.Array.Copy(this.{name}[i], clone.{name}[i], this.{name}[i].Length);");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}            for (int j = 0; j < this.{name}[i].Length; j++)");
                 sb.AppendLine($"{indent}            {{");
                 sb.AppendLine($"{indent}                if (this.{name}[i][j] != null)");
                 sb.AppendLine($"{indent}                {{");
-                sb.AppendLine($"{indent}                    clone.{name}[i][j] = this.{name}[i][j].DeepCloneInternal();");
+                sb.AppendLine($"{indent}                    clone.{name}[i][j] = this.{name}[i][j]{cloneMethod};");
                 sb.AppendLine($"{indent}                }}");
                 sb.AppendLine($"{indent}            }}");
             }
@@ -1010,7 +1031,7 @@ namespace Tomato.DeepCloneGenerator
 
             var elementType = type.ElementType;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -1022,15 +1043,16 @@ namespace Tomato.DeepCloneGenerator
             {
                 sb.AppendLine($"{indent}    global::System.Array.Copy(this.{name}, clone.{name}, this.{name}.Length);");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    for (int i = 0; i < dim0; i++)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        for (int j = 0; j < dim1; j++)");
                 sb.AppendLine($"{indent}        {{");
                 sb.AppendLine($"{indent}            if (this.{name}[i, j] != null)");
                 sb.AppendLine($"{indent}            {{");
-                sb.AppendLine($"{indent}                clone.{name}[i, j] = this.{name}[i, j].DeepCloneInternal();");
+                sb.AppendLine($"{indent}                clone.{name}[i, j] = this.{name}[i, j]{cloneMethod};");
                 sb.AppendLine($"{indent}            }}");
                 sb.AppendLine($"{indent}        }}");
                 sb.AppendLine($"{indent}    }}");
@@ -1051,7 +1073,7 @@ namespace Tomato.DeepCloneGenerator
 
             var elementType = type.ElementType;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var isElementDeepCloneable = IsDeepCloneable(elementType);
+            var isElementAnyDeepCloneable = IsAnyDeepCloneable(elementType);
 
             sb.AppendLine($"{indent}if (this.{name} != null)");
             sb.AppendLine($"{indent}{{");
@@ -1064,8 +1086,9 @@ namespace Tomato.DeepCloneGenerator
             {
                 sb.AppendLine($"{indent}    global::System.Array.Copy(this.{name}, clone.{name}, this.{name}.Length);");
             }
-            else if (isElementDeepCloneable)
+            else if (isElementAnyDeepCloneable)
             {
+                var cloneMethod = GetElementCloneMethod(elementType);
                 sb.AppendLine($"{indent}    for (int i = 0; i < dim0; i++)");
                 sb.AppendLine($"{indent}    {{");
                 sb.AppendLine($"{indent}        for (int j = 0; j < dim1; j++)");
@@ -1074,7 +1097,7 @@ namespace Tomato.DeepCloneGenerator
                 sb.AppendLine($"{indent}            {{");
                 sb.AppendLine($"{indent}                if (this.{name}[i, j, k] != null)");
                 sb.AppendLine($"{indent}                {{");
-                sb.AppendLine($"{indent}                    clone.{name}[i, j, k] = this.{name}[i, j, k].DeepCloneInternal();");
+                sb.AppendLine($"{indent}                    clone.{name}[i, j, k] = this.{name}[i, j, k]{cloneMethod};");
                 sb.AppendLine($"{indent}                }}");
                 sb.AppendLine($"{indent}            }}");
                 sb.AppendLine($"{indent}        }}");
@@ -1141,6 +1164,37 @@ namespace Tomato.DeepCloneGenerator
             }
         }
 
+        private static void GenerateCustomDeepCloneableClone(StringBuilder sb, MemberInfo member, string indent)
+        {
+            var name = member.Name;
+            var typeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            // CustomDeepCloneable uses user-defined DeepClone() method
+            if (member.Option == CloneOption.Cyclable)
+            {
+                sb.AppendLine($"{indent}if (this.{name} != null)");
+                sb.AppendLine($"{indent}{{");
+                sb.AppendLine($"{indent}    if (global::Tomato.DeepCloneGenerator.DeepCloneCycleTracker.TryGetClone(this.{name}, out {typeName}? cached))");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine($"{indent}        clone.{name} = cached;");
+                sb.AppendLine($"{indent}    }}");
+                sb.AppendLine($"{indent}    else");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine($"{indent}        var clonedValue = this.{name}.DeepClone();");
+                sb.AppendLine($"{indent}        global::Tomato.DeepCloneGenerator.DeepCloneCycleTracker.Register(this.{name}, clonedValue);");
+                sb.AppendLine($"{indent}        clone.{name} = clonedValue;");
+                sb.AppendLine($"{indent}    }}");
+                sb.AppendLine($"{indent}}}");
+            }
+            else
+            {
+                sb.AppendLine($"{indent}if (this.{name} != null)");
+                sb.AppendLine($"{indent}{{");
+                sb.AppendLine($"{indent}    clone.{name} = this.{name}.DeepClone();");
+                sb.AppendLine($"{indent}}}");
+            }
+        }
+
         private static bool IsSimpleType(ITypeSymbol type)
         {
             if (type.IsValueType)
@@ -1150,25 +1204,61 @@ namespace Tomato.DeepCloneGenerator
             return false;
         }
 
+        /// <summary>
+        /// Gets the clone method call for an element: .DeepCloneInternal() or .DeepClone()
+        /// </summary>
+        private static string GetElementCloneMethod(ITypeSymbol elementType)
+        {
+            // [DeepClonable] → use generated DeepCloneInternal()
+            if (IsDeepCloneable(elementType))
+                return ".DeepCloneInternal()";
+
+            // IDeepCloneable<T> only → use user-defined DeepClone()
+            if (IsCustomDeepCloneable(elementType))
+                return ".DeepClone()";
+
+            // Fallback (should not happen in normal usage)
+            return ".DeepCloneInternal()";
+        }
+
         private static bool IsDeepCloneable(ITypeSymbol type)
         {
             if (type is INamedTypeSymbol namedType)
             {
-                // Check for DeepClonable attribute
+                // Check for DeepClonable attribute (use DeepCloneInternal)
                 foreach (var attr in namedType.GetAttributes())
                 {
                     if (attr.AttributeClass?.ToDisplayString() == "Tomato.DeepCloneGenerator.DeepClonableAttribute")
                         return true;
                 }
+            }
+            return false;
+        }
 
-                // Check for IDeepCloneable<T> interface
+        private static bool IsCustomDeepCloneable(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol namedType)
+            {
+                // Already has [DeepClonable] → not custom
+                foreach (var attr in namedType.GetAttributes())
+                {
+                    if (attr.AttributeClass?.ToDisplayString() == "Tomato.DeepCloneGenerator.DeepClonableAttribute")
+                        return false;
+                }
+
+                // Check for IDeepCloneable<T> interface (user-defined DeepClone)
                 foreach (var iface in namedType.AllInterfaces)
                 {
-                    if (iface.OriginalDefinition.ToDisplayString() == "Tomato.DeepCloneGenerator.IDeepCloneable<T>")
+                    if (iface.OriginalDefinition.ToDisplayString() == "Tomato.DeepCloneGenerator.IDeepCloneable`1")
                         return true;
                 }
             }
             return false;
+        }
+
+        private static bool IsAnyDeepCloneable(ITypeSymbol type)
+        {
+            return IsDeepCloneable(type) || IsCustomDeepCloneable(type);
         }
 
         private static string GetTypeModifiers(INamedTypeSymbol typeSymbol)

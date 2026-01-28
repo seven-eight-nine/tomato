@@ -144,11 +144,6 @@ controller.StateChanged += (s, e) =>
 };
 ```
 
-## 📚 さらに詳しく
-
-- **[詳細ガイド](../docs/CharacterSpawnSystem-Guide.md)** - 完全なリファレンス
-- **[実装仕様](../docs/CharacterSpawnSystem_Implementation_Spec.md)** - 内部実装の詳細
-
 ## 📄 ライセンス
 
 MIT License

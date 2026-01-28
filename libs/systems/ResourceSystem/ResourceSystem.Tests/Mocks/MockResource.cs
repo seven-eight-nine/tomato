@@ -122,9 +122,12 @@ public class MockDependentResource : IResource<string>
                 _dependencyLoader.Request(dep);
             }
             _dependencyLoader.Execute();
+            return ResourceLoadState.Loading;
         }
 
-        if (!_dependencyLoader.Tick())
+        // 依存ローダーのTickは呼ばない（Catalog.Tickが担当）
+        // AllLoadedをチェックするのみ
+        if (!_dependencyLoader.AllLoaded)
         {
             return ResourceLoadState.Loading;
         }

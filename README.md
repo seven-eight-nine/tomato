@@ -435,7 +435,6 @@ Step 1: 全Entityの次Stepのメッセージを処理
 
 - [アーキテクチャ概要](docs/ARCHITECTURE.md)
 - [はじめに](docs/GETTING_STARTED.md)
-- [設計ドキュメント](docs/plans/action-game-design.md)
 - [SystemPipeline詳細](libs/foundation/SystemPipeline/README.md)
 - [EntityHandleSystem詳細](libs/foundation/EntityHandleSystem/README.md)
 - [FlowTree詳細](libs/foundation/FlowTree/README.md)

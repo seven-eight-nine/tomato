@@ -20,6 +20,7 @@
 - **依存ロード対応**: リソースが他のリソースに依存する場合も自動解決
 - **ゲームエンジン非依存**: Unity/Godot/自作エンジン問わず使用可能
 - **非同期ロード対応**: 毎フレームTickで進捗管理
+- **シーン遷移最適化**: 同一フレームでアンロード→ロードが発生した場合、アンロードをスキップ
 
 ---
 
@@ -87,6 +88,7 @@ void Update()
 {
     if (loader.State == LoaderState.Loading)
     {
+        catalog.Tick();  // リソースのロード処理を進める
         if (loader.Tick())
         {
             OnLoadComplete();
@@ -108,6 +110,7 @@ if (texHandle.TryGet<Texture>(out var texture))
 
 ```csharp
 loader.Dispose();
+catalog.Tick();  // アンロード処理を実行
 ```
 
 ---
@@ -141,8 +144,8 @@ loader.Dispose();
 
 | 操作 | RefCount変化 | 説明 |
 |------|:------------:|------|
-| `Request()` | +1 | Loaderがリソースを要求 |
-| `Dispose()` | -1 | Loaderがリソースを解放 |
+| `Execute()` | +1 | Loaderがリソースを要求（catalog.Tick()で処理） |
+| `Dispose()` | -1 | Loaderがリソースを解放（catalog.Tick()で処理） |
 | RefCount=0 | → | 実際にリソースをUnload |
 
 ---
@@ -154,20 +157,23 @@ loader.Dispose();
 ```csharp
 // シーンAのLoader
 var loaderA = new Loader(catalog);
-loaderA.Request("texture/player");  // RefCount=1
-loaderA.Execute();
-while (!loaderA.Tick()) { }
+loaderA.Request("texture/player");  // リクエスト登録
+loaderA.Execute();                   // Catalogに送信
+while (true) { catalog.Tick(); if (loaderA.Tick()) break; }  // RefCount=1
 
 // シーンBのLoader（シーンAがまだアクティブな状態で）
 var loaderB = new Loader(catalog);
-loaderB.Request("texture/player");  // RefCount=2、再ロードしない
-loaderB.Execute();
+loaderB.Request("texture/player");  // リクエスト登録
+loaderB.Execute();                   // RefCount=2、再ロードしない
+catalog.Tick();
 
 // シーンAを解放
-loaderA.Dispose();  // RefCount=1、まだ解放されない
+loaderA.Dispose();
+catalog.Tick();  // RefCount=1、まだ解放されない
 
 // シーンBを解放
-loaderB.Dispose();  // RefCount=0、実際に解放される
+loaderB.Dispose();
+catalog.Tick();  // RefCount=0、実際に解放される
 ```
 
 ### 依存リソースのロード
@@ -188,9 +194,12 @@ public class MaterialResource : IResource<Material>
             _dependencyLoader.Request("texture/diffuse");
             _dependencyLoader.Request("texture/normal");
             _dependencyLoader.Execute();
+            return ResourceLoadState.Loading;
         }
 
-        if (!_dependencyLoader.Tick())
+        // 依存ローダーのTick()は呼ばない（catalog.Tick()が担当）
+        // AllLoadedのみ確認する
+        if (!_dependencyLoader.AllLoaded)
             return ResourceLoadState.Loading;
 
         _material = CreateMaterial();

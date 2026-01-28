@@ -184,5 +184,150 @@ namespace TestNamespace
 
             Assert.Empty(compDiags);
         }
+
+        [Fact]
+        public void UsesCustomDeepClone_ForManualIDeepCloneableImplementation()
+        {
+            var source = @"
+using Tomato.DeepCloneGenerator;
+
+namespace TestNamespace
+{
+    // Manual IDeepCloneable<T> implementation (no [DeepClonable] attribute)
+    public class CustomQueue : IDeepCloneable<CustomQueue>
+    {
+        public int Count { get; set; }
+
+        public CustomQueue DeepClone()
+        {
+            return new CustomQueue(); // Custom logic: don't copy Count
+        }
+    }
+
+    [DeepClonable]
+    public partial class Entity
+    {
+        public string Name { get; set; }
+        public CustomQueue Queue { get; set; }
+    }
+}";
+
+            var (diagnostics, generatedSources) = GeneratorTestHelper.RunGenerator(source);
+
+            Assert.Empty(diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
+
+            var entityGenerated = generatedSources.FirstOrDefault(s => s.Contains("partial class Entity"));
+            Assert.NotNull(entityGenerated);
+
+            // Debug output
+            System.Console.WriteLine("=== Generated Entity ===");
+            System.Console.WriteLine(entityGenerated);
+
+            // Should use .DeepClone() (not .DeepCloneInternal()) for manual IDeepCloneable<T>
+            Assert.Contains(".Queue.DeepClone()", entityGenerated);
+            Assert.DoesNotContain(".Queue.DeepCloneInternal()", entityGenerated);
+        }
+
+        [Fact]
+        public void UsesDeepCloneInternal_ForDeepClonableAttribute()
+        {
+            var source = @"
+using Tomato.DeepCloneGenerator;
+
+namespace TestNamespace
+{
+    // Has [DeepClonable] attribute - should use generated DeepCloneInternal()
+    [DeepClonable]
+    public partial class GeneratedQueue
+    {
+        public int Count { get; set; }
+    }
+
+    [DeepClonable]
+    public partial class Entity
+    {
+        public string Name { get; set; }
+        public GeneratedQueue Queue { get; set; }
+    }
+}";
+
+            var (diagnostics, generatedSources) = GeneratorTestHelper.RunGenerator(source);
+
+            Assert.Empty(diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
+
+            var entityGenerated = generatedSources.FirstOrDefault(s => s.Contains("partial class Entity"));
+            Assert.NotNull(entityGenerated);
+            // Should use .DeepCloneInternal() for [DeepClonable] types
+            Assert.Contains("this.Queue.DeepCloneInternal()", entityGenerated);
+        }
+
+        [Fact]
+        public void UsesCustomDeepClone_ForListOfManualIDeepCloneable()
+        {
+            var source = @"
+using System.Collections.Generic;
+using Tomato.DeepCloneGenerator;
+
+namespace TestNamespace
+{
+    // Manual IDeepCloneable<T> implementation
+    public class CustomItem : IDeepCloneable<CustomItem>
+    {
+        public int Value { get; set; }
+
+        public CustomItem DeepClone()
+        {
+            return new CustomItem { Value = this.Value * 2 }; // Custom logic
+        }
+    }
+
+    [DeepClonable]
+    public partial class Container
+    {
+        public List<CustomItem> Items { get; set; }
+    }
+}";
+
+            var (diagnostics, generatedSources) = GeneratorTestHelper.RunGenerator(source);
+
+            Assert.Empty(diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
+
+            var containerGenerated = generatedSources.FirstOrDefault(s => s.Contains("partial class Container"));
+            Assert.NotNull(containerGenerated);
+            // Should use .DeepClone() for manual IDeepCloneable<T> in collections
+            Assert.Contains("item.DeepClone()", containerGenerated);
+            Assert.DoesNotContain("item.DeepCloneInternal()", containerGenerated);
+        }
+
+        [Fact]
+        public void CompilesSuccessfully_WithCustomDeepClone()
+        {
+            var source = @"
+using Tomato.DeepCloneGenerator;
+
+namespace TestNamespace
+{
+    public class CustomQueue : IDeepCloneable<CustomQueue>
+    {
+        private int _internalCount;
+
+        public CustomQueue DeepClone()
+        {
+            return new CustomQueue(); // Returns empty queue
+        }
+    }
+
+    [DeepClonable]
+    public partial class Entity
+    {
+        public string Name { get; set; }
+        public CustomQueue Queue { get; set; }
+    }
+}";
+
+            var (compDiags, _) = GeneratorTestHelper.GetCompiledResult(source);
+
+            Assert.Empty(compDiags);
+        }
     }
 }

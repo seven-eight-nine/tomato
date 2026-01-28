@@ -459,9 +459,16 @@ namespace Tomato.DeepCloneGenerator
             // Check if type has [DeepClonable] attribute or implements IDeepCloneable<T>
             if (type is INamedTypeSymbol namedType3)
             {
-                if (HasDeepClonableAttribute(namedType3) || ImplementsIDeepCloneable(namedType3))
+                // [DeepClonable] attribute → use generated DeepCloneInternal()
+                if (HasDeepClonableAttribute(namedType3))
                 {
                     return CopyStrategy.DeepCloneable;
+                }
+
+                // IDeepCloneable<T> without [DeepClonable] → use user-defined DeepClone()
+                if (ImplementsIDeepCloneable(namedType3))
+                {
+                    return CopyStrategy.CustomDeepCloneable;
                 }
             }
 

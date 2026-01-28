@@ -11,6 +11,7 @@ public sealed class Loader : IDisposable
 {
     private readonly ResourceCatalog _catalog;
     private readonly HashSet<ResourceEntry> _requests;
+    private readonly HashSet<ResourceEntry> _pendingLoads;
     private LoaderState _state;
     private bool _disposed;
 
@@ -23,6 +24,7 @@ public sealed class Loader : IDisposable
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _requests = new HashSet<ResourceEntry>();
+        _pendingLoads = new HashSet<ResourceEntry>();
         _state = LoaderState.Idle;
         _disposed = false;
     }
@@ -124,6 +126,7 @@ public sealed class Loader : IDisposable
     /// <summary>
     /// リソースのロードをリクエストする
     /// 既にリクエスト済みの場合は何もしない（重複無視）
+    /// Catalogへの送信はExecute()で行われる
     /// </summary>
     /// <param name="resourceKey">リソースキー</param>
     /// <returns>リソースハンドル</returns>
@@ -139,32 +142,57 @@ public sealed class Loader : IDisposable
 
         var entry = _catalog.GetEntry(resourceKey);
 
-        // 既にこのLoaderでリクエスト済みなら参照カウントを増やさない
+        // 既にこのLoaderでリクエスト済みなら追加しない
         if (!_requests.Contains(entry))
         {
             _requests.Add(entry);
-            entry.Acquire();
+            _pendingLoads.Add(entry);
         }
 
         return new ResourceHandle(entry);
     }
 
     /// <summary>
-    /// ロードを開始する（Unloadedのリソースのみ）
+    /// リソースのロードを即座にリクエストする（依存ローダー用）
+    /// Catalogへ即座に送信される
+    /// </summary>
+    /// <param name="resourceKey">リソースキー</param>
+    /// <returns>リソースハンドル</returns>
+    /// <exception cref="ObjectDisposedException">Loaderが破棄済みの場合</exception>
+    /// <exception cref="ArgumentNullException">resourceKeyがnullの場合</exception>
+    /// <exception cref="KeyNotFoundException">指定したキーがカタログに存在しない場合</exception>
+    public ResourceHandle RequestImmediate(string resourceKey)
+    {
+        ThrowIfDisposed();
+
+        if (resourceKey == null)
+            throw new ArgumentNullException(nameof(resourceKey));
+
+        var entry = _catalog.GetEntry(resourceKey);
+
+        // 既にこのLoaderでリクエスト済みなら追加しない
+        if (!_requests.Contains(entry))
+        {
+            _requests.Add(entry);
+            _catalog.RequestLoad(entry);
+        }
+
+        return new ResourceHandle(entry);
+    }
+
+    /// <summary>
+    /// ロードを開始する（保留中のリクエストをCatalogに送信）
     /// </summary>
     /// <exception cref="ObjectDisposedException">Loaderが破棄済みの場合</exception>
     public void Execute()
     {
         ThrowIfDisposed();
 
-        foreach (var entry in _requests)
+        foreach (var entry in _pendingLoads)
         {
-            // Unloadedのリソースのみロード開始
-            if (entry.State == ResourceLoadState.Unloaded)
-            {
-                entry.Start();
-            }
+            _catalog.RequestLoad(entry);
         }
+        _pendingLoads.Clear();
 
         // 状態を更新
         if (_requests.Count > 0)
@@ -176,7 +204,7 @@ public sealed class Loader : IDisposable
     /// <summary>
     /// Tick処理を行う
     /// 全てのリソースがロード完了した場合はtrueを返す
-    /// 失敗したリソースはリトライされる
+    /// リソースのTickはCatalog.Tick()が担当する
     /// </summary>
     /// <returns>全てロード完了した場合はtrue</returns>
     /// <exception cref="ObjectDisposedException">Loaderが破棄済みの場合</exception>
@@ -187,20 +215,12 @@ public sealed class Loader : IDisposable
         if (_state == LoaderState.Idle)
             return false;
 
-        foreach (var entry in _requests)
+        // ロード中に追加されたリソースのLoad対応
+        foreach (var entry in _pendingLoads)
         {
-            // Unloadedのリソースがあれば開始（ロード中に追加されたリソース対応）
-            if (entry.State == ResourceLoadState.Unloaded)
-            {
-                entry.Start();
-            }
-
-            // Loading/Failedの場合はTick
-            if (entry.State == ResourceLoadState.Loading || entry.State == ResourceLoadState.Failed)
-            {
-                entry.Tick(_catalog);
-            }
+            _catalog.RequestLoad(entry);
         }
+        _pendingLoads.Clear();
 
         // 全完了チェック
         if (AllLoaded)
@@ -220,16 +240,17 @@ public sealed class Loader : IDisposable
         if (_disposed)
             return;
 
+        // Execute済みエントリ = _requests - _pendingLoads
         foreach (var entry in _requests)
         {
-            var newRefCount = entry.Release();
-            if (newRefCount == 0)
+            if (!_pendingLoads.Contains(entry))
             {
-                entry.Unload();
+                _catalog.RequestUnload(entry);
             }
         }
 
         _requests.Clear();
+        _pendingLoads.Clear();
         _state = LoaderState.Idle;
         _disposed = true;
     }
