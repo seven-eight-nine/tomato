@@ -67,19 +67,19 @@ public static class Flow
 
     /// <summary>
     /// ツリーの早期終了を要求するノードを作成する（Success）。
-    /// 実行されると、現在のツリーをリセットし、EventNodeのonExitを発火させる。
+    /// 実行されると、現在のツリーをリセットし、ScopeNodeのonExitを発火させる。
     /// </summary>
     public static ReturnNode ReturnSuccess() => new(NodeStatus.Success);
 
     /// <summary>
     /// ツリーの早期終了を要求するノードを作成する（Failure）。
-    /// 実行されると、現在のツリーをリセットし、EventNodeのonExitを発火させる。
+    /// 実行されると、現在のツリーをリセットし、ScopeNodeのonExitを発火させる。
     /// </summary>
     public static ReturnNode ReturnFailure() => new(NodeStatus.Failure);
 
     /// <summary>
     /// ツリーの早期終了を要求するノードを作成する。
-    /// 実行されると、現在のツリーをリセットし、EventNodeのonExitを発火させる。
+    /// 実行されると、現在のツリーをリセットし、ScopeNodeのonExitを発火させる。
     /// </summary>
     /// <param name="status">返すステータス（SuccessまたはFailure）</param>
     public static ReturnNode Return(NodeStatus status) => new(status);
@@ -234,22 +234,22 @@ public static class Flow
         => new(condition, child);
 
     /// <summary>
-    /// Eventノードを作成する（ステートレス）。
+    /// Scopeノードを作成する（ステートレス）。
     /// </summary>
-    /// <param name="onEnter">入った瞬間に発火するイベント</param>
-    /// <param name="onExit">出た瞬間に発火するイベント</param>
+    /// <param name="onEnter">入った瞬間に発火するコールバック</param>
+    /// <param name="onExit">出た瞬間に発火するコールバック</param>
     /// <param name="child">子ノード</param>
-    public static EventNode Event(FlowEventHandler? onEnter, FlowExitEventHandler? onExit, IFlowNode child)
+    public static ScopeNode Scope(FlowScopeEnterHandler? onEnter, FlowScopeExitHandler? onExit, IFlowNode child)
         => new(onEnter, onExit, child);
 
     /// <summary>
-    /// Eventノードを作成する（型付き）。
+    /// Scopeノードを作成する（型付き）。
     /// </summary>
     /// <typeparam name="T">状態の型</typeparam>
-    /// <param name="onEnter">入った瞬間に発火するイベント</param>
-    /// <param name="onExit">出た瞬間に発火するイベント</param>
+    /// <param name="onEnter">入った瞬間に発火するコールバック</param>
+    /// <param name="onExit">出た瞬間に発火するコールバック</param>
     /// <param name="child">子ノード</param>
-    public static EventNode<T> Event<T>(FlowEventHandler<T>? onEnter, FlowExitEventHandler<T>? onExit, IFlowNode child) where T : class, IFlowState
+    public static ScopeNode<T> Scope<T>(FlowScopeEnterHandler<T>? onEnter, FlowScopeExitHandler<T>? onExit, IFlowNode child) where T : class, IFlowState
         => new(onEnter, onExit, child);
 
     // =====================================================

@@ -1,7 +1,7 @@
 using System;
 using Tomato.EntityHandleSystem;
 using Tomato.ActionExecutionSystem;
-using Tomato.CharacterSpawnSystem;
+using Tomato.UnitLODSystem;
 using Tomato.ActionSelector;
 
 namespace Tomato.GameLoop.Context;
@@ -29,9 +29,9 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     public IActionJudgment<TCategory, InputState, GameState>[] Judgments { get; set; }
 
     /// <summary>
-    /// CharacterSpawnControllerへの参照（オプション）。
+    /// Unitへの参照（オプション）。
     /// </summary>
-    public CharacterSpawnController? SpawnController { get; set; }
+    public Unit? Unit { get; set; }
 
     /// <summary>
     /// 削除マークされているかどうか。
@@ -52,7 +52,7 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
         Handle = handle;
         ActionStateMachine = new ActionStateMachine<TCategory>();
         Judgments = Array.Empty<IActionJudgment<TCategory, InputState, GameState>>();
-        SpawnController = null;
+        Unit = null;
         IsMarkedForDeletion = false;
         IsActive = true;
     }
@@ -63,7 +63,7 @@ public sealed class EntityContext<TCategory> where TCategory : struct, Enum
     public void Reset()
     {
         Judgments = Array.Empty<IActionJudgment<TCategory, InputState, GameState>>();
-        SpawnController = null;
+        Unit = null;
         IsMarkedForDeletion = false;
         IsActive = true;
     }

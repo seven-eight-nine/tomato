@@ -37,7 +37,7 @@
 | 依存ソートコンテキスト | DependencySortSystem | 汎用トポロジカルソートと循環検出 |
 | 調停コンテキスト | ReconciliationSystem | 位置調停と押し出し処理 |
 | エンティティコンテキスト | EntityHandleSystem, HandleSystem | Entityの生成・管理・コンポーネント |
-| スポーンコンテキスト | CharacterSpawnSystem | キャラクターのリソース管理とスポーン |
+| ユニットLODコンテキスト | UnitLODSystem | ユニットベースのLODライフサイクル管理 |
 | 状態機械コンテキスト | HierarchicalStateMachine | 階層的状態マシンとパスファインディング |
 | フロー制御コンテキスト | FlowTree | BehaviorTree風フロー制御とDSL |
 | タイムラインコンテキスト | TimelineSystem | シーケンス/クリップベースのタイムライン管理 |
@@ -107,7 +107,7 @@
 - 6フェーズゲームループの統括（Collision→Message→Decision→Execution→Reconciliation→Cleanup）
 - EntityContext によるEntity単位のコンテキスト管理
 - IEntityMessageRegistry実装でCommandGeneratorと連携
-- SpawnBridgeによるCharacterSpawnSystemとの疎結合
+- UnitLODSystemとの連携によるリソースライフサイクル管理
 
 #### FlowTree: フロー制御
 
@@ -149,12 +149,12 @@
 - 循環参照の検出とトラッキング
 - コレクション対応
 
-#### CharacterSpawnSystem: リソースライフサイクル
+#### UnitLODSystem: ユニットライフサイクル
 
-- 状態マシンによるリソースロード/アンロードの管理
-- データリソースとGameObjectリソースの分離
-- 非同期ロード対応
-- GameLoopとの連携（SpawnBridge経由）
+- 目標レベルに応じたユニットの自動生成・ロード・破棄
+- グループ管理（同じrequiredAtのユニットをまとめて処理）
+- パイプライン処理（ロードは並行、Ready化は順次）
+- IUnitインターフェースによる柔軟なユニット実装
 
 ---
 
@@ -170,8 +170,8 @@
        │              │               │               │              │
        ▼              ▼               ▼               ▼              ▼
 ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-│ Collision  │ │ Command    │ │ Action     │ │ Action     │ │ Character  │
-│ System     │ │ Generator  │ │ Selector   │ │ Execution  │ │ SpawnSys   │
+│ Collision  │ │ Command    │ │ Action     │ │ Action     │ │ UnitLOD    │
+│ System     │ │ Generator  │ │ Selector   │ │ Execution  │ │ System     │
 └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
       │              │              │              │              │
       ▼              │              │              │              │

@@ -4,7 +4,7 @@ using Xunit;
 using Tomato.EntityHandleSystem;
 using Tomato.GameLoop.Context;
 using Tomato.GameLoop.Spawn;
-using Tomato.CharacterSpawnSystem;
+using Tomato.UnitLODSystem;
 using EHSIEntityArena = Tomato.EntityHandleSystem.IEntityArena;
 
 namespace Tomato.GameLoop.Tests.Spawn;
@@ -61,79 +61,46 @@ public class MockArena : EHSIEntityArena, IEntitySpawner
 /// </summary>
 public class MockEntityInitializer : IEntityInitializer<TestActionCategory>
 {
-    public List<(EntityContext<TestActionCategory> context, string characterId, object? dataResource)> InitializeCalls { get; } = new();
+    public List<(EntityContext<TestActionCategory> context, Unit unit, object? dataResource)> InitializeCalls { get; } = new();
 
-    public void Initialize(EntityContext<TestActionCategory> context, string characterId, object? dataResource)
+    public void Initialize(EntityContext<TestActionCategory> context, Unit unit, object? dataResource)
     {
-        InitializeCalls.Add((context, characterId, dataResource));
+        InitializeCalls.Add((context, unit, dataResource));
     }
 }
 
 /// <summary>
-/// テスト用のモックResourceLoader
+/// テスト用のモックUnitDetail
 /// </summary>
-public class MockResourceLoader : IResourceLoader
+public class MockUnitDetail : IUnitDetail<Unit>
 {
-    public bool AutoCompleteDataLoad { get; set; } = true;
-    public bool AutoCompleteGameObjectLoad { get; set; } = true;
-    public ResourceLoadResult DataLoadResult { get; set; } = ResourceLoadResult.Success;
-    public ResourceLoadResult GameObjectLoadResult { get; set; } = ResourceLoadResult.Success;
-    public object DataResource { get; set; } = new object();
-    public object GameObjectResource { get; set; } = new object();
+    public UnitPhase Phase { get; private set; } = UnitPhase.None;
+    private int _tickCount;
 
-    private ResourceLoadCallback? _pendingDataCallback;
-    private ResourceLoadCallback? _pendingGOCallback;
-
-    public void LoadDataResourceAsync(string characterId, ResourceLoadCallback callback)
+    public void OnUpdatePhase(Unit owner, UnitPhase phase)
     {
-        if (AutoCompleteDataLoad)
+        switch (Phase)
         {
-            callback(DataLoadResult, DataLoadResult == ResourceLoadResult.Success ? DataResource : null!);
-        }
-        else
-        {
-            _pendingDataCallback = callback;
+            case UnitPhase.Loading:
+                Phase = UnitPhase.Loaded;
+                break;
+            case UnitPhase.Creating:
+                Phase = UnitPhase.Ready;
+                break;
+            case UnitPhase.Unloading:
+                if (++_tickCount >= 1)
+                    Phase = UnitPhase.Unloaded;
+                break;
         }
     }
 
-    public void LoadGameObjectResourceAsync(string characterId, ResourceLoadCallback callback)
+    public void OnChangePhase(Unit owner, UnitPhase prev, UnitPhase next)
     {
-        if (AutoCompleteGameObjectLoad)
-        {
-            callback(GameObjectLoadResult, GameObjectLoadResult == ResourceLoadResult.Success ? GameObjectResource : null!);
-        }
-        else
-        {
-            _pendingGOCallback = callback;
-        }
+        Phase = next;
+        _tickCount = 0;
     }
 
-    public void CompleteDataLoad() => _pendingDataCallback?.Invoke(DataLoadResult, DataResource);
-    public void CompleteGOLoad() => _pendingGOCallback?.Invoke(GameObjectLoadResult, GameObjectResource);
-
-    public void UnloadDataResource(object resource) { }
-    public void UnloadGameObjectResource(object resource) { }
-}
-
-/// <summary>
-/// テスト用のモックGameObjectProxy
-/// </summary>
-public class MockGameObjectProxy : IGameObjectProxy
-{
-    public bool IsActive { get; set; }
-    public bool IsDestroyed { get; private set; }
-    public void Destroy() => IsDestroyed = true;
-}
-
-/// <summary>
-/// テスト用のモックGameObjectFactory
-/// </summary>
-public class MockGameObjectFactory : IGameObjectFactory
-{
-    public IGameObjectProxy CreateGameObject(object gameObjectResource, object dataResource)
-    {
-        return new MockGameObjectProxy();
-    }
+    public void Dispose() { }
 }
 
 #endregion
@@ -144,20 +111,25 @@ public class SpawnBridgeTests
     private EntityContextRegistry<TestActionCategory> CreateRegistry() => new EntityContextRegistry<TestActionCategory>();
     private MockEntityInitializer CreateInitializer() => new MockEntityInitializer();
 
-    private CharacterSpawnController CreateController(string id = "char1")
+    private Unit CreateUnit()
     {
-        var loader = new MockResourceLoader();
-        var factory = new MockGameObjectFactory();
-        return new CharacterSpawnController(id, loader, factory);
+        var unit = new Unit();
+        unit.Register<MockUnitDetail>(1);
+        return unit;
     }
 
-    private CharacterSpawnController CreateActiveController(string id = "char1")
+    private Unit CreateReadyUnit()
     {
-        var loader = new MockResourceLoader();
-        var factory = new MockGameObjectFactory();
-        var controller = new CharacterSpawnController(id, loader, factory);
-        controller.RequestState(CharacterRequestState.Active);
-        return controller;
+        var unit = new Unit();
+        unit.Register<MockUnitDetail>(1);
+        unit.RequestState(1);
+        // Tick until stable
+        for (int i = 0; i < 10; i++)
+        {
+            unit.Tick();
+            if (unit.IsStable) break;
+        }
+        return unit;
     }
 
     #region Constructor Tests
@@ -209,20 +181,20 @@ public class SpawnBridgeTests
     #region Connect/Disconnect Tests
 
     [Fact]
-    public void Connect_WithValidController_ShouldSucceed()
+    public void Connect_WithValidUnit_ShouldSucceed()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateController();
+        var unit = CreateUnit();
 
         // Should not throw
-        bridge.Connect(controller);
+        bridge.Connect(unit);
     }
 
     [Fact]
-    public void Connect_WithNullController_ShouldThrow()
+    public void Connect_WithNullUnit_ShouldThrow()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
@@ -233,21 +205,21 @@ public class SpawnBridgeTests
     }
 
     [Fact]
-    public void Disconnect_WithValidController_ShouldSucceed()
+    public void Disconnect_WithValidUnit_ShouldSucceed()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateController();
-        bridge.Connect(controller);
+        var unit = CreateUnit();
+        bridge.Connect(unit);
 
         // Should not throw
-        bridge.Disconnect(controller);
+        bridge.Disconnect(unit);
     }
 
     [Fact]
-    public void Disconnect_WithNullController_ShouldThrow()
+    public void Disconnect_WithNullUnit_ShouldThrow()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
@@ -259,97 +231,97 @@ public class SpawnBridgeTests
 
     #endregion
 
-    #region OnCharacterActivated Tests
+    #region OnUnitReady Tests
 
     [Fact]
-    public void OnCharacterActivated_ShouldSpawnEntity()
+    public void OnUnitReady_ShouldSpawnEntity()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
         Assert.Equal(1, arena.SpawnedHandles.Count);
     }
 
     [Fact]
-    public void OnCharacterActivated_ShouldRegisterContext()
+    public void OnUnitReady_ShouldRegisterContext()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
         Assert.Equal(1, registry.Count);
     }
 
     [Fact]
-    public void OnCharacterActivated_ShouldCallInitializer()
+    public void OnUnitReady_ShouldCallInitializer()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
         Assert.Single(initializer.InitializeCalls);
-        Assert.Equal("char1", initializer.InitializeCalls[0].characterId);
+        Assert.Same(unit, initializer.InitializeCalls[0].unit);
     }
 
     [Fact]
-    public void OnCharacterActivated_ShouldSetContextSpawnController()
+    public void OnUnitReady_ShouldSetContextUnit()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
-        var context = bridge.GetContext("char1");
+        var context = bridge.GetContext(unit);
         Assert.NotNull(context);
-        Assert.Same(controller, context!.SpawnController);
+        Assert.Same(unit, context!.Unit);
     }
 
     [Fact]
-    public void OnCharacterActivated_ShouldSetContextActive()
+    public void OnUnitReady_ShouldSetContextActive()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
-        var context = bridge.GetContext("char1");
+        var context = bridge.GetContext(unit);
         Assert.NotNull(context);
         Assert.True(context!.IsActive);
     }
 
     [Fact]
-    public void OnCharacterActivated_CalledTwice_ShouldReactivate()
+    public void OnUnitReady_CalledTwice_ShouldReactivate()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        var context = bridge.GetContext("char1");
+        bridge.OnUnitReady(unit);
+        var context = bridge.GetContext(unit);
         context!.IsActive = false; // Deactivate
 
-        bridge.OnCharacterActivated(controller);
+        bridge.OnUnitReady(unit);
 
         Assert.True(context.IsActive);
         Assert.Equal(1, arena.SpawnedHandles.Count); // Should not spawn again
@@ -357,83 +329,84 @@ public class SpawnBridgeTests
 
     #endregion
 
-    #region OnCharacterDeactivated Tests
+    #region OnUnitUnloading Tests
 
     [Fact]
-    public void OnCharacterDeactivated_ShouldSetContextInactive()
+    public void OnUnitUnloading_ShouldSetContextInactive()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        bridge.OnCharacterDeactivated(controller);
+        bridge.OnUnitReady(unit);
+        bridge.OnUnitUnloading(unit);
 
-        var context = bridge.GetContext("char1");
+        var context = bridge.GetContext(unit);
         Assert.NotNull(context);
         Assert.False(context!.IsActive);
     }
 
     [Fact]
-    public void OnCharacterDeactivated_WithUnknownCharacter_ShouldNotThrow()
+    public void OnUnitUnloading_WithUnknownUnit_ShouldNotThrow()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController("unknown");
+        var unit = CreateUnit();
 
         // Should not throw
-        bridge.OnCharacterDeactivated(controller);
+        bridge.OnUnitUnloading(unit);
     }
 
     #endregion
 
-    #region OnCharacterRemoved Tests
+    #region OnUnitRemoved Tests
 
     [Fact]
-    public void OnCharacterRemoved_ShouldMarkForDeletion()
+    public void OnUnitRemoved_ShouldMarkForDeletion()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        bridge.OnCharacterRemoved("char1");
+        bridge.OnUnitReady(unit);
+        bridge.OnUnitRemoved(unit);
 
         var markedForDeletion = registry.GetMarkedForDeletion();
         Assert.Single(markedForDeletion);
     }
 
     [Fact]
-    public void OnCharacterRemoved_ShouldRemoveMapping()
+    public void OnUnitRemoved_ShouldRemoveMapping()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        bridge.OnCharacterRemoved("char1");
+        bridge.OnUnitReady(unit);
+        bridge.OnUnitRemoved(unit);
 
-        Assert.Null(bridge.GetHandle("char1"));
+        Assert.Null(bridge.GetHandle(unit));
     }
 
     [Fact]
-    public void OnCharacterRemoved_WithUnknownCharacter_ShouldNotThrow()
+    public void OnUnitRemoved_WithUnknownUnit_ShouldNotThrow()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
+        var unit = CreateUnit();
 
         // Should not throw
-        bridge.OnCharacterRemoved("unknown");
+        bridge.OnUnitRemoved(unit);
     }
 
     #endregion
@@ -441,126 +414,121 @@ public class SpawnBridgeTests
     #region GetHandle/GetContext Tests
 
     [Fact]
-    public void GetHandle_WithKnownCharacter_ShouldReturnHandle()
+    public void GetHandle_WithKnownUnit_ShouldReturnHandle()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        var handle = bridge.GetHandle("char1");
+        bridge.OnUnitReady(unit);
+        var handle = bridge.GetHandle(unit);
 
         Assert.NotNull(handle);
     }
 
     [Fact]
-    public void GetHandle_WithUnknownCharacter_ShouldReturnNull()
+    public void GetHandle_WithUnknownUnit_ShouldReturnNull()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
+        var unit = CreateUnit();
 
-        var handle = bridge.GetHandle("unknown");
+        var handle = bridge.GetHandle(unit);
 
         Assert.Null(handle);
     }
 
     [Fact]
-    public void GetContext_WithKnownCharacter_ShouldReturnContext()
+    public void GetContext_WithKnownUnit_ShouldReturnContext()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-        var controller = CreateActiveController();
+        var unit = CreateReadyUnit();
 
-        bridge.OnCharacterActivated(controller);
-        var context = bridge.GetContext("char1");
+        bridge.OnUnitReady(unit);
+        var context = bridge.GetContext(unit);
 
         Assert.NotNull(context);
     }
 
     [Fact]
-    public void GetContext_WithUnknownCharacter_ShouldReturnNull()
+    public void GetContext_WithUnknownUnit_ShouldReturnNull()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
+        var unit = CreateUnit();
 
-        var context = bridge.GetContext("unknown");
+        var context = bridge.GetContext(unit);
 
         Assert.Null(context);
     }
 
     #endregion
 
-    #region StateChanged Event Integration Tests
+    #region UpdateUnit Integration Tests
 
     [Fact]
-    public void Connect_WhenControllerBecomesActive_ShouldAutoRegister()
+    public void UpdateUnit_WhenUnitBecomesStable_ShouldAutoRegister()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
+        var unit = CreateUnit();
 
-        var loader = new MockResourceLoader();
-        var factory = new MockGameObjectFactory();
-        var controller = new CharacterSpawnController("char1", loader, factory);
+        bridge.Connect(unit);
+        unit.RequestState(1);
 
-        bridge.Connect(controller);
-
-        // Controller transitions to Active
-        controller.RequestState(CharacterRequestState.Active);
+        // Tick and update until stable
+        for (int i = 0; i < 10; i++)
+        {
+            unit.Tick();
+            bridge.UpdateUnit(unit);
+            if (unit.IsStable) break;
+        }
 
         Assert.Equal(1, registry.Count);
-        Assert.NotNull(bridge.GetHandle("char1"));
+        Assert.NotNull(bridge.GetHandle(unit));
     }
 
     [Fact]
-    public void Connect_WhenControllerBecomesInactive_ShouldDeactivate()
+    public void UpdateUnit_WhenUnitUnloadsToZero_ShouldMarkForDeletion()
     {
         var registry = CreateRegistry();
         var arena = CreateArena();
         var initializer = CreateInitializer();
         var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
+        var unit = CreateUnit();
 
-        var loader = new MockResourceLoader();
-        var factory = new MockGameObjectFactory();
-        var controller = new CharacterSpawnController("char1", loader, factory);
+        bridge.Connect(unit);
+        unit.RequestState(1);
 
-        bridge.Connect(controller);
-        controller.RequestState(CharacterRequestState.Active);
+        // Tick until stable
+        for (int i = 0; i < 10; i++)
+        {
+            unit.Tick();
+            bridge.UpdateUnit(unit);
+            if (unit.IsStable) break;
+        }
 
-        // Transition to Ready (inactive)
-        controller.RequestState(CharacterRequestState.Ready);
+        Assert.Equal(1, registry.Count);
 
-        var context = bridge.GetContext("char1");
-        Assert.NotNull(context);
-        Assert.False(context!.IsActive);
-    }
-
-    [Fact]
-    public void Connect_WhenControllerRemoved_ShouldMarkForDeletion()
-    {
-        var registry = CreateRegistry();
-        var arena = CreateArena();
-        var initializer = CreateInitializer();
-        var bridge = new SpawnBridge<TestActionCategory>(registry, arena, initializer);
-
-        var loader = new MockResourceLoader();
-        var factory = new MockGameObjectFactory();
-        var controller = new CharacterSpawnController("char1", loader, factory);
-
-        bridge.Connect(controller);
-        controller.RequestState(CharacterRequestState.Active);
-
-        // Transition to None (removed)
-        controller.RequestState(CharacterRequestState.None);
+        // Now unload
+        unit.RequestState(0);
+        for (int i = 0; i < 10; i++)
+        {
+            unit.Tick();
+            bridge.UpdateUnit(unit);
+            if (unit.IsStable) break;
+        }
 
         Assert.Single(registry.GetMarkedForDeletion());
     }

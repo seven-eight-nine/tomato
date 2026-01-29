@@ -21,7 +21,7 @@ libs/
 ├── systems/                 # 個別機能システム
 │   ├── ActionSelector/      # 行動選択エンジン
 │   ├── ActionExecutionSystem/ # 行動実行・ステートマシン
-│   ├── CharacterSpawnSystem/ # キャラクタースポーン
+│   ├── UnitLODSystem/        # ユニットベースLODライフサイクル管理
 │   ├── CollisionSystem/       # 空間システム（衝突判定・空間検索統合）
 │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ
@@ -61,7 +61,7 @@ libs/
 |---------|------|---------|
 | **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 66 |
 | **ActionExecutionSystem** | アクション実行・ステートマシン・MotionGraph | 119 |
-| **CharacterSpawnSystem** | キャラクター生成・リソース管理 | 269 |
+| **UnitLODSystem** | ユニットベースLODライフサイクル管理 | 50 |
 | **CollisionSystem** | 衝突判定・空間検索統合（CollisionDetector, SpatialWorld） | 50+ |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
 | **StatusEffectSystem** | 状態異常・バフ/デバフ管理 | 50 |
@@ -75,7 +75,7 @@ libs/
 
 | システム | 説明 | テスト数 |
 |---------|------|---------|
-| **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 56 |
+| **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 50 |
 
 **合計: 1,800+ テスト**
 
@@ -355,7 +355,7 @@ CommandGenerator.Core
 FlowTree.Core (独立・外部依存なし)
 ├── FlowTree / IFlowNode / NodeStatus
 ├── Composite: Sequence, Selector, Parallel, Race, Join, ShuffledSelector, WeightedRandomSelector, RoundRobin
-├── Decorator: Retry, Timeout, Delay, Guard, Repeat, Event
+├── Decorator: Retry, Timeout, Delay, Guard, Repeat, Scope
 ├── Leaf: Action, Condition, SubTree, Wait, Yield
 └── FlowCallStack / CallFrame
 

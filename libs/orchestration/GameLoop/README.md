@@ -1,7 +1,7 @@
 # GameLoop
 
 action-game-design.mdで定義された6フェーズゲームループを実現する統合システム。
-全てのシステム（EntityHandle, CommandGenerator, ActionSelector, ActionExecution, Collision, CharacterSpawn）を連携させる。
+全てのシステム（EntityHandle, CommandGenerator, ActionSelector, ActionExecution, Collision, UnitLOD）を連携させる。
 
 ## 概要
 
@@ -9,34 +9,34 @@ GameLoopは以下の責務を持つ:
 
 1. **Entity単位のコンテキスト管理** - ActionStateMachineをEntityに紐付け
 2. **6フェーズゲームループの統括** - Collision→Message→Decision→Execution→Reconciliation→Cleanup
-3. **CharacterSpawnSystemとの連携** - スポーン/デスポーンイベントをEntityContextに橋渡し
+3. **UnitLODSystemとの連携** - スポーン/デスポーンイベントをEntityContextに橋渡し
 4. **CommandGeneratorとの連携** - MessageHandlerQueueとStepProcessorによるメッセージ処理
 
 ## アーキテクチャ
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Pipeline + SystemGroup                          │
-├─────────────────────────────────────────────────────────────────────┤
-│  UpdateGroup:                                                       │
-│    1. CollisionSystem      - 外部衝突結果をメッセージ化             │
-│    2. MessageSystem        - StepProcessorでメッセージ処理          │
-│    3. DecisionSystem       - アクション選択（読み取り専用）         │
-│    4. ExecutionSystem      - アクション実行                         │
-│                                                                     │
-│  LateUpdateGroup:                                                   │
-│    5. ReconciliationSystem - 位置調停（依存順）                     │
-│    6. CleanupSystem        - 消滅処理                               │
-└─────────────────────────────────────────────────────────────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-┌─────────────────┐   ┌─────────────────────┐   ┌─────────────────┐
-│ EntityContext   │   │ MessageHandlerQueue │   │ StepProcessor   │
-│ Registry        │   │ [CommandQueue]      │   │                 │
-│                 │   │                     │   │ Step処理        │
-│ Entity管理      │   │ ゲーム固有コマンド  │   │ 収束まで実行    │
-└─────────────────┘   └─────────────────────┘   └─────────────────┘
++---------------------------------------------------------------------------+
+|                     Pipeline + SystemGroup                                |
++---------------------------------------------------------------------------+
+|  UpdateGroup:                                                             |
+|    1. CollisionSystem      - 外部衝突結果をメッセージ化                   |
+|    2. MessageSystem        - StepProcessorでメッセージ処理                |
+|    3. DecisionSystem       - アクション選択（読み取り専用）               |
+|    4. ExecutionSystem      - アクション実行                               |
+|                                                                           |
+|  LateUpdateGroup:                                                         |
+|    5. ReconciliationSystem - 位置調停（依存順）                           |
+|    6. CleanupSystem        - 消滅処理                                     |
++---------------------------------------------------------------------------+
+                                |
+        +-----------------------+-----------------------+
+        v                       v                       v
++-------------------+   +-----------------------+   +-------------------+
+| EntityContext     |   | MessageHandlerQueue   |   | StepProcessor     |
+| Registry          |   | [CommandQueue]        |   |                   |
+|                   |   |                       |   | Step処理          |
+| Entity管理        |   | ゲーム固有コマンド    |   | 収束まで実行      |
++-------------------+   +-----------------------+   +-------------------+
 ```
 
 ## コンポーネント詳細
@@ -57,7 +57,7 @@ public sealed class EntityContext<TCategory>
     public AnyHandle Handle { get; }
     public ActionStateMachine<TCategory> ActionStateMachine { get; }
     public IActionJudgment<TCategory, InputState, GameState>[] Judgments { get; set; }
-    public CharacterSpawnController? SpawnController { get; set; }
+    public Unit? Unit { get; set; }
     public bool IsActive { get; set; }
     public bool IsMarkedForDeletion { get; }
 }
@@ -108,11 +108,11 @@ public interface ICollisionSource
 
 ### Spawn/
 
-CharacterSpawnSystemとの連携。
+UnitLODSystemとの連携。
 
 | クラス | 責務 |
 |--------|------|
-| `SpawnBridge<TCategory>` | CharacterSpawnControllerのStateChangedを監視し、Entity登録/削除 |
+| `SpawnBridge<TCategory>` | UnitのUnitPhaseChangedを監視し、Entity登録/削除 |
 | `ISpawnCompletionHandler` | スポーン完了通知のインターフェース |
 | `IEntityInitializer<TCategory>` | Entity初期化ロジック（ゲーム側で実装） |
 | `IEntitySpawner` | Spawn/Despawnインターフェース |
@@ -297,24 +297,50 @@ public class MyCollisionMessageEmitter : ICollisionMessageEmitter
 }
 ```
 
-### CharacterSpawnSystemとの接続
+### UnitLODSystemとの接続
 
 ```csharp
-// SpawnBridge作成
-var initializer = new MyEntityInitializer();
-var spawnBridge = new SpawnBridge<ActionCategory>(registry, arena, initializer);
+using Tomato.UnitLODSystem;
 
-// CharacterSpawnControllerと接続
-spawnBridge.Connect(characterSpawnController);
+// Unit作成（基本的な使い方）
+var unit = new Unit();
 
-// キャラクターをスポーン
-characterSpawnController.RequestState(CharacterRequestState.Active);
-// → StateChangedイベントで OnCharacterActivated() が呼ばれ、EntityContextが自動登録
+// 詳細レベル登録（requiredAtで必要な目標レベルを指定）
+unit.Register<CharacterDataDetail>(1);
+unit.Register<CharacterModelDetail>(2);
 
-// キャラクターを削除
-characterSpawnController.RequestState(CharacterRequestState.None);
-// → OnCharacterRemoved() が呼ばれ、削除マークされる
-// → 次フレームのCleanupSystemで実際に削除
+// UnitPhaseChangedイベントで状態変化を監視
+unit.UnitPhaseChanged += (sender, e) =>
+{
+    if (e.NewPhase == UnitPhase.Ready)
+    {
+        // 詳細レベルがReadyになったときの処理
+    }
+    if (e.NewPhase == UnitPhase.Unloading)
+    {
+        // アンロード開始 - この瞬間からGet<T>()はnullを返す
+    }
+};
+
+// 目標設定
+unit.RequestState(2);
+
+// 毎フレーム更新
+unit.Tick();
+
+// Get<T>() は Phase == Ready のときのみインスタンスを返す
+// Loading, Creating, Unloading中は null
+var model = unit.Get<CharacterModelDetail>();
+if (model != null)
+{
+    // Ready状態のときのみここに到達
+}
+
+// IsStable は全詳細レベルがReadyのとき true
+if (unit.IsStable)
+{
+    // 全詳細レベルがReady - EntityContextと連携
+}
 ```
 
 ### ゲームループ実行
@@ -326,13 +352,13 @@ void Update(float deltaTime)
     collisionSource.UpdateWorlds(/* ... */);
     collisionSource.DetectCollisions();
 
-    // Update: Collision → Message → Decision → Execution
+    // Update: Collision -> Message -> Decision -> Execution
     pipeline.Execute(updateGroup, deltaTime);
 }
 
 void LateUpdate(float deltaTime)
 {
-    // LateUpdate: Reconciliation → Cleanup
+    // LateUpdate: Reconciliation -> Cleanup
     pipeline.Execute(lateUpdateGroup, deltaTime);
 }
 ```
@@ -364,14 +390,14 @@ public class MyEntityInitializer : IEntityInitializer<ActionCategory>
 
 ```
 GameLoop.Core
-├── EntityHandleSystem.Attributes  (AnyHandle)
-├── CommandGenerator.Attributes    (StepProcessor, IStepProcessable)
-├── CommandGenerator.Core          (MessageHandlerQueue)
-├── SystemPipeline.Core            (Pipeline, SystemGroup, ISystem)
-├── ActionSelector                 (ActionSelector, IActionJudgment)
-├── ActionExecutionSystem.Core     (ActionStateMachine, IExecutableAction)
-├── Tomato.Math                    (Vector3)
-└── CharacterSpawnSystem.Core      (CharacterSpawnController)
++-- EntityHandleSystem.Attributes  (AnyHandle)
++-- CommandGenerator.Attributes    (StepProcessor, IStepProcessable)
++-- CommandGenerator.Core          (MessageHandlerQueue)
++-- SystemPipeline.Core            (Pipeline, SystemGroup, ISystem)
++-- ActionSelector                 (ActionSelector, IActionJudgment)
++-- ActionExecutionSystem.Core     (ActionStateMachine, IExecutableAction)
++-- Tomato.Math                    (Vector3)
++-- UnitLODSystem.Core             (Unit, IUnitDetail)
 ```
 
 ## テスト
@@ -386,51 +412,51 @@ dotnet test libs/orchestration/GameLoop/GameLoop.Tests/
 | テストファイル | テスト数 | 対象 |
 |---------------|---------|------|
 | EntityContextRegistryTests | 8 | コンテキスト管理 |
-| SpawnBridgeTests | 27 | CharacterSpawnSystem連携 |
-| CleanupPhaseProcessorTests | 10 | 削除処理 |
-| CollisionPhaseProcessorTests | 6 | 衝突フェーズ |
+| SpawnBridgeTests | 25 | UnitLODSystem連携 |
+| CleanupSystemTests | 9 | 削除処理 |
+| CollisionSystemTests | 8 | 衝突フェーズ |
 
-**合計: 51テスト**
+**合計: 50テスト**
 
 ## ディレクトリ構造
 
 ```
 GameLoop/
-├── README.md
-├── GameLoop.Core/
-│   ├── GameLoop.Core.csproj
-│   ├── Context/
-│   │   ├── EntityContext.cs           # Entity単位コンテキスト
-│   │   └── EntityContextRegistry.cs   # IEntityRegistry実装
-│   ├── Collision/
-│   │   ├── CollisionPair.cs           # 衝突ペア構造体
-│   │   └── ICollisionSource.cs        # 衝突ソースインターフェース
-│   ├── Phases/
-│   │   ├── CollisionPhaseProcessor.cs # 第1フェーズ（ISerialSystem）
-│   │   ├── MessagePhaseProcessor.cs   # 第2フェーズ（ISerialSystem）
-│   │   ├── DecisionPhaseProcessor.cs  # 第3フェーズ（IParallelSystem）
-│   │   ├── ExecutionPhaseProcessor.cs # 第4フェーズ（ISerialSystem）
-│   │   ├── ReconciliationSystem.cs    # 第5フェーズ（IOrderedSerialSystem）
-│   │   └── CleanupPhaseProcessor.cs   # 第6フェーズ（ISerialSystem）
-│   ├── Spawn/
-│   │   ├── SpawnBridge.cs             # CharacterSpawnSystem連携
-│   │   ├── ISpawnCompletionHandler.cs
-│   │   ├── IEntityInitializer.cs
-│   │   └── IEntityArena.cs
-│   └── Providers/
-│       ├── IInputProvider.cs
-│       ├── ICharacterStateProvider.cs
-│       ├── ICollisionMessageEmitter.cs
-│       └── IActionFactory.cs
-└── GameLoop.Tests/
-    ├── GameLoop.Tests.csproj
-    ├── Context/
-    │   └── EntityContextRegistryTests.cs
-    ├── Spawn/
-    │   └── SpawnBridgeTests.cs
-    └── Phases/
-        ├── CleanupPhaseProcessorTests.cs
-        └── CollisionPhaseProcessorTests.cs
++-- README.md
++-- GameLoop.Core/
+|   +-- GameLoop.Core.csproj
+|   +-- Context/
+|   |   +-- EntityContext.cs           # Entity単位コンテキスト
+|   |   +-- EntityContextRegistry.cs   # IEntityRegistry実装
+|   +-- Collision/
+|   |   +-- CollisionPair.cs           # 衝突ペア構造体
+|   |   +-- ICollisionSource.cs        # 衝突ソースインターフェース
+|   +-- Phases/
+|   |   +-- CollisionSystem.cs         # 第1フェーズ（ISerialSystem）
+|   |   +-- MessageSystem.cs           # 第2フェーズ（ISerialSystem）
+|   |   +-- DecisionSystem.cs          # 第3フェーズ（IParallelSystem）
+|   |   +-- ExecutionSystem.cs         # 第4フェーズ（ISerialSystem）
+|   |   +-- ReconciliationSystem.cs    # 第5フェーズ（IOrderedSerialSystem）
+|   |   +-- CleanupSystem.cs           # 第6フェーズ（ISerialSystem）
+|   +-- Spawn/
+|   |   +-- SpawnBridge.cs             # UnitLODSystem連携
+|   |   +-- ISpawnCompletionHandler.cs
+|   |   +-- IEntityInitializer.cs
+|   |   +-- IEntitySpawner.cs
+|   +-- Providers/
+|       +-- IInputProvider.cs
+|       +-- ICharacterStateProvider.cs
+|       +-- ICollisionMessageEmitter.cs
+|       +-- IActionFactory.cs
++-- GameLoop.Tests/
+    +-- GameLoop.Tests.csproj
+    +-- Context/
+    |   +-- EntityContextRegistryTests.cs
+    +-- Spawn/
+    |   +-- SpawnBridgeTests.cs
+    +-- Phases/
+        +-- CleanupSystemTests.cs
+        +-- CollisionSystemTests.cs
 ```
 
 ## 設計上の決定事項
@@ -468,7 +494,7 @@ Entity削除はCleanupSystemで行われる。これによりフレーム内で�
 
 ### SpawnBridgeパターン
 
-CharacterSpawnSystemとの疎結合を実現。StateChangedイベントを監視し、必要なタイミングでEntityContextの登録/削除を行う。
+UnitLODSystemとの疎結合を実現。UnitPhaseChangedイベントを監視し、必要なタイミングでEntityContextの登録/削除を行う。
 
 ## 関連ドキュメント
 

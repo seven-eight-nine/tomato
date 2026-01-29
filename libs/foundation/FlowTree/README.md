@@ -98,7 +98,7 @@ var status = tree.Tick(0.016f);
 | 分類 | 説明 | 例 |
 |------|------|-----|
 | **Composite** | 複数の子を持つ | Sequence, Selector, Race, Join, ShuffledSelector |
-| **Decorator** | 1つの子を修飾 | Repeat, Retry, Timeout, Event |
+| **Decorator** | 1つの子を修飾 | Repeat, Retry, Timeout, Scope |
 | **Leaf** | 末端ノード | Action, Condition, SubTree, Wait |
 
 ### FlowTreeの構造
@@ -298,15 +298,15 @@ tree.Build(state, b => b.RoundRobin(
 ));
 ```
 
-### Event（イベント発火）
+### Scope（スコープ）
 
-ノードの開始/終了時にイベントを発火。
+ノードの開始/終了時にコールバックを発火。
 
 ```csharp
 // ステートレス版
 var tree = new FlowTree();
 tree.Build(
-    Event(
+    Scope(
         () => Console.WriteLine("開始"),
         result => Console.WriteLine($"終了: {result}"),
         Sequence(
@@ -317,7 +317,7 @@ tree.Build(
 );
 
 // 状態付き版（FlowBuilder）
-tree.Build(state, b => b.Event(
+tree.Build(state, b => b.Scope(
     s => s.StartTime = DateTime.Now,
     (s, result) => s.EndTime = DateTime.Now,
     b.Action(s => Process(s))

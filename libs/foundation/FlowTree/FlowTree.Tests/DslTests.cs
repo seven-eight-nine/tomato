@@ -823,20 +823,20 @@ public class ComplexFlowTreeTests
     }
 
     [Fact]
-    public void Complex_EventHandlers_TrackingExecution()
+    public void Complex_ScopeHandlers_TrackingExecution()
     {
-        // Eventハンドラで実行追跡
+        // Scopeハンドラで実行追跡
         var state = new GameLoopState();
 
-        var tree = new FlowTree("EventTracking");
-        tree.Build(state, 
+        var tree = new FlowTree("ScopeTracking");
+        tree.Build(state,
                 Sequence(
-                    Event<GameLoopState>(
+                    Scope<GameLoopState>(
                         s => s.EventLog.Add("Action1:Enter"),
                         (s, result) => s.EventLog.Add($"Action1:Exit({result})"),
                         Do<GameLoopState>(s => s.Score += 10)
                     ),
-                    Event<GameLoopState>(
+                    Scope<GameLoopState>(
                         s => s.EventLog.Add("Action2:Enter"),
                         (s, result) => s.EventLog.Add($"Action2:Exit({result})"),
                         Do<GameLoopState>(s => s.Score += 20)
@@ -848,7 +848,7 @@ public class ComplexFlowTreeTests
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(30, state.Score);
 
-        // すべてのイベントがログされていることを確認
+        // すべてのコールバックがログされていることを確認
         Assert.Contains("Action1:Enter", state.EventLog);
         Assert.Contains("Action1:Exit(Success)", state.EventLog);
         Assert.Contains("Action2:Enter", state.EventLog);
@@ -1411,12 +1411,12 @@ public class FlowBuilderTypeInferenceTests
     }
 
     [Fact]
-    public void FlowBuilder_Event_TypeInference()
+    public void FlowBuilder_Scope_TypeInference()
     {
         var state = new TestState();
 
         var tree = new FlowTree();
-        tree.Build(state, b => b.Event(
+        tree.Build(state, b => b.Scope(
             s => s.Log.Add("Enter"),
             (s, result) => s.Log.Add($"Exit:{result}"),
             b.Do(s => s.Value = 100)
@@ -1446,9 +1446,9 @@ public class FlowBuilderTypeInferenceTests
                     b.Do(s => s.Log.Add("Branch B"))
                 )
             ),
-            b.Event(
-                s => s.Log.Add("Event:Enter"),
-                (s, _) => s.Log.Add("Event:Exit"),
+            b.Scope(
+                s => s.Log.Add("Scope:Enter"),
+                (s, _) => s.Log.Add("Scope:Exit"),
                 b.Guard(
                     s => s.Value >= 50,
                     b.Do(s => s.Log.Add("Guarded"))
@@ -1459,7 +1459,7 @@ public class FlowBuilderTypeInferenceTests
 
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(50, state.Value);
-        Assert.Equal(new[] { "Start", "Branch B", "Event:Enter", "Guarded", "Event:Exit", "End" }, state.Log);
+        Assert.Equal(new[] { "Start", "Branch B", "Scope:Enter", "Guarded", "Scope:Exit", "End" }, state.Log);
     }
 
     [Fact]

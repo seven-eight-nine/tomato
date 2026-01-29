@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <RootNamespace>Tomato.CharacterSpawnSystem.Tests</RootNamespace>
+    <RootNamespace>Tomato.UnitLODSystem.Tests</RootNamespace>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -17,6 +17,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\CharacterSpawnSystem.Core\CharacterSpawnSystem.Core.csproj" />
+    <ProjectReference Include="..\UnitLODSystem.Core\UnitLODSystem.Core.csproj" />
   </ItemGroup>
 </Project>

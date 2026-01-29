@@ -513,27 +513,27 @@ Guard<MyState>(s => s.HasTarget, SubTree(attackTree))
 b.Guard(s => s.HasTarget, b.SubTree(attackTree))
 ```
 
-#### EventNode
+#### ScopeNode
 
-ノードの開始/終了時にイベントを発火する。
+ノードの開始/終了時にコールバックを発火する。
 
 ```csharp
 // ステートレス版
-Event(
+Scope(
     () => Console.WriteLine("処理開始"),
     result => Console.WriteLine($"処理終了: {result}"),
     Action(static () => DoSomething())
 )
 
 // 状態付き版（FlowBuilder使用）
-b.Event(
+b.Scope(
     s => s.StartTime = DateTime.Now,
     (s, result) => s.EndTime = DateTime.Now,
     b.Action(s => DoSomething(s))
 )
 ```
 
-| イベント | 発火タイミング |
+| コールバック | 発火タイミング |
 |---------|--------------|
 | onEnter | 初回Tick時のみ |
 | onExit | Success/Failureになった時のみ（Running中は発火しない） |
@@ -541,12 +541,12 @@ b.Event(
 **デリゲート型**:
 ```csharp
 // ステートレス
-public delegate void FlowEventHandler();
-public delegate void FlowExitEventHandler(NodeStatus result);
+public delegate void FlowScopeEnterHandler();
+public delegate void FlowScopeExitHandler(NodeStatus result);
 
 // 状態付き
-public delegate void FlowEventHandler<in T>(T state) where T : class;
-public delegate void FlowExitEventHandler<in T>(T state, NodeStatus result) where T : class;
+public delegate void FlowScopeEnterHandler<in T>(T state) where T : class;
+public delegate void FlowScopeExitHandler<in T>(T state, NodeStatus result) where T : class;
 ```
 
 ---
@@ -684,7 +684,7 @@ Failure  // 即座にFailure
 
 #### ReturnNode
 
-ツリーの早期終了を要求する。実行されると、現在のツリー（またはサブツリー）をリセットし、EventNodeのonExitを発火させる。
+ツリーの早期終了を要求する。実行されると、現在のツリー（またはサブツリー）をリセットし、ScopeNodeのonExitを発火させる。
 
 ```csharp
 // 成功で早期終了
@@ -701,7 +701,7 @@ Return(NodeStatus.Success)
 
 ```csharp
 var subTree = new FlowTree();
-subTree.Build(state, b => b.Event(
+subTree.Build(state, b => b.Scope(
     s => InitializeResources(s),
     (s, _) => CleanupResources(s),  // Returnでも発火される
     b.Sequence(
@@ -719,7 +719,7 @@ subTree.Build(state, b => b.Event(
 
 ```csharp
 // キャンセル可能な長時間処理
-tree.Build(state, b => b.Event(
+tree.Build(state, b => b.Scope(
     s => OnStart(s),
     (s, _) => OnEnd(s),
     b.Race(
@@ -991,8 +991,8 @@ var sel = Selector(
 | `Failer(child)` | 常にFailure |
 | `Guard(condition, child)` | 条件付き実行 |
 | `Guard<T>(condition, child)` | 型付き条件付き実行 |
-| `Event(onEnter, onExit, child)` | イベント発火 |
-| `Event<T>(onEnter, onExit, child)` | 型付きイベント発火 |
+| `Scope(onEnter, onExit, child)` | スコープ（開始/終了コールバック） |
+| `Scope<T>(onEnter, onExit, child)` | 型付きスコープ |
 
 #### Leaf
 
@@ -1322,19 +1322,19 @@ public class DownloadState : IFlowState
     public int CompletedCount { get; set; }
 }
 
-// 全ファイルのダウンロード完了を待つ（進捗イベント付き）
+// 全ファイルのダウンロード完了を待つ（進捗コールバック付き）
 tree.Build(state, b => b.Join(
-    b.Event(
+    b.Scope(
         null,
         (s, _) => s.CompletedCount++,
         b.WaitUntil(s => s.File1Done)
     ),
-    b.Event(
+    b.Scope(
         null,
         (s, _) => s.CompletedCount++,
         b.WaitUntil(s => s.File2Done)
     ),
-    b.Event(
+    b.Scope(
         null,
         (s, _) => s.CompletedCount++,
         b.WaitUntil(s => s.File3Done)
@@ -1635,7 +1635,7 @@ public static FlowTree CreateSaveFlow(SaveState state)
             )
         ),
         // 完了表示
-        b.Event(
+        b.Scope(
             null,
             (s, result) =>
             {
@@ -1669,7 +1669,7 @@ public static FlowTree CreateMatchmakingFlow(MatchmakingState state)
     var tree = new FlowTree("Matchmaking");
     tree.Build(state, b => b.Sequence(
         // マッチメイキングUI表示
-        b.Event(
+        b.Scope(
             s => ShowMatchmakingUI(),
             (s, result) =>
             {
@@ -1756,7 +1756,7 @@ public static FlowTree CreateMainQuest(QuestState state)
     var tree = new FlowTree("MainQuest");
     tree.Build(state, b => b.Sequence(
         // フェーズ1: 情報収集
-        b.Event(
+        b.Scope(
             null,
             (s, _) => s.QuestPhase = 1,
             b.Sequence(
@@ -1770,7 +1770,7 @@ public static FlowTree CreateMainQuest(QuestState state)
             )
         ),
         // フェーズ2: ダンジョン探索
-        b.Event(
+        b.Scope(
             null,
             (s, _) => s.QuestPhase = 2,
             b.Sequence(
@@ -1969,7 +1969,7 @@ libs/foundation/FlowTree/
         TimeoutNode.cs
         DelayNode.cs
         GuardNode.cs
-        EventNode.cs
+        ScopeNode.cs
       Leaf/
         ActionNode.cs
         ConditionNode.cs

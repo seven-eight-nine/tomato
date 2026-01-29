@@ -32,7 +32,7 @@ tomato/
 │   ├── systems/                 # 個別機能システム
 │   │   ├── ActionSelector/      # 行動選択エンジン
 │   │   ├── ActionExecutionSystem/  # 行動実行・ステートマシン
-│   │   ├── CharacterSpawnSystem/   # キャラクタースポーン管理
+│   │   ├── UnitLODSystem/          # ユニットベースLODライフサイクル管理
 │   │   ├── SpatialSystem/       # 空間システム（衝突判定・空間検索統合）
 │   │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ管理
@@ -95,7 +95,7 @@ dotnet test libs/foundation/DeepCloneGenerator/DeepCloneGenerator.Tests/
 dotnet test libs/foundation/DependencySortSystem/DependencySortSystem.Tests/
 
 # systems
-dotnet test libs/systems/CharacterSpawnSystem/CharacterSpawnSystem.Tests/
+dotnet test libs/systems/UnitLODSystem/UnitLODSystem.Tests/
 dotnet test libs/systems/ActionSelector/ActionSelector.Tests/
 dotnet test libs/systems/ActionExecutionSystem/ActionExecutionSystem.Tests/
 dotnet test libs/systems/CollisionSystem/CollisionSystem.Tests/
@@ -318,17 +318,31 @@ machine.StartAction(ActionCategory.Upper, action);
 machine.Update(deltaTime);
 ```
 
-### CharacterSpawnSystem
+### UnitLODSystem
 
-キャラクターのリソース管理とスポーン。
+ユニットベースのLODライフサイクル管理。目標レベルに応じて詳細レベル（IUnitDetail）を自動的に生成・ロード・破棄。
 
 ```csharp
-var controller = new CharacterSpawnController(characterId, loader, factory);
-var spawnBridge = new SpawnBridge<ActionCategory>(registry, arena, initializer);
-spawnBridge.Connect(controller);
+// Unit作成
+var unit = new Unit("hero_001");
 
-// スポーン
-controller.RequestState(CharacterRequestState.Active);
+// 詳細レベル登録（requiredAtで必要な目標レベルを指定）
+unit.Register<CharacterDataDetail>(1);
+unit.Register<CharacterModelDetail>(2);
+
+// 目標設定
+unit.RequestState(2);
+
+// 毎フレーム更新
+unit.Tick();
+
+// Get<T>() は Phase == Ready のときのみインスタンスを返す
+// Loading, Creating, Unloading中は null
+var model = unit.Get<CharacterModelDetail>();
+if (model != null)
+{
+    // Ready状態のときのみここに到達
+}
 ```
 
 ### ReconciliationSystem
@@ -419,7 +433,7 @@ Step 1: 全Entityの次Stepのメッセージを処理
 | foundation | SystemPipeline | 51 |
 | foundation | DependencySortSystem | 28 |
 | foundation | HandleSystem | 25 |
-| systems | CharacterSpawnSystem | 269 |
+| systems | UnitLODSystem | 50 |
 | systems | InventorySystem | 101 |
 | systems | ActionSelector | 66 |
 | systems | SpatialSystem | 50+ |
@@ -428,7 +442,7 @@ Step 1: 全Entityの次Stepのメッセージを処理
 | systems | CombatSystem | 37 |
 | systems | SerializationSystem | 21 |
 | systems | ReconciliationSystem | 11 |
-| orchestration | GameLoop | 56 |
+| orchestration | GameLoop | 50 |
 | | **合計** | **1,603** |
 
 ## ドキュメント

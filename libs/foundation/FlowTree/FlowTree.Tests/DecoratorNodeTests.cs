@@ -291,14 +291,14 @@ public class DecoratorNodeTests
     }
 
     // =====================================================
-    // EventNode Tests
+    // ScopeNode Tests
     // =====================================================
 
     [Fact]
-    public void EventNode_OnEnterFiredOnFirstTick()
+    public void ScopeNode_OnEnterFiredOnFirstTick()
     {
         int enterCount = 0;
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             () => { enterCount++; },
             null,
             new ActionNode(static () => NodeStatus.Success)
@@ -316,11 +316,11 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventNode_OnEnterFiredOnceWhileRunning()
+    public void ScopeNode_OnEnterFiredOnceWhileRunning()
     {
         int enterCount = 0;
         int tickCount = 0;
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             () => { enterCount++; },
             null,
             new ActionNode(() =>
@@ -346,11 +346,11 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventNode_OnExitFiredOnCompletion()
+    public void ScopeNode_OnExitFiredOnCompletion()
     {
         int exitCount = 0;
         NodeStatus? exitResult = null;
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             null,
             result => { exitCount++; exitResult = result; },
             new ActionNode(static () => NodeStatus.Success)
@@ -364,11 +364,11 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventNode_OnExitNotFiredWhileRunning()
+    public void ScopeNode_OnExitNotFiredWhileRunning()
     {
         int exitCount = 0;
         int tickCount = 0;
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             null,
             _ => { exitCount++; },
             new ActionNode(() =>
@@ -390,11 +390,11 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventNode_BothEventsWork()
+    public void ScopeNode_BothCallbacksWork()
     {
         int enterCount = 0;
         int exitCount = 0;
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             () => { enterCount++; },
             _ => { exitCount++; },
             new ActionNode(static () => NodeStatus.Success)
@@ -408,9 +408,9 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventNode_PassesThroughChildStatus()
+    public void ScopeNode_PassesThroughChildStatus()
     {
-        var eventNode = new EventNode(
+        var eventNode = new ScopeNode(
             null,
             null,
             new ActionNode(static () => NodeStatus.Failure)
@@ -421,18 +421,18 @@ public class DecoratorNodeTests
     }
 
     // =====================================================
-    // Event DSL Tests
+    // Scope DSL Tests
     // =====================================================
 
     [Fact]
-    public void EventDsl_WrapsNode()
+    public void ScopeDsl_WrapsNode()
     {
         int enterCount = 0;
         int exitCount = 0;
 
         var tree = new FlowTree();
         tree.Build(
-            Event(
+            Scope(
                 () => { enterCount++; },
                 _ => { exitCount++; },
                 Action(static () => NodeStatus.Success)
@@ -446,14 +446,14 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventDsl_WrapsCompositeNode()
+    public void ScopeDsl_WrapsCompositeNode()
     {
         int enterCount = 0;
         int actionCount = 0;
 
         var tree = new FlowTree();
         tree.Build(
-            Event(
+            Scope(
                 () => { enterCount++; },
                 null,
                 Sequence(
@@ -470,7 +470,7 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventDsl_WorksWithRunningNode()
+    public void ScopeDsl_WorksWithRunningNode()
     {
         int enterCount = 0;
         int exitCount = 0;
@@ -478,7 +478,7 @@ public class DecoratorNodeTests
 
         var tree = new FlowTree();
         tree.Build(
-            Event(
+            Scope(
                 () => { enterCount++; },
                 _ => { exitCount++; },
                 Action(() =>
@@ -506,14 +506,14 @@ public class DecoratorNodeTests
     }
 
     // =====================================================
-    // Generic Event Tests
+    // Generic Scope Tests
     // =====================================================
 
     [Fact]
-    public void EventNode_Generic_OnEnterWithState()
+    public void ScopeNode_Generic_OnEnterWithState()
     {
         var state = new TestState { Counter = 0 };
-        var eventNode = new EventNode<TestState>(
+        var eventNode = new ScopeNode<TestState>(
             s => { s.Counter++; },
             null,
             new ActionNode(static () => NodeStatus.Success)
@@ -529,13 +529,13 @@ public class DecoratorNodeTests
     }
 
     [Fact]
-    public void EventDsl_Generic_WithState()
+    public void ScopeDsl_Generic_WithState()
     {
         var state = new TestState { Counter = 0 };
 
         var tree = new FlowTree();
         tree.Build(state,
-                Event<TestState>(
+                Scope<TestState>(
                     s => { s.Counter++; },
                     (s, _) => { s.Counter += 10; },
                     Action(static () => NodeStatus.Success)

@@ -55,9 +55,9 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     public GuardNode<T> Guard(FlowCondition<T> condition, IFlowNode child) => new(condition, child);
 
     /// <summary>
-    /// Eventノードを作成する。
+    /// Scopeノードを作成する。
     /// </summary>
-    public EventNode<T> Event(FlowEventHandler<T>? onEnter, FlowExitEventHandler<T>? onExit, IFlowNode child)
+    public ScopeNode<T> Scope(FlowScopeEnterHandler<T>? onEnter, FlowScopeExitHandler<T>? onExit, IFlowNode child)
         => new(onEnter, onExit, child);
 
     // =====================================================
@@ -252,10 +252,10 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     public GuardNode Guard(FlowCondition condition, IFlowNode child) => Flow.Guard(condition, child);
 
     /// <summary>
-    /// Eventノードを作成する（ステートレス）。
+    /// Scopeノードを作成する（ステートレス）。
     /// </summary>
-    public EventNode Event(FlowEventHandler? onEnter, FlowExitEventHandler? onExit, IFlowNode child)
-        => Flow.Event(onEnter, onExit, child);
+    public ScopeNode Scope(FlowScopeEnterHandler? onEnter, FlowScopeExitHandler? onExit, IFlowNode child)
+        => Flow.Scope(onEnter, onExit, child);
 
     /// <summary>
     /// WaitUntilノードを作成する（ステートレス）。

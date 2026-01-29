@@ -1,28 +1,28 @@
-using Tomato.CharacterSpawnSystem;
+using Tomato.UnitLODSystem;
 
 namespace Tomato.GameLoop.Spawn;
 
 /// <summary>
-/// CharacterSpawnControllerのスポーン完了を通知するインターフェース。
-/// CharacterSpawnSystemと他システムの橋渡し役。
+/// UnitのReady完了を通知するインターフェース。
+/// UnitLODSystemと他システムの橋渡し役。
 /// </summary>
 public interface ISpawnCompletionHandler
 {
     /// <summary>
-    /// キャラクターがアクティブになった時に呼ばれる。
+    /// Unitが安定状態（IsStable）になった時に呼ばれる。
     /// </summary>
-    /// <param name="controller">CharacterSpawnController</param>
-    void OnCharacterActivated(CharacterSpawnController controller);
+    /// <param name="unit">Unit</param>
+    void OnUnitReady(Unit unit);
 
     /// <summary>
-    /// キャラクターが非アクティブになった時に呼ばれる。
+    /// Unitがアンロードを開始した時に呼ばれる。
     /// </summary>
-    /// <param name="controller">CharacterSpawnController</param>
-    void OnCharacterDeactivated(CharacterSpawnController controller);
+    /// <param name="unit">Unit</param>
+    void OnUnitUnloading(Unit unit);
 
     /// <summary>
-    /// キャラクターが完全に削除された時に呼ばれる。
+    /// Unitが完全にアンロードされた時に呼ばれる。
     /// </summary>
-    /// <param name="characterId">キャラクターID</param>
-    void OnCharacterRemoved(string characterId);
+    /// <param name="unit">Unit</param>
+    void OnUnitRemoved(Unit unit);
 }

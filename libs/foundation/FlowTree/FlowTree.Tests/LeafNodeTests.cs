@@ -430,14 +430,14 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void ReturnNode_TriggersEventOnExit()
+    public void ReturnNode_TriggersScopeOnExit()
     {
         int exitCount = 0;
         NodeStatus? exitStatus = null;
 
         var tree = new FlowTree();
         tree.Build(
-            Event(
+            Scope(
                 null,
                 result => { exitCount++; exitStatus = result; },
                 Sequence(
@@ -461,7 +461,7 @@ public class LeafNodeTests
 
         var subTree = new FlowTree();
         subTree.Build(
-            Event(
+            Scope(
                 null,
                 _ => exitCount++,
                 Sequence(
@@ -522,7 +522,7 @@ public class LeafNodeTests
     }
 
     [Fact]
-    public void ReturnNode_ResetsRunningNodesWithEventFiring()
+    public void ReturnNode_ResetsRunningNodesWithScopeFiring()
     {
         int enterCount = 0;
         int exitCount = 0;
@@ -530,7 +530,7 @@ public class LeafNodeTests
 
         var tree = new FlowTree();
         tree.Build(
-            Event(
+            Scope(
                 () => enterCount++,
                 _ => exitCount++,
                 Race(
@@ -558,7 +558,7 @@ public class LeafNodeTests
         // Return条件を満たす
         shouldReturn = true;
 
-        // 3回目: WaitUntilが成功→ReturnSuccessで終了、EventのonExitが発火
+        // 3回目: WaitUntilが成功→ReturnSuccessで終了、ScopeのonExitが発火
         Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
         Assert.Equal(1, enterCount);
         Assert.Equal(1, exitCount);  // onExitが発火された

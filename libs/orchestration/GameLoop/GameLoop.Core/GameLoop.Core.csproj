@@ -14,6 +14,6 @@
     <ProjectReference Include="..\..\..\systems\ActionSelector\ActionSelector.Core\ActionSelector.Core.csproj" />
     <ProjectReference Include="..\..\..\systems\ActionExecutionSystem\ActionExecutionSystem.Core\ActionExecutionSystem.Core.csproj" />
     <ProjectReference Include="..\..\..\common\Tomato.Math\Tomato.Math.csproj" />
-    <ProjectReference Include="..\..\..\systems\CharacterSpawnSystem\CharacterSpawnSystem.Core\CharacterSpawnSystem.Core.csproj" />
+    <ProjectReference Include="..\..\..\systems\UnitLODSystem\UnitLODSystem.Core\UnitLODSystem.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,6 @@
 using System;
 using Tomato.GameLoop.Context;
+using Tomato.UnitLODSystem;
 
 namespace Tomato.GameLoop.Spawn;
 
@@ -11,10 +12,10 @@ namespace Tomato.GameLoop.Spawn;
 public interface IEntityInitializer<TCategory> where TCategory : struct, Enum
 {
     /// <summary>
-    /// データリソースからEntityContextを初期化する。
+    /// UnitからEntityContextを初期化する。
     /// </summary>
     /// <param name="context">初期化対象のEntityContext</param>
-    /// <param name="characterId">キャラクターID</param>
-    /// <param name="dataResource">データリソース</param>
-    void Initialize(EntityContext<TCategory> context, string characterId, object? dataResource);
+    /// <param name="unit">Unit</param>
+    /// <param name="dataResource">データリソース（オプション）</param>
+    void Initialize(EntityContext<TCategory> context, Unit unit, object? dataResource);
 }
