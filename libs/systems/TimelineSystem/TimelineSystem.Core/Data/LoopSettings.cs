@@ -34,7 +34,17 @@ public readonly struct LoopSettings : IEquatable<LoopSettings>
         EndFrame == other.EndFrame;
 
     public override bool Equals(object? obj) => obj is LoopSettings other && Equals(other);
-    public override int GetHashCode() => HashCode.Combine(Enabled, StartFrame, EndFrame);
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + Enabled.GetHashCode();
+            hash = hash * 31 + StartFrame;
+            hash = hash * 31 + EndFrame;
+            return hash;
+        }
+    }
 
     public static bool operator ==(LoopSettings left, LoopSettings right) => left.Equals(right);
     public static bool operator !=(LoopSettings left, LoopSettings right) => !left.Equals(right);

@@ -58,7 +58,7 @@ public sealed class QueryContext
     {
         if (_eventBuffer.Length < required)
         {
-            int newSize = Math.Max(_eventBuffer.Length * 2, required);
+            int newSize = System.Math.Max(_eventBuffer.Length * 2, required);
             Array.Resize(ref _eventBuffer, newSize);
         }
     }
@@ -67,7 +67,7 @@ public sealed class QueryContext
     {
         if (_overlapBuffer.Length < required)
         {
-            int newSize = Math.Max(_overlapBuffer.Length * 2, required);
+            int newSize = System.Math.Max(_overlapBuffer.Length * 2, required);
             Array.Resize(ref _overlapBuffer, newSize);
         }
     }

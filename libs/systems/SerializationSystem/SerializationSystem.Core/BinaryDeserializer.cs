@@ -178,7 +178,7 @@ public ref struct BinaryDeserializer
             return string.Empty;
 
         EnsureAvailable(length);
-        var value = Encoding.UTF8.GetString(_data.Slice(_position, length));
+        var value = Encoding.UTF8.GetString(_data.Slice(_position, length).ToArray());
         _position += length;
         return value;
     }

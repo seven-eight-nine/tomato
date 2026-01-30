@@ -188,7 +188,7 @@ public sealed class SimpleResourceState : IResourceState
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public float GetCooldown(string cooldownId)
     {
-        return _cooldowns.TryGetValue(cooldownId, out var remaining) ? MathF.Max(0, remaining) : 0f;
+        return _cooldowns.TryGetValue(cooldownId, out var remaining) ? Math.Max(0, remaining) : 0f;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

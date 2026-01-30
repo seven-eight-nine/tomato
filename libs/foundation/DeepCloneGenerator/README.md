@@ -177,6 +177,46 @@ public partial class Stats
 }
 ```
 
+### IDeepCloneable<T> を手動実装
+
+カスタムのクローンロジックが必要な場合、`IDeepCloneable<T>` を直接実装できる。
+`[DeepClonable]` を使わず手動実装した型は、他の `[DeepClonable]` 型のプロパティとして
+自動的に認識され、`DeepClone()` メソッドが呼ばれる。
+
+```csharp
+// 手動実装（[DeepClonable]属性なし）
+public class CustomQueue : IDeepCloneable<CustomQueue>
+{
+    private readonly List<int> _items = new();
+
+    public CustomQueue DeepClone()
+    {
+        var clone = new CustomQueue();
+        // カスタムロジック：偶数のみコピー
+        foreach (var item in _items.Where(x => x % 2 == 0))
+        {
+            clone._items.Add(item);
+        }
+        return clone;
+    }
+}
+
+// CustomQueue をプロパティとして使用
+[DeepClonable]
+public partial class GameState
+{
+    public string Name { get; set; }
+    public CustomQueue EventQueue { get; set; }  // 自動で DeepClone() が呼ばれる
+}
+
+var clone = gameState.DeepClone();
+// clone.EventQueue は CustomQueue.DeepClone() で作成された独立したインスタンス
+```
+
+> **注**: `[DeepClonable]` 属性付きの型は生成された `DeepCloneInternal()` が使われ、
+> 手動実装の `IDeepCloneable<T>` は `DeepClone()` が使われる。
+> コレクション内の要素（`List<CustomItem>` など）も同様に正しく処理される。
+
 ---
 
 ## サポートする型
@@ -208,8 +248,8 @@ public partial class Stats
 
 ## 要件
 
-- C# 9.0 以上
-- .NET 5.0 / .NET Standard 2.0 以上
+- C# 9.0 以上（LangVersion latest 推奨）
+- .NET Standard 2.0 対応（.NET Framework 4.6.1+, .NET Core 2.0+, Unity 2018.1+ 等）
 - `partial` 型宣言
 - パラメータレスコンストラクタ（public/internal/protected）
 

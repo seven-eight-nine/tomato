@@ -292,7 +292,7 @@ public class CommandPoolAdvancedTests
                         // Return half immediately
                         if (i % 2 == 0 && localInstances.Count > 0)
                         {
-                            var toReturn = localInstances[^1];
+                            var toReturn = localInstances[localInstances.Count - 1];
                             localInstances.RemoveAt(localInstances.Count - 1);
                             CommandPool<StressTestCommand>.Return(toReturn);
                             Interlocked.Increment(ref returnCount);

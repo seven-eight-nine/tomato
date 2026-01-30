@@ -180,7 +180,7 @@ public sealed class CraftingManager<TItem>
         {
             int available = sourceInventory.GetTotalStackCount(ingredient.DefinitionId);
             int possibleCount = available / ingredient.Count;
-            maxCount = Math.Min(maxCount, possibleCount);
+            maxCount = System.Math.Min(maxCount, possibleCount);
         }
 
         return maxCount;
@@ -220,7 +220,7 @@ public sealed class CraftingManager<TItem>
             {
                 if (toConsume <= 0) break;
 
-                int consumeFromThis = Math.Min(item.StackCount, toConsume);
+                int consumeFromThis = System.Math.Min(item.StackCount, toConsume);
                 var result = sourceInventory.TryRemove(item.InstanceId, consumeFromThis);
                 if (!result.Success)
                 {

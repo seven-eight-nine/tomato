@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 namespace Tomato.TimelineSystem;
 
-public record TrackDto
+public class TrackDto
 {
-    public int Id { get; init; }
-    public List<ClipDto> Clips { get; init; } = new();
+    public int Id { get; set; }
+    public List<ClipDto> Clips { get; set; } = new List<ClipDto>();
 }

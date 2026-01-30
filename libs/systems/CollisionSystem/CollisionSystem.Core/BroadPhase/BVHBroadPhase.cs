@@ -280,8 +280,8 @@ public sealed class BVHBroadPhase : IBroadPhase
         // 子ノードを再帰的に構築
         node.IsLeaf = false;
         node.ShapeIndex = InvalidIndex;
-        node.LeftChild = BuildRecursive(indices[..mid], depth + 1);
-        node.RightChild = BuildRecursive(indices[mid..], depth + 1);
+        node.LeftChild = BuildRecursive(indices.Slice(0, mid), depth + 1);
+        node.RightChild = BuildRecursive(indices.Slice(mid), depth + 1);
 
         return nodeIndex;
     }

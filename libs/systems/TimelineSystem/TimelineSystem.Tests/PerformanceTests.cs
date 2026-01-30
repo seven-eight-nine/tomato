@@ -14,6 +14,8 @@ public class PerformanceTests
         _output = output;
     }
 
+    private static long GetAllocatedBytes() => GC.GetAllocatedBytesForCurrentThread();
+
     [Fact]
     public void Query_1000Clips_100Tracks_Performance()
     {
@@ -141,7 +143,7 @@ public class PerformanceTests
             sequence.Query(i * 5, 10, ctx);
         }
 
-        long memoryBefore = GC.GetAllocatedBytesForCurrentThread();
+        long memoryBefore = GetAllocatedBytes();
 
         const int iterations = 1000;
         for (int i = 0; i < iterations; i++)
@@ -150,7 +152,7 @@ public class PerformanceTests
             sequence.Query(frame, 10, ctx);
         }
 
-        long memoryAfter = GC.GetAllocatedBytesForCurrentThread();
+        long memoryAfter = GetAllocatedBytes();
         long allocatedBytes = memoryAfter - memoryBefore;
 
         _output.WriteLine($"Iterations: {iterations}");

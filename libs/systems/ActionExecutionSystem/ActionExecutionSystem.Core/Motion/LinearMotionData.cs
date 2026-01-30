@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using MathF = Tomato.Math.MathF;
 
 namespace Tomato.ActionExecutionSystem;
 
@@ -28,7 +29,7 @@ public sealed class LinearMotionData : IMotionData
             return new MotionFrame(_startPosition, Quaternion.Identity);
         }
 
-        float t = Math.Clamp(time / Duration, 0f, 1f);
+        float t = MathF.Max(0f, MathF.Min(1f, time / Duration));
         var position = Vector3.Lerp(_startPosition, _endPosition, t);
         return new MotionFrame(position, Quaternion.Identity);
     }

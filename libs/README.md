@@ -1,6 +1,6 @@
 # Tomato Game Framework Libraries
 
-ゲーム開発のためのライブラリ群。
+ゲーム開発のためのライブラリ群。すべて .NET Standard 2.0 対応。
 
 ## フォルダ構造
 
@@ -48,11 +48,11 @@ libs/
 | システム | 説明 | テスト数 |
 |---------|------|---------|
 | **HandleSystem** | 汎用ハンドルパターン（IHandle, IArena, ArenaBase）、エンティティ以外にも適用可能（Source Generator） | 25 |
-| **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 309 |
+| **EntityHandleSystem** | Entity専用ハンドル、コンポーネントシステム、Query、EntityManager（HandleSystem依存） | 348 |
 | **CommandGenerator** | コマンドパターンのメッセージハンドラ生成（Source Generator） | 247 |
 | **SystemPipeline** | ECSスタイルのシステムパイプライン、Serial/Parallel/MessageQueue処理（Source Generator） | 51 |
-| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 148 |
-| **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 82 |
+| **FlowTree** | コールスタック付き汎用フロー制御、ビヘイビアツリーパターン、動的サブツリー・再帰対応 | 165 |
+| **DeepCloneGenerator** | ディープクローン自動生成（Source Generator） | 86 |
 | **DependencySortSystem** | 汎用トポロジカルソート、循環検出 | 28 |
 
 ### systems/ - 個別機能システム
@@ -60,16 +60,17 @@ libs/
 | システム | 説明 | テスト数 |
 |---------|------|---------|
 | **ActionSelector** | 入力からアクションを選択、優先度ベースのジャッジメント | 66 |
-| **ActionExecutionSystem** | アクション実行・ステートマシン・MotionGraph | 119 |
+| **ActionExecutionSystem** | アクション実行・ステートマシン・MotionGraph | 81 |
+| **HierarchicalStateMachine** | 階層的状態マシン | 84 |
+| **TimelineSystem** | トラック/クリップベースのタイムライン/シーケンサー | 33 |
 | **UnitLODSystem** | ユニットベースLODライフサイクル管理 | 50 |
-| **CollisionSystem** | 衝突判定・空間検索統合（CollisionDetector, SpatialWorld） | 50+ |
+| **CollisionSystem** | 衝突判定・空間検索統合（CollisionDetector, SpatialWorld） | 102 |
 | **CombatSystem** | 攻撃・ダメージ処理（HitGroup、多段ヒット制御） | 37 |
 | **StatusEffectSystem** | 状態異常・バフ/デバフ管理 | 50 |
+| **ResourceSystem** | リソース管理システム | 62 |
 | **InventorySystem** | アイテム・インベントリ管理 | 101 |
 | **ReconciliationSystem** | 依存関係を考慮した位置調停（DependencySortSystem使用） | 11 |
-| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 21 |
-| **TimelineSystem** | トラック/クリップベースのタイムライン/シーケンサー | 63 |
-| **HierarchicalStateMachine** | 階層的状態マシン、A*パスファインディング | 67 |
+| **SerializationSystem** | ゼロアロケーションバイナリシリアライズ | 60 |
 
 ### orchestration/ - 統合システム
 
@@ -78,6 +79,8 @@ libs/
 | **GameLoop** | 6フェーズゲームループを実現する最上位統合システム | 50 |
 
 **合計: 1,800+ テスト**
+
+> 注: すべてのライブラリは .NET Standard 2.0 対応。テストは .NET 8.0 で実行。
 
 ## 主要な使用例
 

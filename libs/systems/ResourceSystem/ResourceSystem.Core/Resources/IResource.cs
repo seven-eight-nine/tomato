@@ -11,7 +11,7 @@ public interface IResource
     /// 重いリソースは大きな値を返すことで、ローディングバーの進捗を正確に表現できる
     /// デフォルトは1
     /// </summary>
-    int Point => 1;
+    int Point { get; }
 
     /// <summary>
     /// ロード開始（非同期ロードを開始する）
@@ -56,8 +56,4 @@ public interface IResource<TResource> : IResource
     /// <returns>ロードされたリソース、未ロードの場合はnull</returns>
     new TResource? GetResource();
 
-    /// <summary>
-    /// 基底インターフェースの明示的実装
-    /// </summary>
-    object? IResource.GetResource() => GetResource();
 }

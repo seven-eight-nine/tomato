@@ -276,7 +276,7 @@ public sealed class SpatialWorld
         }
 
         // 距離でソート
-        SortByDistance(results[..hitCount]);
+        SortByDistance(results.Slice(0, hitCount));
 
         return hitCount;
     }
@@ -455,7 +455,7 @@ public sealed class SpatialWorld
         {
             case ShapeType.Sphere:
             {
-                ref readonly var sphere = ref _registry.GetSphere(shapeIndex);
+                var sphere = _registry.GetSphere(shapeIndex);
                 if (ShapeIntersection.PointSphere(point, sphere))
                 {
                     var dir = (point - sphere.Center);
@@ -468,7 +468,7 @@ public sealed class SpatialWorld
             }
             case ShapeType.Capsule:
             {
-                ref readonly var capsule = ref _registry.GetCapsule(shapeIndex);
+                var capsule = _registry.GetCapsule(shapeIndex);
                 if (ShapeIntersection.PointCapsule(point, capsule))
                 {
                     var closest = MathUtils.ClosestPointOnSegment(point, capsule.Point1, capsule.Point2);
@@ -482,7 +482,7 @@ public sealed class SpatialWorld
             }
             case ShapeType.Cylinder:
             {
-                ref readonly var cylinder = ref _registry.GetCylinder(shapeIndex);
+                var cylinder = _registry.GetCylinder(shapeIndex);
                 if (ShapeIntersection.PointCylinder(point, cylinder))
                 {
                     var dx = point.X - cylinder.BaseCenter.X;
@@ -498,7 +498,7 @@ public sealed class SpatialWorld
             }
             case ShapeType.Box:
             {
-                ref readonly var box = ref _registry.GetBox(shapeIndex);
+                var box = _registry.GetBox(shapeIndex);
                 if (ShapeIntersection.PointBox(point, box))
                 {
                     var dir = point - box.Center;
@@ -525,22 +525,22 @@ public sealed class SpatialWorld
         {
             case ShapeType.Sphere:
             {
-                ref readonly var sphere = ref _registry.GetSphere(shapeIndex);
+                var sphere = _registry.GetSphere(shapeIndex);
                 return ShapeIntersection.RaySphere(origin, direction, maxDistance, sphere, out t, out point, out normal);
             }
             case ShapeType.Capsule:
             {
-                ref readonly var capsule = ref _registry.GetCapsule(shapeIndex);
+                var capsule = _registry.GetCapsule(shapeIndex);
                 return ShapeIntersection.RayCapsule(origin, direction, maxDistance, capsule, out t, out point, out normal);
             }
             case ShapeType.Cylinder:
             {
-                ref readonly var cylinder = ref _registry.GetCylinder(shapeIndex);
+                var cylinder = _registry.GetCylinder(shapeIndex);
                 return ShapeIntersection.RayCylinder(origin, direction, maxDistance, cylinder, out t, out point, out normal);
             }
             case ShapeType.Box:
             {
-                ref readonly var box = ref _registry.GetBox(shapeIndex);
+                var box = _registry.GetBox(shapeIndex);
                 return ShapeIntersection.RayBox(origin, direction, maxDistance, box, out t, out point, out normal);
             }
         }
@@ -560,22 +560,22 @@ public sealed class SpatialWorld
         {
             case ShapeType.Sphere:
             {
-                ref readonly var sphere = ref _registry.GetSphere(shapeIndex);
+                var sphere = _registry.GetSphere(shapeIndex);
                 return ShapeIntersection.SphereSphere(querySphere, sphere, out point, out normal, out distance);
             }
             case ShapeType.Capsule:
             {
-                ref readonly var capsule = ref _registry.GetCapsule(shapeIndex);
+                var capsule = _registry.GetCapsule(shapeIndex);
                 return ShapeIntersection.SphereCapsule(querySphere, capsule, out point, out normal, out distance);
             }
             case ShapeType.Cylinder:
             {
-                ref readonly var cylinder = ref _registry.GetCylinder(shapeIndex);
+                var cylinder = _registry.GetCylinder(shapeIndex);
                 return ShapeIntersection.SphereCylinder(querySphere, cylinder, out point, out normal, out distance);
             }
             case ShapeType.Box:
             {
-                ref readonly var box = ref _registry.GetBox(shapeIndex);
+                var box = _registry.GetBox(shapeIndex);
                 return ShapeIntersection.SphereBox(querySphere, box, out point, out normal, out distance);
             }
         }
@@ -595,22 +595,22 @@ public sealed class SpatialWorld
         {
             case ShapeType.Sphere:
             {
-                ref readonly var sphere = ref _registry.GetSphere(shapeIndex);
+                var sphere = _registry.GetSphere(shapeIndex);
                 return ShapeIntersection.CapsuleSweepSphere(start, end, radius, sphere, out toi, out point, out normal);
             }
             case ShapeType.Capsule:
             {
-                ref readonly var capsule = ref _registry.GetCapsule(shapeIndex);
+                var capsule = _registry.GetCapsule(shapeIndex);
                 return ShapeIntersection.CapsuleSweepCapsule(start, end, radius, capsule, out toi, out point, out normal);
             }
             case ShapeType.Cylinder:
             {
-                ref readonly var cylinder = ref _registry.GetCylinder(shapeIndex);
+                var cylinder = _registry.GetCylinder(shapeIndex);
                 return ShapeIntersection.CapsuleSweepCylinder(start, end, radius, cylinder, out toi, out point, out normal);
             }
             case ShapeType.Box:
             {
-                ref readonly var box = ref _registry.GetBox(shapeIndex);
+                var box = _registry.GetBox(shapeIndex);
                 return ShapeIntersection.CapsuleSweepBox(start, end, radius, box, out toi, out point, out normal);
             }
         }
@@ -630,22 +630,22 @@ public sealed class SpatialWorld
         {
             case ShapeType.Sphere:
             {
-                ref readonly var sphere = ref _registry.GetSphere(shapeIndex);
+                var sphere = _registry.GetSphere(shapeIndex);
                 return ShapeIntersection.SlashSphere(a0, a1, b0, b1, sphere, out point, out normal, out distance);
             }
             case ShapeType.Capsule:
             {
-                ref readonly var capsule = ref _registry.GetCapsule(shapeIndex);
+                var capsule = _registry.GetCapsule(shapeIndex);
                 return ShapeIntersection.SlashCapsule(a0, a1, b0, b1, capsule, out point, out normal, out distance);
             }
             case ShapeType.Cylinder:
             {
-                ref readonly var cylinder = ref _registry.GetCylinder(shapeIndex);
+                var cylinder = _registry.GetCylinder(shapeIndex);
                 return ShapeIntersection.SlashCylinder(a0, a1, b0, b1, cylinder, out point, out normal, out distance);
             }
             case ShapeType.Box:
             {
-                ref readonly var box = ref _registry.GetBox(shapeIndex);
+                var box = _registry.GetBox(shapeIndex);
                 return ShapeIntersection.SlashBox(a0, a1, b0, b1, box, out point, out normal, out distance);
             }
         }

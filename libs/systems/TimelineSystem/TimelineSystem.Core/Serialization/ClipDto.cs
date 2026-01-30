@@ -1,10 +1,10 @@
 namespace Tomato.TimelineSystem;
 
-public record ClipDto
+public class ClipDto
 {
-    public int Id { get; init; }
-    public int TrackId { get; init; }
-    public ClipType Type { get; init; }
-    public int StartFrame { get; init; }
-    public int EndFrame { get; init; }
+    public int Id { get; set; }
+    public int TrackId { get; set; }
+    public ClipType Type { get; set; }
+    public int StartFrame { get; set; }
+    public int EndFrame { get; set; }
 }

@@ -41,7 +41,12 @@ public readonly struct ShapeHandle : IEquatable<ShapeHandle>
         => obj is ShapeHandle other && Equals(other);
 
     public override int GetHashCode()
-        => HashCode.Combine(Index, Generation);
+    {
+        unchecked
+        {
+            return Index * 31 + Generation;
+        }
+    }
 
     public static bool operator ==(ShapeHandle left, ShapeHandle right)
         => left.Equals(right);

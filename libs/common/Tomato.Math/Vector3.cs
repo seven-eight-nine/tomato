@@ -126,7 +126,16 @@ public readonly struct Vector3 : IEquatable<Vector3>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override int GetHashCode()
-        => HashCode.Combine(X, Y, Z);
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + X.GetHashCode();
+            hash = hash * 31 + Y.GetHashCode();
+            hash = hash * 31 + Z.GetHashCode();
+            return hash;
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(Vector3 left, Vector3 right)

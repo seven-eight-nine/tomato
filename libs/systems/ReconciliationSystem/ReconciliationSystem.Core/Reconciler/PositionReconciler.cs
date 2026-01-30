@@ -94,8 +94,10 @@ public sealed class PositionReconciler
         }
 
         // 押し出しを適用
-        foreach (var (handle, pushout) in _pushouts)
+        foreach (var kvp in _pushouts)
         {
+            var handle = kvp.Key;
+            var pushout = kvp.Value;
             if (pushout == Vector3.Zero)
                 continue;
 

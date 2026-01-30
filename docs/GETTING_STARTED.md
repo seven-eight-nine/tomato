@@ -6,9 +6,11 @@
 
 ## 前提条件
 
-- .NET 8.0 SDK
-- C# の基本的な知識
+- .NET 6.0 SDK 以上（テスト実行用）
+- C# 9.0 以上（LangVersion latest 推奨）
 - ゲームループの概念の理解
+
+> **互換性**: ライブラリは .NET Standard 2.0 対応。.NET Framework 4.6.1+, .NET Core 2.0+, Unity 2018.1+, Godot 等で利用可能。
 
 ---
 

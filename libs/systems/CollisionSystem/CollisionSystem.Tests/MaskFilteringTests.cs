@@ -67,7 +67,7 @@ public class MaskFilteringTests
         bool hit = world.Raycast(query, out var result);
 
         Assert.True(hit);
-        Assert.True(MathF.Abs(result.Distance - 9f) < 0.01f);
+        Assert.True(System.Math.Abs(result.Distance - 9f) < 0.01f);
     }
 
     [Fact]

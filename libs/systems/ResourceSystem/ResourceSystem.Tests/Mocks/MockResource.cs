@@ -107,6 +107,8 @@ public class MockDependentResource : IResource<string>
         _loaded = false;
     }
 
+    public int Point => 1;
+
     public void Start()
     {
         _loaded = false;

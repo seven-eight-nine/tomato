@@ -40,6 +40,11 @@ public partial class ActionSelector<TCategory, TInput, TContext>
     private readonly bool[] _categoryFilled;
     private int _candidateCount;
     private readonly SelectionResult<TCategory, TInput, TContext> _result;
+    private readonly HashSet<IActionJudgment<TCategory, TInput, TContext>> _lifecycleNewJudgments;
+    private readonly List<IActionJudgment<TCategory, TInput, TContext>> _lifecycleToRemove;
+    private static readonly Comparer<(IActionJudgment<TCategory, TInput, TContext> judgment, ActionPriority priority)> _candidateComparer =
+        Comparer<(IActionJudgment<TCategory, TInput, TContext> judgment, ActionPriority priority)>.Create(
+            (a, b) => a.priority.CompareTo(b.priority));
 
     /// <summary>
     /// デフォルトコンストラクタ。NoExclusivityルールを使用する。
@@ -55,6 +60,8 @@ public partial class ActionSelector<TCategory, TInput, TContext>
         _candidates = new (IActionJudgment<TCategory, TInput, TContext>, ActionPriority)[maxJudgments];
         _categoryFilled = new bool[_categoryValues.Length];
         _result = new SelectionResult<TCategory, TInput, TContext>();
+        _lifecycleNewJudgments = new HashSet<IActionJudgment<TCategory, TInput, TContext>>();
+        _lifecycleToRemove = new List<IActionJudgment<TCategory, TInput, TContext>>(maxJudgments);
     }
 
     public SelectionResult<TCategory, TInput, TContext> ProcessFrame(
@@ -94,22 +101,22 @@ public partial class ActionSelector<TCategory, TInput, TContext>
         JudgmentList<TCategory, TInput, TContext> judgmentList,
         in FrameState<TInput, TContext> state)
     {
-        var newJudgments = new HashSet<IActionJudgment<TCategory, TInput, TContext>>();
+        _lifecycleNewJudgments.Clear();
         for (int i = 0; i < judgmentList.Count; i++)
         {
-            newJudgments.Add(judgmentList[i].Judgment);
+            _lifecycleNewJudgments.Add(judgmentList[i].Judgment);
         }
 
-        var toRemove = new List<IActionJudgment<TCategory, TInput, TContext>>();
+        _lifecycleToRemove.Clear();
         foreach (var kvp in _activeJudgments)
         {
-            if (!newJudgments.Contains(kvp.Key))
+            if (!_lifecycleNewJudgments.Contains(kvp.Key))
             {
                 kvp.Key.Input?.OnJudgmentStop();
-                toRemove.Add(kvp.Key);
+                _lifecycleToRemove.Add(kvp.Key);
             }
         }
-        foreach (var j in toRemove)
+        foreach (var j in _lifecycleToRemove)
         {
             _activeJudgments.Remove(j);
         }
@@ -156,9 +163,7 @@ public partial class ActionSelector<TCategory, TInput, TContext>
     {
         if (_candidateCount <= 1) return;
 
-        Array.Sort(_candidates, 0, _candidateCount,
-            Comparer<(IActionJudgment<TCategory, TInput, TContext> judgment, ActionPriority priority)>.Create(
-                (a, b) => a.priority.CompareTo(b.priority)));
+        Array.Sort(_candidates, 0, _candidateCount, _candidateComparer);
     }
 
     private void DetermineRequestedActions(in FrameState<TInput, TContext> state, bool forcedInputOnly)

@@ -18,7 +18,7 @@ public class RaycastTests
         bool hit = world.Raycast(query, out var result);
 
         Assert.True(hit);
-        Assert.True(MathF.Abs(result.Distance - 4f) < Epsilon);
+        Assert.True(System.Math.Abs(result.Distance - 4f) < Epsilon);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class RaycastTests
         bool hit = world.Raycast(query, out var result);
 
         Assert.True(hit);
-        Assert.True(MathF.Abs(result.Distance - 4f) < Epsilon);
+        Assert.True(System.Math.Abs(result.Distance - 4f) < Epsilon);
     }
 
     [Fact]

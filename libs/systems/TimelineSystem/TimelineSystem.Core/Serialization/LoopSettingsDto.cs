@@ -1,10 +1,10 @@
 namespace Tomato.TimelineSystem;
 
-public record LoopSettingsDto
+public class LoopSettingsDto
 {
-    public bool Enabled { get; init; }
-    public int StartFrame { get; init; }
-    public int EndFrame { get; init; }
+    public bool Enabled { get; set; }
+    public int StartFrame { get; set; }
+    public int EndFrame { get; set; }
 
     public static LoopSettingsDto FromLoopSettings(LoopSettings settings)
     {

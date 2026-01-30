@@ -6,6 +6,8 @@ namespace Tomato.FlowTree.Tests;
 
 public class ZeroGcTests
 {
+    private static long GetAllocatedBytes() => GC.GetAllocatedBytesForCurrentThread();
+
     [Fact]
     public void Tick_NoAllocation()
     {
@@ -14,7 +16,7 @@ public class ZeroGcTests
         var state = new TestState();
 
         var subTree = new FlowTree("SubTree");
-        subTree.Build(state, 
+        subTree.Build(state,
                 Sequence(
                     Action(static () => NodeStatus.Success),
                     Action(static () => NodeStatus.Success)
@@ -24,7 +26,7 @@ public class ZeroGcTests
         var tree = new FlowTree("Main");
         tree
             .WithCallStack(stack)
-            .Build(state, 
+            .Build(state,
                 Sequence(
                     Action<TestState>(s =>
                     {
@@ -48,7 +50,7 @@ public class ZeroGcTests
         }
 
         // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedBefore = GetAllocatedBytes();
 
         for (int i = 0; i < 1000; i++)
         {
@@ -63,7 +65,7 @@ public class ZeroGcTests
             }
         }
 
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedAfter = GetAllocatedBytes();
         long allocated = allocatedAfter - allocatedBefore;
 
         // ゼロアロケーションを検証（多少の許容範囲を設ける）
@@ -91,7 +93,7 @@ public class ZeroGcTests
         stack.Clear();
 
         // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedBefore = GetAllocatedBytes();
 
         for (int i = 0; i < 10000; i++)
         {
@@ -103,7 +105,7 @@ public class ZeroGcTests
             stack.Pop();
         }
 
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedAfter = GetAllocatedBytes();
         long allocated = allocatedAfter - allocatedBefore;
 
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during CallStack operations.");
@@ -141,7 +143,7 @@ public class ZeroGcTests
         }
 
         // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedBefore = GetAllocatedBytes();
 
         for (int i = 0; i < 10000; i++)
         {
@@ -153,7 +155,7 @@ public class ZeroGcTests
             race.Tick(ref ctx);
         }
 
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedAfter = GetAllocatedBytes();
         long allocated = allocatedAfter - allocatedBefore;
 
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during composite node operations.");
@@ -181,7 +183,7 @@ public class ZeroGcTests
         }
 
         // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedBefore = GetAllocatedBytes();
 
         for (int i = 0; i < 10000; i++)
         {
@@ -193,7 +195,7 @@ public class ZeroGcTests
             repeat.Tick(ref ctx);
         }
 
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedAfter = GetAllocatedBytes();
         long allocated = allocatedAfter - allocatedBefore;
 
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during decorator node operations.");
@@ -205,7 +207,7 @@ public class ZeroGcTests
         var state = new TestState { IntValue = 0 };
 
         var tree = new FlowTree();
-        tree.Build(state, 
+        tree.Build(state,
                 Sequence(
                     Action<TestState>(s =>
                     {
@@ -224,7 +226,7 @@ public class ZeroGcTests
         }
 
         // GCアロケーション計測
-        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedBefore = GetAllocatedBytes();
 
         for (int i = 0; i < 10000; i++)
         {
@@ -232,7 +234,7 @@ public class ZeroGcTests
             tree.Tick(0.016f);
         }
 
-        long allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+        long allocatedAfter = GetAllocatedBytes();
         long allocated = allocatedAfter - allocatedBefore;
 
         Assert.True(allocated < 1024, $"Allocated {allocated} bytes during generic context operations.");

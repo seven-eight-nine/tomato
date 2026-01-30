@@ -1249,7 +1249,21 @@ namespace Tomato.DeepCloneGenerator
                 // Check for IDeepCloneable<T> interface (user-defined DeepClone)
                 foreach (var iface in namedType.AllInterfaces)
                 {
-                    if (iface.OriginalDefinition.ToDisplayString() == "Tomato.DeepCloneGenerator.IDeepCloneable`1")
+                    var originalDef = iface.OriginalDefinition;
+
+                    // Method 1: Check full display string
+                    if (originalDef.ToDisplayString() == "Tomato.DeepCloneGenerator.IDeepCloneable`1")
+                        return true;
+
+                    // Method 2: Check metadata name and namespace
+                    if (originalDef.MetadataName == "IDeepCloneable`1" &&
+                        originalDef.ContainingNamespace?.ToDisplayString() == "Tomato.DeepCloneGenerator")
+                        return true;
+
+                    // Method 3: Check by name pattern (for source-defined interfaces)
+                    if (originalDef.Name == "IDeepCloneable" &&
+                        originalDef.Arity == 1 &&
+                        originalDef.ContainingNamespace?.Name == "DeepCloneGenerator")
                         return true;
                 }
             }

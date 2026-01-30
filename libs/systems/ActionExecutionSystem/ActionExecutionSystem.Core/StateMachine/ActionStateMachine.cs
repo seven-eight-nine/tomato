@@ -74,8 +74,10 @@ public sealed class ActionStateMachine<TCategory> where TCategory : struct, Enum
         // 完了したアクションを収集（Dictionaryを反復中に変更できないため）
         var completedCategories = new List<TCategory>();
 
-        foreach (var (category, action) in _currentActions)
+        foreach (var kvp in _currentActions)
         {
+            var category = kvp.Key;
+            var action = kvp.Value;
             if (action == null) continue;
 
             action.Update(deltaTime);

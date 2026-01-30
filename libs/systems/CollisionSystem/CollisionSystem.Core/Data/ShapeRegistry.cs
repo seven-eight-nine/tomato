@@ -48,8 +48,11 @@ public sealed class ShapeRegistry
         _layerMasks = new uint[_capacity];
         _aabbs = new AABB[_capacity];
 
-        Array.Fill(_generations, -1);
-        Array.Fill(_layerMasks, 0xFFFFFFFF);
+        for (int i = 0; i < _capacity; i++)
+        {
+            _generations[i] = -1;
+            _layerMasks[i] = 0xFFFFFFFF;
+        }
     }
 
     /// <summary>
@@ -279,9 +282,9 @@ public sealed class ShapeRegistry
     public void SetLayerMask(int index, uint layerMask) => _layerMasks[index] = layerMask;
 
     /// <summary>
-    /// 全レイヤーマスクの Span を取得する。
+    /// 全レイヤーマスクを取得する。
     /// </summary>
-    public ReadOnlySpan<uint> LayerMasks => _layerMasks.AsSpan(0, _capacity);
+    public uint[] LayerMasks => _layerMasks;
 
     /// <summary>
     /// AABB を取得する。
@@ -293,46 +296,46 @@ public sealed class ShapeRegistry
     /// 球データを取得する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref readonly SphereData GetSphere(int index)
+    public SphereData GetSphere(int index)
     {
         int paramIndex = _paramIndices[index];
-        return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_spheres)[paramIndex];
+        return _spheres[paramIndex];
     }
 
     /// <summary>
     /// カプセルデータを取得する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref readonly CapsuleData GetCapsule(int index)
+    public CapsuleData GetCapsule(int index)
     {
         int paramIndex = _paramIndices[index];
-        return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_capsules)[paramIndex];
+        return _capsules[paramIndex];
     }
 
     /// <summary>
     /// 円柱データを取得する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref readonly CylinderData GetCylinder(int index)
+    public CylinderData GetCylinder(int index)
     {
         int paramIndex = _paramIndices[index];
-        return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cylinders)[paramIndex];
+        return _cylinders[paramIndex];
     }
 
     /// <summary>
     /// ボックスデータを取得する。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref readonly BoxData GetBox(int index)
+    public BoxData GetBox(int index)
     {
         int paramIndex = _paramIndices[index];
-        return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_boxes)[paramIndex];
+        return _boxes[paramIndex];
     }
 
     /// <summary>
-    /// 全 AABB の Span を取得する。
+    /// 全 AABB を取得する。
     /// </summary>
-    public ReadOnlySpan<AABB> AABBs => _aabbs.AsSpan(0, _capacity);
+    public AABB[] AABBs => _aabbs;
 
     /// <summary>
     /// アクティブなインデックスを列挙する。

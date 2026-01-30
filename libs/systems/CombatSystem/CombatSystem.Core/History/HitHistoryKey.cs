@@ -28,7 +28,12 @@ public readonly struct HitHistoryKey : IEquatable<HitHistoryKey>
         => obj is HitHistoryKey other && Equals(other);
 
     public override int GetHashCode()
-        => HashCode.Combine(HitGroup, Target?.GetHashCode() ?? 0);
+    {
+        unchecked
+        {
+            return HitGroup * 31 + (Target?.GetHashCode() ?? 0);
+        }
+    }
 
     public static bool operator ==(HitHistoryKey left, HitHistoryKey right) => left.Equals(right);
     public static bool operator !=(HitHistoryKey left, HitHistoryKey right) => !left.Equals(right);

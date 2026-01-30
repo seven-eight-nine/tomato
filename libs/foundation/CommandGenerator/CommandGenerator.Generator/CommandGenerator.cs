@@ -923,17 +923,20 @@ public sealed class CommandGenerator : IIncrementalGenerator
         var indent2 = indent + "    ";
         var indent3 = indent2 + "    ";
 
-        // プール初期化子クラス
+        // プール初期化子クラス（静的コンストラクタで初期化）
         int maxPoolCapacity = info.QueueRegistrations.Max(r => r.PoolInitialCapacity);
         sb.AppendLine($"{indent}// プール初期容量設定（静的コンストラクタで設定）");
         sb.AppendLine($"{indent}internal static class {info.ClassName}PoolInitializer");
         sb.AppendLine($"{indent}{{");
-        sb.AppendLine($"{indent2}[ModuleInitializer]");
-        sb.AppendLine($"{indent2}internal static void Initialize()");
+        sb.AppendLine($"{indent2}static {info.ClassName}PoolInitializer()");
         sb.AppendLine($"{indent2}{{");
         sb.AppendLine($"{indent3}// 複数キューに登録されている場合、最大値を使用");
         sb.AppendLine($"{indent3}CommandPoolConfig<{info.ClassName}>.InitialCapacity = {maxPoolCapacity};");
         sb.AppendLine($"{indent2}}}");
+        sb.AppendLine();
+        sb.AppendLine($"{indent2}// 静的コンストラクタを確実に呼び出すためのダミーメソッド");
+        sb.AppendLine($"{indent2}[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine($"{indent2}internal static void EnsureInitialized() {{ }}");
         sb.AppendLine($"{indent}}}");
         sb.AppendLine();
 

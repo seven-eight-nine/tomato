@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Tomato.GameLoop</RootNamespace>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\..\foundation\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
     <ProjectReference Include="..\..\..\foundation\CommandGenerator\CommandGenerator.Attributes\CommandGenerator.Attributes.csproj" />

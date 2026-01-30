@@ -1,8 +1,8 @@
 # Tomato - アクションゲームフレームワーク
 
-[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
+[![.NET Standard](https://img.shields.io/badge/.NET%20Standard-2.0-512BD4)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-1%2C603%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-1%2C800%2B%20passing-brightgreen)]()
 
 3次元空間上でEntityが相互作用するアクションゲームのためのコアフレームワーク。
 TDD（テスト駆動開発）で構築された、決定論的で拡張可能なゲームループシステム。
@@ -14,14 +14,19 @@ TDD（テスト駆動開発）で構築された、決定論的で拡張可能�
 - **ECSスタイルのシステムパイプライン**: Serial/Parallel/MessageQueueの3種類の処理パターン
 - **Source Generator活用**: EntityHandle、MessageHandler、MessageQueueSystem、DeepCloneを自動生成
 - **モジュラーアーキテクチャ**: 各システムが独立してテスト可能
-- **1,603テスト**: 高いテストカバレッジによる信頼性
+- **1,800以上のテスト**: 高いテストカバレッジによる信頼性
+- **.NET Standard 2.0対応**: Unity、Godot等の幅広いランタイムで動作
 
 ## プロジェクト構成
 
 ```
 tomato/
 ├── libs/
+│   ├── common/                  # 共通ユーティリティ
+│   │   └── Tomato.Math/         # 数学ユーティリティ（Vector3, AABB, MathF）
+│   │
 │   ├── foundation/              # 基盤システム
+│   │   ├── HandleSystem/        # 汎用ハンドルパターン（Source Generator）
 │   │   ├── EntityHandleSystem/  # 型安全なEntityハンドル、Arena、Query（Source Generator）
 │   │   ├── CommandGenerator/    # コマンドキュー・メッセージハンドラ生成（Source Generator）
 │   │   ├── SystemPipeline/      # ECSスタイルのシステムパイプライン（Source Generator）
@@ -32,16 +37,19 @@ tomato/
 │   ├── systems/                 # 個別機能システム
 │   │   ├── ActionSelector/      # 行動選択エンジン
 │   │   ├── ActionExecutionSystem/  # 行動実行・ステートマシン
-│   │   ├── UnitLODSystem/          # ユニットベースLODライフサイクル管理
-│   │   ├── SpatialSystem/       # 空間システム（衝突判定・空間検索統合）
+│   │   ├── HierarchicalStateMachine/ # 階層的状態マシン
+│   │   ├── TimelineSystem/      # トラック/クリップベースのタイムライン
+│   │   ├── UnitLODSystem/       # ユニットベースLODライフサイクル管理
+│   │   ├── CollisionSystem/     # 衝突判定・空間検索統合
 │   │   ├── CombatSystem/        # 攻撃・ダメージ処理
 │   │   ├── StatusEffectSystem/  # 状態異常・バフ/デバフ管理
+│   │   ├── ResourceSystem/      # リソース管理
 │   │   ├── InventorySystem/     # アイテム・インベントリ管理
 │   │   ├── ReconciliationSystem/   # 位置調停・依存順処理
 │   │   └── SerializationSystem/ # 高性能バイナリシリアライズ
 │   │
 │   └── orchestration/           # 統合・オーケストレーション
-│       └── GameLoop/        # 6フェーズゲームループ統合
+│       └── GameLoop/            # 6フェーズゲームループ統合
 │
 └── docs/
     ├── ARCHITECTURE.md          # アーキテクチャ概要
@@ -69,7 +77,8 @@ GameLoopOrchestrator.Tick(deltaTime)
 
 ### 必要環境
 
-- .NET 8.0 SDK
+- .NET 6.0 SDK 以上（テスト実行用）
+- ライブラリは .NET Standard 2.0 対応（.NET Framework 4.6.1+, .NET Core 2.0+, Unity 2018.1+ 等で利用可能）
 
 ### ビルド
 
@@ -361,9 +370,11 @@ reconciler.Process(entities, pushboxCollisions);
 
 | システム | 説明 |
 |---------|------|
+| **HierarchicalStateMachine** | 階層的状態マシン |
+| **TimelineSystem** | トラック/クリップベースのタイムライン/シーケンサー |
 | **StatusEffectSystem** | 状態異常・バフ/デバフの管理 |
+| **ResourceSystem** | リソース管理システム |
 | **InventorySystem** | アイテム・インベントリ管理 |
-| **SpatialSystem** | 衝突判定・空間検索統合 |
 | **SerializationSystem** | ゼロアロケーションのバイナリシリアライズ |
 
 ## 統合システム（Orchestration）
@@ -426,24 +437,27 @@ Step 1: 全Entityの次Stepのメッセージを処理
 
 | カテゴリ | システム | テスト数 |
 |---------|---------|---------|
-| foundation | EntityHandleSystem | 309 |
-| foundation | CommandGenerator | 243 |
-| foundation | FlowTree | 107 |
-| foundation | DeepCloneGenerator | 82 |
+| foundation | EntityHandleSystem | 348 |
+| foundation | CommandGenerator | 247 |
+| foundation | FlowTree | 165 |
+| foundation | DeepCloneGenerator | 86 |
 | foundation | SystemPipeline | 51 |
 | foundation | DependencySortSystem | 28 |
 | foundation | HandleSystem | 25 |
-| systems | UnitLODSystem | 50 |
+| systems | CollisionSystem | 102 |
 | systems | InventorySystem | 101 |
+| systems | HierarchicalStateMachine | 84 |
+| systems | ActionExecutionSystem | 81 |
 | systems | ActionSelector | 66 |
-| systems | SpatialSystem | 50+ |
+| systems | SerializationSystem | 60 |
 | systems | StatusEffectSystem | 50 |
-| systems | ActionExecutionSystem | 46 |
+| systems | UnitLODSystem | 50 |
 | systems | CombatSystem | 37 |
-| systems | SerializationSystem | 21 |
+| systems | TimelineSystem | 33 |
 | systems | ReconciliationSystem | 11 |
+| systems | ResourceSystem | 62 |
 | orchestration | GameLoop | 50 |
-| | **合計** | **1,603** |
+| | **合計** | **1,800+** |
 
 ## ドキュメント
 

@@ -109,7 +109,12 @@ public readonly struct AABB : IEquatable<AABB>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override int GetHashCode()
-        => HashCode.Combine(Min, Max);
+    {
+        unchecked
+        {
+            return Min.GetHashCode() * 31 + Max.GetHashCode();
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(AABB left, AABB right)

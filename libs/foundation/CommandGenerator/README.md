@@ -507,9 +507,9 @@ handle.GameCommandQueue.Enqueue<DamageCommand>(cmd => {
 ```
 CommandGenerator/
 ├── CommandGenerator.Attributes/  # 属性・基本型（netstandard2.0）
-├── CommandGenerator.Generator/   # Source Generator
-├── CommandGenerator.Core/        # メッセージシステム（net8.0）
-└── CommandGenerator.Tests/       # テスト
+├── CommandGenerator.Generator/   # Source Generator（netstandard2.0）
+├── CommandGenerator.Core/        # メッセージシステム（netstandard2.0）
+└── CommandGenerator.Tests/       # テスト（net8.0）
 ```
 
 ## さらに詳しく

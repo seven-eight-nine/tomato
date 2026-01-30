@@ -38,7 +38,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"Added {ShapeCount:N0} spheres in {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / ShapeCount:F2} us per shape");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / ShapeCount:F2} us per shape");
 
         Assert.Equal(ShapeCount, world.ShapeCount);
     }
@@ -70,7 +70,7 @@ public class PerformanceTests
 
         _output.WriteLine($"Raycast {QueryIterations:N0} queries against {ShapeCount:N0} shapes");
         _output.WriteLine($"Total time: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
 
         Assert.True(sw.ElapsedMilliseconds < 10000, "Raycast performance too slow");
@@ -104,7 +104,7 @@ public class PerformanceTests
 
         _output.WriteLine($"RaycastAll {QueryIterations:N0} queries against {ShapeCount:N0} shapes");
         _output.WriteLine($"Total time: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Total hits: {totalHits:N0}, Average hits per query: {(float)totalHits / QueryIterations:F2}");
 
         Assert.True(sw.ElapsedMilliseconds < 15000, "RaycastAll performance too slow");
@@ -138,7 +138,7 @@ public class PerformanceTests
 
         _output.WriteLine($"SphereOverlap {QueryIterations:N0} queries against {ShapeCount:N0} shapes");
         _output.WriteLine($"Total time: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Total hits: {totalHits:N0}, Average hits per query: {(float)totalHits / QueryIterations:F2}");
 
         Assert.True(sw.ElapsedMilliseconds < 15000, "SphereOverlap performance too slow");
@@ -171,7 +171,7 @@ public class PerformanceTests
 
         _output.WriteLine($"CapsuleSweep {QueryIterations:N0} queries against {ShapeCount:N0} shapes");
         _output.WriteLine($"Total time: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
 
         Assert.True(sw.ElapsedMilliseconds < 15000, "CapsuleSweep performance too slow");
@@ -205,7 +205,7 @@ public class PerformanceTests
 
         _output.WriteLine($"SlashQuery {QueryIterations:N0} queries against {ShapeCount:N0} shapes");
         _output.WriteLine($"Total time: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Total hits: {totalHits:N0}, Average hits per query: {(float)totalHits / QueryIterations:F2}");
 
         Assert.True(sw.ElapsedMilliseconds < 15000, "SlashQuery performance too slow");
@@ -304,7 +304,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"Updated {updateCount:N0} shape positions in {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / updateCount:F2} us per update");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / updateCount:F2} us per update");
 
         Assert.True(sw.ElapsedMilliseconds < 5000, "Update performance too slow");
     }
@@ -337,7 +337,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"Removed {removeCount:N0} shapes in {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / removeCount:F2} us per removal");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / removeCount:F2} us per removal");
 
         Assert.Equal(ShapeCount - removeCount, world.ShapeCount);
     }
@@ -377,7 +377,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"Dense area raycast {iterations:N0} queries: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / iterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / iterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / iterations:F1}%");
     }
 
@@ -412,7 +412,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"Sparse area raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
     }
 
@@ -446,7 +446,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"[Small grid] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
     }
 
@@ -480,7 +480,7 @@ public class PerformanceTests
         sw.Stop();
 
         _output.WriteLine($"[Large grid] Raycast {QueryIterations:N0} queries: {sw.ElapsedMilliseconds} ms");
-        _output.WriteLine($"Average: {sw.Elapsed.TotalMicroseconds / QueryIterations:F2} us per query");
+        _output.WriteLine($"Average: {sw.Elapsed.TotalMilliseconds * 1000 / QueryIterations:F2} us per query");
         _output.WriteLine($"Hit rate: {hitCount * 100.0 / QueryIterations:F1}%");
     }
 

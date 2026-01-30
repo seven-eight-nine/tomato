@@ -41,8 +41,8 @@ public sealed class PriorityBasedReconciliationRule : ReconciliationRule
         out Vector3 pushoutA,
         out Vector3 pushoutB)
     {
-        int priorityA = _priorities.GetValueOrDefault(typeA, 0);
-        int priorityB = _priorities.GetValueOrDefault(typeB, 0);
+        int priorityA = _priorities.TryGetValue(typeA, out var pA) ? pA : 0;
+        int priorityB = _priorities.TryGetValue(typeB, out var pB) ? pB : 0;
 
         // 押し出しベクトル（接触法線 * 深度）
         var totalPushout = normal * penetration;

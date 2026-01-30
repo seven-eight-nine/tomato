@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Tomato.Math;
 
 namespace Tomato.TimelineSystem;
 
@@ -166,6 +167,6 @@ public abstract class Track
         if (duration <= 0) return 1.0f;
 
         float progress = (float)(currentFrame - clip.StartFrame) / duration;
-        return Math.Clamp(progress, 0f, 1f);
+        return MathF.Max(0f, MathF.Min(1f, progress));
     }
 }

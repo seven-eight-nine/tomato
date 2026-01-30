@@ -345,10 +345,10 @@ public sealed class MBPBroadPhase : IBroadPhase
         float invSizeX = 1f / _regionSizeX;
         float invSizeZ = 1f / _regionSizeZ;
 
-        minRX = System.Math.Clamp((int)((aabb.Min.X - _worldBounds.Min.X) * invSizeX), 0, _regionsX - 1);
-        minRZ = System.Math.Clamp((int)((aabb.Min.Z - _worldBounds.Min.Z) * invSizeZ), 0, _regionsZ - 1);
-        maxRX = System.Math.Clamp((int)((aabb.Max.X - _worldBounds.Min.X) * invSizeX), 0, _regionsX - 1);
-        maxRZ = System.Math.Clamp((int)((aabb.Max.Z - _worldBounds.Min.Z) * invSizeZ), 0, _regionsZ - 1);
+        minRX = MathUtils.Clamp((int)((aabb.Min.X - _worldBounds.Min.X) * invSizeX), 0, _regionsX - 1);
+        minRZ = MathUtils.Clamp((int)((aabb.Min.Z - _worldBounds.Min.Z) * invSizeZ), 0, _regionsZ - 1);
+        maxRX = MathUtils.Clamp((int)((aabb.Max.X - _worldBounds.Min.X) * invSizeX), 0, _regionsX - 1);
+        maxRZ = MathUtils.Clamp((int)((aabb.Max.Z - _worldBounds.Min.Z) * invSizeZ), 0, _regionsZ - 1);
     }
 
     private void AddToRegion(int shapeIndex, int regionIndex, in AABB aabb)
