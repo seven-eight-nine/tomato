@@ -55,49 +55,49 @@ public class MotionTransitionConditionTests
     }
 
     [Fact]
-    public void AfterFrame_ShouldReturnTrue_WhenFrameReached()
+    public void AfterTick_ShouldReturnTrue_WhenFrameReached()
     {
-        var context = new MotionContext { ElapsedFrames = 30 };
-        var condition = MotionTransitionCondition.AfterFrame(30);
+        var context = new MotionContext { ElapsedTicks = 30 };
+        var condition = MotionTransitionCondition.AfterTick(30);
 
         Assert.True(condition(context));
     }
 
     [Fact]
-    public void AfterFrame_ShouldReturnFalse_WhenFrameNotReached()
+    public void AfterTick_ShouldReturnFalse_WhenFrameNotReached()
     {
-        var context = new MotionContext { ElapsedFrames = 29 };
-        var condition = MotionTransitionCondition.AfterFrame(30);
+        var context = new MotionContext { ElapsedTicks = 29 };
+        var condition = MotionTransitionCondition.AfterTick(30);
 
         Assert.False(condition(context));
     }
 
     [Fact]
-    public void InFrameRange_ShouldReturnTrue_WhenInRange()
+    public void InTickRange_ShouldReturnTrue_WhenInRange()
     {
-        var context = new MotionContext { ElapsedFrames = 35 };
-        var condition = MotionTransitionCondition.InFrameRange(30, 50);
+        var context = new MotionContext { ElapsedTicks = 35 };
+        var condition = MotionTransitionCondition.InTickRange(30, 50);
 
         Assert.True(condition(context));
     }
 
     [Fact]
-    public void InFrameRange_ShouldReturnFalse_WhenOutOfRange()
+    public void InTickRange_ShouldReturnFalse_WhenOutOfRange()
     {
-        var context = new MotionContext { ElapsedFrames = 20 };
-        var condition = MotionTransitionCondition.InFrameRange(30, 50);
+        var context = new MotionContext { ElapsedTicks = 20 };
+        var condition = MotionTransitionCondition.InTickRange(30, 50);
 
         Assert.False(condition(context));
     }
 
     [Fact]
-    public void InFrameRange_ShouldReturnTrue_AtBoundaries()
+    public void InTickRange_ShouldReturnTrue_AtBoundaries()
     {
-        var conditionStart = MotionTransitionCondition.InFrameRange(30, 50);
-        var conditionEnd = MotionTransitionCondition.InFrameRange(30, 50);
+        var conditionStart = MotionTransitionCondition.InTickRange(30, 50);
+        var conditionEnd = MotionTransitionCondition.InTickRange(30, 50);
 
-        Assert.True(conditionStart(new MotionContext { ElapsedFrames = 30 }));
-        Assert.True(conditionEnd(new MotionContext { ElapsedFrames = 50 }));
+        Assert.True(conditionStart(new MotionContext { ElapsedTicks = 30 }));
+        Assert.True(conditionEnd(new MotionContext { ElapsedTicks = 50 }));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class MotionTransitionConditionTests
         state.OnEnter(context);
         for (int i = 0; i < frame; i++)
         {
-            state.OnUpdate(context, 0.016f);
+            state.OnTick(context, 1);
         }
 
         return context;

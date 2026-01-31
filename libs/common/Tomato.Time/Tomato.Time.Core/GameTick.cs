@@ -1,6 +1,6 @@
 using System;
 
-namespace Tomato.StatusEffectSystem
+namespace Tomato.Time
 {
     /// <summary>
     /// ゲーム内の論理時刻（フレーム番号）
@@ -16,6 +16,11 @@ namespace Tomato.StatusEffectSystem
         {
             if (duration.IsInfinite) return new GameTick(long.MaxValue);
             return new GameTick(tick.Value + duration.Value);
+        }
+
+        public static GameTick operator +(GameTick tick, int deltaTicks)
+        {
+            return new GameTick(tick.Value + deltaTicks);
         }
 
         public static GameTick operator -(GameTick tick, TickDuration duration)

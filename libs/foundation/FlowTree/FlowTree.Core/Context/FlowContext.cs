@@ -1,3 +1,5 @@
+using Tomato.Time;
+
 namespace Tomato.FlowTree;
 
 /// <summary>
@@ -23,14 +25,14 @@ public struct FlowContext
     public int MaxCallDepth;
 
     /// <summary>
-    /// 前フレームからの経過時間（秒）。
+    /// 前回からの経過tick数。
     /// </summary>
-    public float DeltaTime;
+    public int DeltaTicks;
 
     /// <summary>
-    /// 累計経過時間（秒）。
+    /// 現在のゲームティック。
     /// </summary>
-    public float TotalTime;
+    public GameTick CurrentTick;
 
     /// <summary>
     /// 現在の呼び出し深度を取得する。

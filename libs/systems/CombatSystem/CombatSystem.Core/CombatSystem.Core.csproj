@@ -14,5 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="../../../foundation/HandleSystem/HandleSystem.Core/HandleSystem.Core.csproj" />
     <ProjectReference Include="../../../foundation/HandleSystem/HandleSystem.Generator/HandleSystem.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../common/Tomato.Time/Tomato.Time.Core/Tomato.Time.Core.csproj" />
   </ItemGroup>
 </Project>

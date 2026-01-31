@@ -346,20 +346,20 @@ if (unit.IsStable)
 ### ゲームループ実行
 
 ```csharp
-void Update(float deltaTime)
+void Tick(int deltaTicks)
 {
     // 衝突検出（CollisionSystem使用、GameLoop外部で実行）
     collisionSource.UpdateWorlds(/* ... */);
     collisionSource.DetectCollisions();
 
-    // Update: Collision -> Message -> Decision -> Execution
-    pipeline.Execute(updateGroup, deltaTime);
+    // Tick: Collision -> Message -> Decision -> Execution
+    pipeline.Execute(updateGroup, deltaTicks);
 }
 
-void LateUpdate(float deltaTime)
+void LateTick(int deltaTicks)
 {
-    // LateUpdate: Reconciliation -> Cleanup
-    pipeline.Execute(lateUpdateGroup, deltaTime);
+    // LateTick: Reconciliation -> Cleanup
+    pipeline.Execute(lateUpdateGroup, deltaTicks);
 }
 ```
 

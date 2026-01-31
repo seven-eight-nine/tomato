@@ -21,8 +21,8 @@ namespace Tomato.ActionSelector;
 /// <code>
 /// var action = new ComboAction&lt;ActionCategory&gt;(
 ///     "Attack1",
-///     cancelStartFrame: 10,
-///     cancelEndFrame: 30,
+///     cancelStartTick: 10,
+///     cancelEndTick: 30,
 ///     transitionTargets: new[] { attack2Judge, launcherJudge });
 /// </code>
 /// </remarks>
@@ -34,14 +34,9 @@ public interface IRunningAction<TCategory> where TCategory : struct, Enum
     string Label { get; }
 
     /// <summary>
-    /// 実行開始からの経過時間（秒）。
+    /// 実行開始からの経過tick数。
     /// </summary>
-    float ElapsedTime { get; }
-
-    /// <summary>
-    /// 実行開始からの経過フレーム数。
-    /// </summary>
-    int ElapsedFrames { get; }
+    int ElapsedTicks { get; }
 
     /// <summary>
     /// 現在キャンセル（遷移）可能かどうか。
@@ -65,10 +60,10 @@ public interface IRunningAction<TCategory> where TCategory : struct, Enum
     ReadOnlySpan<IActionJudgment<TCategory, InputState, GameState>> GetTransitionableJudgments();
 
     /// <summary>
-    /// フレーム更新。
+    /// tick進行。
     /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
-    void Update(float deltaTime);
+    /// <param name="deltaTicks">前フレームからの経過tick数</param>
+    void Tick(int deltaTicks);
 }
 
 /// <summary>
@@ -85,12 +80,11 @@ public sealed class ComboAction<TCategory> : IRunningAction<TCategory>
     // ===========================================
 
     private readonly string _label;
-    private readonly int _cancelStartFrame;
-    private readonly int _cancelEndFrame;
+    private readonly int _cancelStartTick;
+    private readonly int _cancelEndTick;
     private readonly IActionJudgment<TCategory, InputState, GameState>[] _transitionTargets;
 
-    private float _elapsedTime;
-    private int _elapsedFrames;
+    private int _elapsedTicks;
 
     // ===========================================
     // コンストラクタ
@@ -100,18 +94,18 @@ public sealed class ComboAction<TCategory> : IRunningAction<TCategory>
     /// コンボ対応アクションを生成する。
     /// </summary>
     /// <param name="label">アクションラベル</param>
-    /// <param name="cancelStartFrame">キャンセル開始フレーム</param>
-    /// <param name="cancelEndFrame">キャンセル終了フレーム</param>
+    /// <param name="cancelStartTick">キャンセル開始tick</param>
+    /// <param name="cancelEndTick">キャンセル終了tick</param>
     /// <param name="transitionTargets">遷移先ジャッジメント群</param>
     public ComboAction(
         string label,
-        int cancelStartFrame,
-        int cancelEndFrame,
+        int cancelStartTick,
+        int cancelEndTick,
         IActionJudgment<TCategory, InputState, GameState>[] transitionTargets)
     {
         _label = label ?? throw new ArgumentNullException(nameof(label));
-        _cancelStartFrame = cancelStartFrame;
-        _cancelEndFrame = cancelEndFrame;
+        _cancelStartTick = cancelStartTick;
+        _cancelEndTick = cancelEndTick;
         _transitionTargets = transitionTargets ?? Array.Empty<IActionJudgment<TCategory, InputState, GameState>>();
     }
 
@@ -128,13 +122,12 @@ public sealed class ComboAction<TCategory> : IRunningAction<TCategory>
     // ===========================================
 
     public string Label => _label;
-    public float ElapsedTime => _elapsedTime;
-    public int ElapsedFrames => _elapsedFrames;
+    public int ElapsedTicks => _elapsedTicks;
 
     public bool CanCancel
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _elapsedFrames >= _cancelStartFrame && _elapsedFrames <= _cancelEndFrame;
+        get => _elapsedTicks >= _cancelStartTick && _elapsedTicks <= _cancelEndTick;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -143,10 +136,9 @@ public sealed class ComboAction<TCategory> : IRunningAction<TCategory>
         return CanCancel ? _transitionTargets : ReadOnlySpan<IActionJudgment<TCategory, InputState, GameState>>.Empty;
     }
 
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        _elapsedTime += deltaTime;
-        _elapsedFrames++;
+        _elapsedTicks += deltaTicks;
     }
 
     // ===========================================
@@ -154,7 +146,7 @@ public sealed class ComboAction<TCategory> : IRunningAction<TCategory>
     // ===========================================
 
     public override string ToString() =>
-        $"ComboAction[{_label}] Frame:{_elapsedFrames} CanCancel:{CanCancel}";
+        $"ComboAction[{_label}] Tick:{_elapsedTicks} CanCancel:{CanCancel}";
 }
 
 /// <summary>
@@ -167,8 +159,7 @@ public sealed class SimpleRunningAction<TCategory> : IRunningAction<TCategory>
     where TCategory : struct, Enum
 {
     private readonly string _label;
-    private float _elapsedTime;
-    private int _elapsedFrames;
+    private int _elapsedTicks;
 
     public SimpleRunningAction(string label)
     {
@@ -176,20 +167,18 @@ public sealed class SimpleRunningAction<TCategory> : IRunningAction<TCategory>
     }
 
     public string Label => _label;
-    public float ElapsedTime => _elapsedTime;
-    public int ElapsedFrames => _elapsedFrames;
+    public int ElapsedTicks => _elapsedTicks;
     public bool CanCancel => false;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ReadOnlySpan<IActionJudgment<TCategory, InputState, GameState>> GetTransitionableJudgments()
         => ReadOnlySpan<IActionJudgment<TCategory, InputState, GameState>>.Empty;
 
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        _elapsedTime += deltaTime;
-        _elapsedFrames++;
+        _elapsedTicks += deltaTicks;
     }
 
     public override string ToString() =>
-        $"SimpleAction[{_label}] Frame:{_elapsedFrames}";
+        $"SimpleAction[{_label}] Tick:{_elapsedTicks}";
 }

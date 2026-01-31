@@ -60,15 +60,15 @@ tomato/
 ## フレーム処理フロー
 
 ```
-GameLoopOrchestrator.Tick(deltaTime)
+GameLoopOrchestrator.Tick(deltaTicks)
 │
-├─ Update:
+├─ Tick:
 │   ├─ CollisionPhase      衝突判定・メッセージ発行
 │   ├─ MessagePhase        Step処理（状態変更はここでのみ）
 │   ├─ DecisionPhase       行動決定（読み取り専用）
 │   └─ ExecutionPhase      行動実行
 │
-└─ LateUpdate:
+└─ LateTick:
     ├─ ReconciliationPhase 位置調停（依存順）
     └─ CleanupPhase        消滅Entity削除
 ```
@@ -213,7 +213,7 @@ var updateGroup = new SystemGroup(
 );
 
 var pipeline = new Pipeline(registry);
-pipeline.Execute(updateGroup, deltaTime);
+pipeline.Execute(updateGroup, deltaTicks);  // tickベース（1 tick = アプリ定義の時間単位）
 ```
 
 処理パターン:
@@ -228,19 +228,18 @@ pipeline.Execute(updateGroup, deltaTime);
 コールスタック付き汎用フロー制御ライブラリ。ビヘイビアツリーのパターンを基盤としつつ、AI行動選択に限らず非同期処理やワークフロー全般に適用可能。
 
 ```csharp
-// ツリー定義
+// ツリー定義（tickベース）
 var tree = new FlowTree("Patrol");
 tree.Build()
     .Sequence()
         .Action(static (ref FlowContext ctx) => GetNextWaypoint(ref ctx))
         .Action(static (ref FlowContext ctx) => MoveToWaypoint(ref ctx))
-        .Wait(2.0f)
+        .Wait(new TickDuration(120))  // 120 tick待機
     .End()
     .Complete();
 
-// 実行
-var context = FlowContext.Create(new Blackboard(64), 0.016f);
-var status = tree.Tick(ref context);
+// 実行（deltaTicks単位で進行）
+var status = tree.Tick(deltaTicks);
 ```
 
 主な機能:
@@ -318,13 +317,13 @@ if (result.TryGetRequested(ActionCategory.Upper, out var requested))
 
 ### ActionExecutionSystem
 
-選択されたアクションの実行とステートマシン管理。
+選択されたアクションの実行とステートマシン管理。tickベースで動作。
 
 ```csharp
 var machine = new ActionStateMachine<ActionCategory>();
 var action = new StandardExecutableAction<ActionCategory>(definition);
 machine.StartAction(ActionCategory.Upper, action);
-machine.Update(deltaTime);
+machine.Tick(deltaTicks);  // tickベースで進行
 ```
 
 ### UnitLODSystem
@@ -398,9 +397,9 @@ var orchestrator = new GameLoopOrchestrator<ActionCategory>(
     reconciliationProcessor,
     cleanupProcessor);
 
-// ゲームループ
-void Update(float deltaTime) => orchestrator.Update(deltaTime);
-void LateUpdate(float deltaTime) => orchestrator.LateUpdate(deltaTime);
+// ゲームループ（tickベース）
+void Tick(int deltaTicks) => orchestrator.Tick(deltaTicks);
+void LateTick(int deltaTicks) => orchestrator.LateTick(deltaTicks);
 ```
 
 ## 設計原則

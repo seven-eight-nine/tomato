@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -21,8 +22,8 @@ namespace Tomato.SystemPipeline.Tests
             public float Health { get; set; }
             public float X { get; set; }
             public float Y { get; set; }
-            public float VelocityX { get; set; }
-            public float VelocityY { get; set; }
+            public float VelocityX { get; set; } // units per tick
+            public float VelocityY { get; set; } // units per tick
             public bool IsAlive { get; set; } = true;
         }
 
@@ -83,8 +84,9 @@ namespace Tomato.SystemPipeline.Tests
                 var entity = _registry.GetEntity(handle);
                 if (entity == null || !entity.IsAlive) return;
 
-                entity.X += entity.VelocityX * context.DeltaTime;
-                entity.Y += entity.VelocityY * context.DeltaTime;
+                // Velocity is now units per tick
+                entity.X += entity.VelocityX * context.DeltaTicks;
+                entity.Y += entity.VelocityY * context.DeltaTicks;
             }
         }
 
@@ -156,8 +158,8 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new GameEntityRegistry();
             var player = registry.AddEntity(1, 100f);
-            player.VelocityX = 10f;
-            player.VelocityY = 5f;
+            player.VelocityX = 10f; // 10 units per tick
+            player.VelocityY = 5f;  // 5 units per tick
 
             var enemy = registry.AddEntity(2, 50f);
             enemy.VelocityX = -5f;
@@ -171,14 +173,14 @@ namespace Tomato.SystemPipeline.Tests
 
             var pipeline = new Pipeline(registry);
 
-            // Act - Simulate frame 1
-            pipeline.Execute(updateGroup, 0.016f);
-            pipeline.Execute(lateUpdateGroup, 0.016f);
+            // Act - Simulate frame 1 (1 tick)
+            pipeline.Execute(updateGroup, 1);
+            pipeline.Execute(lateUpdateGroup, 1);
 
-            // Assert - Movement applied
-            Assert.Equal(0.16f, player.X, 2);
-            Assert.Equal(0.08f, player.Y, 2);
-            Assert.Equal(-0.08f, enemy.X, 2);
+            // Assert - Movement applied (1 tick)
+            Assert.Equal(10f, player.X, 2);
+            Assert.Equal(5f, player.Y, 2);
+            Assert.Equal(-5f, enemy.X, 2);
         }
 
         [Fact]
@@ -199,8 +201,8 @@ namespace Tomato.SystemPipeline.Tests
 
             // Act - Deal damage to enemy
             damageSystem.DamageQueue.Enqueue((2, 35f));
-            pipeline.Execute(updateGroup, 0.016f);
-            pipeline.Execute(lateUpdateGroup, 0.016f);
+            pipeline.Execute(updateGroup, 1);
+            pipeline.Execute(lateUpdateGroup, 1);
 
             // Assert
             Assert.True(player.IsAlive);
@@ -210,27 +212,26 @@ namespace Tomato.SystemPipeline.Tests
         }
 
         [Fact]
-        public void GameLoop_MultipleFrames_AccumulatesTime()
+        public void GameLoop_MultipleFrames_AccumulatesTicks()
         {
             // Arrange
             var registry = new GameEntityRegistry();
             var entity = registry.AddEntity(1, 100f);
-            entity.VelocityX = 100f;
+            entity.VelocityX = 10f; // 10 units per tick
 
             var movementSystem = new MovementSystem(registry);
             var group = new SerialSystemGroup(movementSystem);
             var pipeline = new Pipeline(registry);
 
-            // Act - Simulate 10 frames at 60fps
+            // Act - Simulate 10 frames at 1 tick each
             for (int i = 0; i < 10; i++)
             {
-                pipeline.Execute(group, 0.016f);
+                pipeline.Execute(group, 1);
             }
 
             // Assert
-            Assert.Equal(10, pipeline.FrameCount);
-            Assert.Equal(0.16f, pipeline.TotalTime, 2);
-            Assert.Equal(16f, entity.X, 1); // 100 * 0.16
+            Assert.Equal(10L, pipeline.CurrentTick.Value);
+            Assert.Equal(100f, entity.X, 1); // 10 * 10 = 100
         }
 
         [Fact]
@@ -253,8 +254,8 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Act
-            pipeline.Execute(updateGroup, 0.016f);
-            pipeline.Execute(lateUpdateGroup, 0.016f);
+            pipeline.Execute(updateGroup, 1);
+            pipeline.Execute(lateUpdateGroup, 1);
 
             // Assert
             Assert.Equal(new[] { "Update1", "Update2", "LateUpdate1", "LateUpdate2" }, executionOrder);
@@ -285,34 +286,34 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var registry = new GameEntityRegistry();
             var entity = registry.AddEntity(1, 100f);
-            entity.VelocityX = 100f;
+            entity.VelocityX = 10f; // 10 units per tick
 
             var movementSystem = new MovementSystem(registry);
             var group = new SerialSystemGroup(movementSystem);
             var pipeline = new Pipeline(registry);
 
             // Act - Frame 1: enabled
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
             var posAfterFrame1 = entity.X;
 
             // Disable movement
             movementSystem.IsEnabled = false;
 
             // Frame 2: disabled
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
             var posAfterFrame2 = entity.X;
 
             // Re-enable
             movementSystem.IsEnabled = true;
 
             // Frame 3: enabled again
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
             var posAfterFrame3 = entity.X;
 
             // Assert
-            Assert.Equal(1.6f, posAfterFrame1, 1);
-            Assert.Equal(1.6f, posAfterFrame2, 1); // No change
-            Assert.Equal(3.2f, posAfterFrame3, 1);
+            Assert.Equal(10f, posAfterFrame1, 1);
+            Assert.Equal(10f, posAfterFrame2, 1); // No change
+            Assert.Equal(20f, posAfterFrame3, 1);
         }
 
         [Fact]
@@ -335,7 +336,7 @@ namespace Tomato.SystemPipeline.Tests
 
             // Act
             damageSystem.DamageQueue.Enqueue((50, 150f)); // Kill entity 50
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
 
             // Assert
             var entities = registry.GetAllEntities();
@@ -351,36 +352,36 @@ namespace Tomato.SystemPipeline.Tests
             var registry = new GameEntityRegistry();
             registry.AddEntity(1, 100f);
 
-            var trackingSystem = new FrameTrackingSystem();
+            var trackingSystem = new TickTrackingSystem();
             var group = new SerialSystemGroup(trackingSystem);
             var pipeline = new Pipeline(registry);
 
             // Act
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 1);
 
-            var framesBefore = trackingSystem.FrameCounts.ToList();
+            var ticksBefore = trackingSystem.CurrentTicks.ToList();
 
             pipeline.Reset();
 
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 1);
 
             // Assert
-            Assert.Equal(new[] { 1, 2, 3 }, framesBefore);
-            Assert.Equal(new[] { 1, 2, 3, 1, 2 }, trackingSystem.FrameCounts);
+            Assert.Equal(new long[] { 1, 2, 3 }, ticksBefore);
+            Assert.Equal(new long[] { 1, 2, 3, 1, 2 }, trackingSystem.CurrentTicks);
         }
 
-        private class FrameTrackingSystem : ISerialSystem
+        private class TickTrackingSystem : ISerialSystem
         {
             public bool IsEnabled { get; set; } = true;
             public IEntityQuery Query => null;
-            public List<int> FrameCounts { get; } = new List<int>();
+            public List<long> CurrentTicks { get; } = new List<long>();
 
             public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
-                FrameCounts.Add(context.FrameCount);
+                CurrentTicks.Add(context.CurrentTick.Value);
             }
         }
     }

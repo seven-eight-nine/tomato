@@ -102,8 +102,8 @@ var machine = new ActionStateMachine<ActionCategory>();
 var action = new StandardExecutableAction<ActionCategory>(attackDefinition);
 machine.StartAction(ActionCategory.Upper, action);
 
-// 毎フレーム更新
-machine.Update(deltaTime);
+// 毎tick更新
+machine.Tick(deltaTicks);
 
 // 完了チェック
 if (!machine.IsRunning(ActionCategory.Upper))
@@ -151,8 +151,8 @@ var graph = new StateGraph<MotionContext>()
 var machine = new MotionStateMachine(graph);
 machine.Initialize("Idle");
 
-// 毎フレーム更新
-machine.Update(deltaTime);
+// 毎tick更新
+machine.Tick(deltaTicks);
 
 // 遷移を試行
 if (machine.TryTransitionTo("Walk"))
@@ -206,9 +206,9 @@ public class CharacterMotionExecutor : IMotionExecutor
         _animation.Play(motionId);
     }
 
-    public void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime)
+    public void OnMotionTick(string motionId, int elapsedTicks, int deltaTicks)
     {
-        // フレームごとの処理
+        // tickごとの処理
     }
 
     public void OnMotionEnd(string motionId)
@@ -250,7 +250,7 @@ if (result.TryGetRequested(ActionCategory.Upper, out var requested))
 2. `ActionDefinitionRegistry.Get()` で定義を取得
 3. `StandardExecutableAction` を作成
 4. `ActionStateMachine.StartAction()` でアクション開始
-5. 毎フレーム `ActionStateMachine.Update()` を呼び出し
+5. 毎tick `ActionStateMachine.Tick()` を呼び出し
 6. `IsComplete` で完了判定
 7. `CanCancel` でコンボ遷移可能か判定
 

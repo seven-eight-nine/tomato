@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.FlowTree;
 
@@ -23,29 +24,29 @@ public delegate bool FlowCondition<in T>(T state) where T : class, IFlowState;
 public sealed class ConditionNode : IFlowNode
 {
     private readonly FlowCondition _condition;
-    private readonly float _interval;
-    private float _elapsed;
+    private readonly TickDuration _interval;
+    private int _elapsed;
     private bool? _lastResult;
 
     /// <summary>
-    /// ConditionNodeを作成する（毎フレーム評価）。
+    /// ConditionNodeを作成する（毎tick評価）。
     /// </summary>
     /// <param name="condition">評価する条件</param>
     public ConditionNode(FlowCondition condition)
     {
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
-        _interval = 0;
+        _interval = TickDuration.Zero;
     }
 
     /// <summary>
     /// ConditionNodeを作成する（間隔評価）。
     /// </summary>
     /// <param name="condition">評価する条件</param>
-    /// <param name="interval">チェック間隔（秒）。間隔内は前回の結果を維持する。</param>
-    public ConditionNode(FlowCondition condition, float interval)
+    /// <param name="interval">チェック間隔（tick数）。間隔内は前回の結果を維持する。</param>
+    public ConditionNode(FlowCondition condition, TickDuration interval)
     {
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
-        if (interval < 0)
+        if (interval.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be non-negative.");
         _interval = interval;
     }
@@ -53,14 +54,14 @@ public sealed class ConditionNode : IFlowNode
     /// <inheritdoc/>
     public NodeStatus Tick(ref FlowContext context)
     {
-        if (_interval <= 0)
+        if (_interval.IsZero)
         {
             return _condition() ? NodeStatus.Success : NodeStatus.Failure;
         }
 
-        _elapsed += context.DeltaTime;
+        _elapsed += context.DeltaTicks;
 
-        if (!_lastResult.HasValue || _elapsed >= _interval)
+        if (!_lastResult.HasValue || _elapsed >= _interval.Value)
         {
             _lastResult = _condition();
             _elapsed = 0;
@@ -85,29 +86,29 @@ public sealed class ConditionNode : IFlowNode
 public sealed class ConditionNode<T> : IFlowNode where T : class, IFlowState
 {
     private readonly FlowCondition<T> _condition;
-    private readonly float _interval;
-    private float _elapsed;
+    private readonly TickDuration _interval;
+    private int _elapsed;
     private bool? _lastResult;
 
     /// <summary>
-    /// ConditionNodeを作成する（毎フレーム評価）。
+    /// ConditionNodeを作成する（毎tick評価）。
     /// </summary>
     /// <param name="condition">評価する条件</param>
     public ConditionNode(FlowCondition<T> condition)
     {
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
-        _interval = 0;
+        _interval = TickDuration.Zero;
     }
 
     /// <summary>
     /// ConditionNodeを作成する（間隔評価）。
     /// </summary>
     /// <param name="condition">評価する条件</param>
-    /// <param name="interval">チェック間隔（秒）。間隔内は前回の結果を維持する。</param>
-    public ConditionNode(FlowCondition<T> condition, float interval)
+    /// <param name="interval">チェック間隔（tick数）。間隔内は前回の結果を維持する。</param>
+    public ConditionNode(FlowCondition<T> condition, TickDuration interval)
     {
         _condition = condition ?? throw new ArgumentNullException(nameof(condition));
-        if (interval < 0)
+        if (interval.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be non-negative.");
         _interval = interval;
     }
@@ -115,14 +116,14 @@ public sealed class ConditionNode<T> : IFlowNode where T : class, IFlowState
     /// <inheritdoc/>
     public NodeStatus Tick(ref FlowContext context)
     {
-        if (_interval <= 0)
+        if (_interval.IsZero)
         {
             return _condition((T)context.State!) ? NodeStatus.Success : NodeStatus.Failure;
         }
 
-        _elapsed += context.DeltaTime;
+        _elapsed += context.DeltaTicks;
 
-        if (!_lastResult.HasValue || _elapsed >= _interval)
+        if (!_lastResult.HasValue || _elapsed >= _interval.Value)
         {
             _lastResult = _condition((T)context.State!);
             _elapsed = 0;

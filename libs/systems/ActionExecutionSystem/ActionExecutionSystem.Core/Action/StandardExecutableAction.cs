@@ -13,8 +13,7 @@ public sealed class StandardExecutableAction<TCategory> : IExecutableAction<TCat
     private readonly ActionDefinition<TCategory> _definition;
     private readonly IActionJudgment<TCategory, InputState, GameState>[] _transitionTargets;
 
-    private float _elapsedTime;
-    private int _elapsedFrames;
+    private int _elapsedTicks;
 
     public StandardExecutableAction(
         ActionDefinition<TCategory> definition,
@@ -27,19 +26,17 @@ public sealed class StandardExecutableAction<TCategory> : IExecutableAction<TCat
     public string ActionId => _definition.ActionId;
     public string Label => _definition.ActionId;
     public TCategory Category => _definition.Category;
-    public float ElapsedTime => _elapsedTime;
-    public int ElapsedFrames => _elapsedFrames;
+    public int ElapsedTicks => _elapsedTicks;
 
-    public bool IsComplete => _elapsedFrames >= _definition.TotalFrames;
+    public bool IsComplete => _elapsedTicks >= _definition.TotalFrames;
 
-    public bool CanCancel => _definition.CancelWindow.Contains(_elapsedFrames);
+    public bool CanCancel => _definition.CancelWindow.Contains(_elapsedTicks);
 
     public IMotionData? MotionData => _definition.MotionData;
 
     public void OnEnter()
     {
-        _elapsedTime = 0;
-        _elapsedFrames = 0;
+        _elapsedTicks = 0;
     }
 
     public void OnExit()
@@ -47,10 +44,9 @@ public sealed class StandardExecutableAction<TCategory> : IExecutableAction<TCat
         // 終了時の処理（必要に応じてオーバーライド）
     }
 
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        _elapsedTime += deltaTime;
-        _elapsedFrames++;
+        _elapsedTicks += deltaTicks;
     }
 
     public ReadOnlySpan<IActionJudgment<TCategory, InputState, GameState>> GetTransitionableJudgments()

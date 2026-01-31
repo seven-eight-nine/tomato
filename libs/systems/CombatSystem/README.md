@@ -135,7 +135,7 @@ public override bool CanTarget(IDamageReceiver target)
 | `HitGroup` | `int` | 履歴共有グループ。0以下で自動生成 |
 | `HittableCount` | `int` | 同一ターゲットへの最大ヒット数。0=無制限 |
 | `AttackableCount` | `int` | 全体での最大ヒット数。0=無制限 |
-| `IntervalTime` | `float` | 再ヒット間隔（秒）。0以下=チェックしない |
+| `Interval` | `int` | 再ヒット間隔（tick）。0以下=チェックしない |
 
 ### HitHistory
 
@@ -145,7 +145,7 @@ public override bool CanTarget(IDamageReceiver target)
 |---------|------|
 | `CanHit(hitGroup, target, info)` | ヒット可能か判定 |
 | `RecordHit(hitGroup, target)` | ヒットを記録 |
-| `Update(deltaTime)` | 内部時刻を進める |
+| `Tick(deltaTicks)` | 内部時刻を進める |
 | `Clear()` | 全履歴をクリア |
 | `ClearHitGroup(hitGroup)` | 特定HitGroupの履歴をクリア |
 | `GetHitCount(hitGroup, target)` | ヒット回数を取得 |
@@ -163,7 +163,7 @@ var multiHitAttack = new MyAttackInfo
 {
     HittableCount = 3,      // 1体に最大3回
     AttackableCount = 15,   // 全体で15回（5体×3ヒット）
-    IntervalTime = 0.1f     // 0.1秒間隔で多段ヒット
+    Interval = 6            // 6 tick間隔で多段ヒット
 };
 
 // 単発の貫通攻撃
@@ -247,7 +247,7 @@ var info = new MyAttackInfo
     HitGroup = 0,           // 0以下で自動生成
     HittableCount = 1,      // 同一ターゲットに1回
     AttackableCount = 0,    // 0=無制限
-    IntervalTime = 0f       // 再ヒット不可
+    Interval = 0            // 再ヒット不可
 };
 
 var handle = combat.CreateAttack(info);
@@ -307,7 +307,7 @@ HitHistoryは `Dictionary<HitHistoryKey, HitHistoryEntry>` を内部に持つ。
 
 ```
 HitHistoryKey = (HitGroup, Target)
-HitHistoryEntry = { HitCount, LastHitTime }
+HitHistoryEntry = { HitCount, LastHitTick }
 ```
 
 同じHitGroupで同じTargetへのヒットは、1つのエントリで管理される。
@@ -324,7 +324,7 @@ CanHit(hitGroup, target, info)
         ├─ HittableCount > 0 かつ HitCount >= HittableCount
         │   → ヒット不可（回数上限）
         │
-        ├─ IntervalTime > 0 かつ (CurrentTime - LastHitTime) < IntervalTime
+        ├─ Interval > 0 かつ (CurrentTick - LastHitTick) < Interval
         │   → ヒット不可（インターバル中）
         │
         └─ 上記以外 → ヒット可能
@@ -332,23 +332,23 @@ CanHit(hitGroup, target, info)
 
 ### 時間管理
 
-HitHistoryは内部時刻（CurrentTime）を持つ。IntervalTimeを使う場合は毎フレーム`Update`を呼ぶ。
+HitHistoryは内部時刻（CurrentTick）を持つ。Intervalを使う場合は毎tick`Tick`を呼ぶ。
 
 ```csharp
-// 毎フレーム
+// 毎tick
 foreach (var character in characters)
-    character.GetHitHistory().Update(deltaTime);
+    character.GetHitHistory().Tick(deltaTicks);
 ```
 
-**Update を呼ばないと CurrentTime が進まず、IntervalTime による再ヒット判定が機能しない。**
+**Tick を呼ばないと CurrentTick が進まず、Interval による再ヒット判定が機能しない。**
 
 ### 自動クリーンアップ
 
 コンストラクタで `autoCleanupInterval` を指定すると、古いエントリが自動削除される。
 
 ```csharp
-var history = new HitHistory(autoCleanupInterval: 10f);
-// 10秒以上アクセスのないエントリは Update 時に削除
+var history = new HitHistory(autoCleanupInterval: 600);
+// 600 tick以上アクセスのないエントリは Tick 時に削除
 ```
 
 ### 履歴操作
@@ -396,14 +396,14 @@ HandleSystemの自動生成により、AttackHandleから直接呼べる。
 | `TryGetInfo(out AttackInfo?)` | 攻撃情報を取得 |
 | `TryCanAttack(out bool)` | まだ攻撃可能か |
 | `TryGetHitCount(out int)` | 現在のヒット回数 |
-| `TryUpdateTime(float deltaTime)` | 経過時間を加算 |
-| `TryGetElapsedTime(out float)` | 経過時間を取得 |
+| `TryUpdateTick(int deltaTicks)` | 経過tick数を加算 |
+| `TryGetElapsedTicks(out int)` | 経過tick数を取得 |
 | `TryGetResolvedHitGroup(out int)` | 解決済みHitGroupを取得 |
 
 ```csharp
-// 攻撃の経過時間で有効期限を管理する例
-handle.TryUpdateTime(deltaTime);
-if (handle.TryGetElapsedTime(out var elapsed) && elapsed > attackDuration)
+// 攻撃の経過tick数で有効期限を管理する例
+handle.TryUpdateTick(deltaTicks);
+if (handle.TryGetElapsedTicks(out var elapsed) && elapsed > attackDuration)
 {
     combat.ReleaseAttack(handle);
 }
@@ -483,11 +483,11 @@ public class CombatIntegration
 {
     private readonly CombatManager _combat = new();
 
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        // HitHistoryの時間を更新
+        // HitHistoryのtickを更新
         foreach (var character in _characters)
-            character.GetHitHistory().Update(deltaTime);
+            character.GetHitHistory().Tick(deltaTicks);
     }
 
     public void OnCollision(CollisionResult collision, AttackHandle handle)
@@ -534,22 +534,22 @@ Console.WriteLine($"HitCount: {count}");
 
 ### 多段ヒットしない
 
-**1. IntervalTime を設定しているか**
+**1. Interval を設定しているか**
 
 ```csharp
 var info = new MyAttackInfo
 {
     HittableCount = 5,
-    IntervalTime = 0.1f  // これがないと1回しか当たらない
+    Interval = 6  // これがないと1回しか当たらない
 };
 ```
 
-**2. HitHistory.Update を呼んでいるか**
+**2. HitHistory.Tick を呼んでいるか**
 
 ```csharp
-// 毎フレーム
+// 毎tick
 foreach (var character in characters)
-    character.GetHitHistory().Update(deltaTime);
+    character.GetHitHistory().Tick(deltaTicks);
 ```
 
 ### 同じ攻撃が何度も当たる

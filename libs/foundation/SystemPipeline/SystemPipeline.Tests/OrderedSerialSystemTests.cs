@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -111,7 +112,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -135,7 +136,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -150,7 +151,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new PriorityOrderedSystem();
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -169,7 +170,7 @@ namespace Tomato.SystemPipeline.Tests
             var registry = new TestEntityRegistry();
             registry.AddEntity(new AnyHandle(new MockArena(), 5, 0));
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -194,7 +195,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -218,7 +219,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act - should not throw
             SystemExecutor.Execute(system, registry, in context);

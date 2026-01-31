@@ -38,19 +38,19 @@ public static class MotionTransitionCondition
     }
 
     /// <summary>
-    /// 指定フレーム以上経過したかをチェックする遷移条件を生成。
+    /// 指定tick以上経過したかをチェックする遷移条件を生成。
     /// </summary>
-    public static Func<MotionContext, bool> AfterFrame(int frame)
+    public static Func<MotionContext, bool> AfterTick(int tick)
     {
-        return ctx => ctx.ElapsedFrames >= frame;
+        return ctx => ctx.ElapsedTicks >= tick;
     }
 
     /// <summary>
-    /// 指定フレーム範囲内かをチェックする遷移条件を生成。
+    /// 指定tick範囲内かをチェックする遷移条件を生成。
     /// </summary>
-    public static Func<MotionContext, bool> InFrameRange(int startFrame, int endFrame)
+    public static Func<MotionContext, bool> InTickRange(int startTick, int endTick)
     {
-        return ctx => ctx.ElapsedFrames >= startFrame && ctx.ElapsedFrames <= endFrame;
+        return ctx => ctx.ElapsedTicks >= startTick && ctx.ElapsedTicks <= endTick;
     }
 
     /// <summary>

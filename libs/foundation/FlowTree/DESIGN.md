@@ -54,16 +54,16 @@ var patrolTree = new FlowTree("Patrol");
 patrolTree.Build(state, b => b.Sequence(
     b.Action(s => GetNextWaypoint(s)),
     b.Action(s => MoveToWaypoint(s)),
-    b.Wait(2.0f)  // 2秒待機
+    b.Wait(new TickDuration(120))  // 120 tick待機
 ));
 ```
 
-### 2. 毎フレーム実行
+### 2. 毎tick実行
 
 ```csharp
-void Update(float deltaTime)
+void Tick(int deltaTicks)
 {
-    var status = patrolTree.Tick(deltaTime);
+    var status = patrolTree.Tick(deltaTicks);
 
     if (status == NodeStatus.Success)
     {
@@ -234,7 +234,7 @@ var tree = new FlowTree();
 tree.Build(
     Sequence(
         Do(static () => DoSomething()),
-        Wait(1.0f)
+        Wait(new TickDuration(60))
     )
 );
 ```
@@ -247,7 +247,7 @@ FlowBuilder内でも状態を使わないノードを追加できる:
 tree.Build(state, b => b.Sequence(
     b.Action(s => ProcessState(s)),           // 状態を使う
     b.Action(static () => NodeStatus.Success),  // 状態を使わない
-    b.Wait(1.0f)                              // ステートレスデコレータ
+    b.Wait(new TickDuration(60))                              // ステートレスデコレータ
 ));
 ```
 
@@ -322,7 +322,7 @@ var patrolTree = new FlowTree("Patrol");
 
 Race(
     SubTree(attackTree),
-    Timeout(5.0f, SubTree(patrolTree))
+    Timeout(new TickDuration(300), SubTree(patrolTree))
 )
 ```
 
@@ -484,8 +484,8 @@ Retry(3,
 指定時間内に完了しなければFailure。
 
 ```csharp
-// 5秒でタイムアウト
-Timeout(5.0f,
+// 300 tickでタイムアウト
+Timeout(new TickDuration(300),
     Action<MyState>(s => LongRunningTask(s))
 )
 ```
@@ -495,7 +495,7 @@ Timeout(5.0f,
 指定時間待機してから子を実行する。
 
 ```csharp
-// 1秒待ってから実行
+// 60 tick待ってから実行
 Delay(1.0f,
     Action<MyState>(s => DoAfterDelay(s))
 )
@@ -659,7 +659,7 @@ public delegate TChild FlowStateProvider<in TParent, out TChild>(TParent parentS
 
 ```csharp
 // 時間待機
-Wait(2.0f)  // 2秒待機
+Wait(new TickDuration(120))  // 120 tick待機
 
 // 条件待機（条件がtrueになるまでRunning）
 b.WaitUntil(s => s.IsReady)
@@ -1078,7 +1078,7 @@ public static class EnemyAI
         PatrolTree.Build(state, b => b.Sequence(
             b.Action(s => { /* get waypoint */ return NodeStatus.Success; }),
             b.Action(s => { /* move to */ return NodeStatus.Running; }),
-            b.Wait(2.0f)
+            b.Wait(new TickDuration(120))
         ));
 
         // ... other subtrees ...
@@ -1197,7 +1197,7 @@ public static FlowTree CreateNetworkRequestFlow(NetworkState state)
 {
     var tree = new FlowTree("NetworkRequest");
     tree.Build(state, b => b.Retry(3,  // 最大3回リトライ
-        b.Timeout(10.0f,  // 10秒でタイムアウト
+        b.Timeout(new TickDuration(600),  // 600 tickでタイムアウト
             b.Sequence(
                 b.Do(s =>
                 {
@@ -1271,11 +1271,11 @@ tree.Build(state, b => b.Race(
 ### タイムアウト付き待機
 
 ```csharp
-// ユーザー入力を待つが、10秒でタイムアウト
+// ユーザー入力を待つが、600 tickでタイムアウト
 tree.Build(state, b => b.Race(
     b.WaitUntil(s => s.HasUserInput),
     b.Sequence(
-        b.Wait(10.0f),
+        b.Wait(new TickDuration(600)),
         b.Do(s => s.TimedOut = true)
     )
 ));
@@ -1678,9 +1678,9 @@ public static FlowTree CreateMatchmakingFlow(MatchmakingState state)
                     ShowMatchmakingError();
             },
             b.Sequence(
-                // サーバー接続（3回リトライ、各10秒タイムアウト）
+                // サーバー接続（3回リトライ、各600 tickタイムアウト）
                 b.Retry(3,
-                    b.Timeout(10.0f,
+                    b.Timeout(new TickDuration(600),
                         b.Action(s =>
                         {
                             return ConnectToMatchServer()
@@ -1702,8 +1702,8 @@ public static FlowTree CreateMatchmakingFlow(MatchmakingState state)
                             return NodeStatus.Failure;
                         })
                     ),
-                    // タイムアウト（60秒）
-                    b.Timeout(60.0f,
+                    // タイムアウト（3600 tick）
+                    b.Timeout(new TickDuration(3600),
                         b.Action(s =>
                         {
                             var matchId = CheckMatchFound();
@@ -1852,7 +1852,7 @@ public static FlowTree CreateCutscene(CutsceneState state)
         ),
         // スキップ可能な待機
         b.Race(
-            b.Wait(2.0f),
+            b.Wait(new TickDuration(120)),
             b.Condition(s => s.SkipRequested)
         ),
         // フェードアウト

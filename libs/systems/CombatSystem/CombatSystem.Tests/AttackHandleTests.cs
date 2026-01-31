@@ -128,21 +128,21 @@ public class AttackHandleTests
     }
 
     [Fact]
-    public void TryUpdateTime_UpdatesElapsedTime()
+    public void TryUpdateTicks_UpdatesElapsedTicks()
     {
         var manager = new CombatManager();
         var info = new MockAttackInfo();
         var handle = manager.CreateAttack(info);
 
-        handle.TryGetElapsedTime(out var time0);
-        handle.TryUpdateTime(1.5f);
-        handle.TryGetElapsedTime(out var time1);
-        handle.TryUpdateTime(0.5f);
-        handle.TryGetElapsedTime(out var time2);
+        handle.TryGetElapsedTicks(out var ticks0);
+        handle.TryUpdateTicks(10);
+        handle.TryGetElapsedTicks(out var ticks1);
+        handle.TryUpdateTicks(5);
+        handle.TryGetElapsedTicks(out var ticks2);
 
-        Assert.Equal(0f, time0);
-        Assert.Equal(1.5f, time1);
-        Assert.Equal(2.0f, time2);
+        Assert.Equal(0, ticks0);
+        Assert.Equal(10, ticks1);
+        Assert.Equal(15, ticks2);
     }
 
     [Fact]

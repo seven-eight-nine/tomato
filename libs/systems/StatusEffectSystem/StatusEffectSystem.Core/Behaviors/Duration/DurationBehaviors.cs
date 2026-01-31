@@ -1,3 +1,5 @@
+using Tomato.Time;
+
 namespace Tomato.StatusEffectSystem
 {
     /// <summary>時間をリフレッシュ（新しい時間で上書き）</summary>

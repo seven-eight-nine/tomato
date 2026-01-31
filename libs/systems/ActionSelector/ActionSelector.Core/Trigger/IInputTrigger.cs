@@ -28,13 +28,13 @@ public static class Triggers
     /// ボタンが保持されている間トリガー。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static IInputTrigger<InputState> Hold(ButtonType button) => new HoldTrigger(button, 0f);
+    public static IInputTrigger<InputState> Hold(ButtonType button) => new HoldTrigger(button, 0);
 
     /// <summary>
-    /// ボタンを指定時間以上保持したらトリガー。
+    /// ボタンを指定tick数以上保持したらトリガー。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static IInputTrigger<InputState> Hold(ButtonType button, float minSeconds) => new HoldTrigger(button, minSeconds);
+    public static IInputTrigger<InputState> Hold(ButtonType button, int minTicks) => new HoldTrigger(button, minTicks);
 
     // ===========================================
     // 高度なトリガー
@@ -44,14 +44,14 @@ public static class Triggers
     /// チャージして離した時にトリガー。段階的なチャージレベルを持つ。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ChargeTrigger Charge(ButtonType button, params float[] thresholds)
+    public static ChargeTrigger Charge(ButtonType button, params int[] thresholds)
         => new ChargeTrigger(button, thresholds);
 
     /// <summary>
-    /// 指定時間内に指定回数ボタンを押したらトリガー。
+    /// 指定tick数内に指定回数ボタンを押したらトリガー。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static IInputTrigger<InputState> Mash(ButtonType button, int count, float window)
+    public static IInputTrigger<InputState> Mash(ButtonType button, int count, int window)
         => new MashTrigger(button, count, window);
 
     /// <summary>
@@ -72,7 +72,7 @@ public static class Triggers
     /// コマンド入力（↓↘→+Pなど）でトリガー。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static IInputTrigger<InputState> Command(CommandInput[] sequence, float totalWindow)
+    public static IInputTrigger<InputState> Command(CommandInput[] sequence, int totalWindow)
         => new CommandTrigger(sequence, totalWindow);
 
     // ===========================================
@@ -129,7 +129,7 @@ public sealed class PressTrigger : IInputTrigger<InputState>
 
     public void OnJudgmentStart() { }
     public void OnJudgmentStop() { }
-    public void OnJudgmentUpdate(in InputState input, float deltaTime) { }
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks) { }
 }
 
 /// <summary>
@@ -149,7 +149,7 @@ public sealed class ReleaseTrigger : IInputTrigger<InputState>
 
     public void OnJudgmentStart() { }
     public void OnJudgmentStop() { }
-    public void OnJudgmentUpdate(in InputState input, float deltaTime) { }
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks) { }
 }
 
 /// <summary>
@@ -158,40 +158,40 @@ public sealed class ReleaseTrigger : IInputTrigger<InputState>
 public sealed class HoldTrigger : IInputTrigger<InputState>
 {
     private readonly ButtonType _button;
-    private readonly float _minSeconds;
-    private float _holdTime;
+    private readonly int _minTicks;
+    private int _holdTicks;
 
-    public HoldTrigger(ButtonType button, float minSeconds)
+    public HoldTrigger(ButtonType button, int minTicks)
     {
         _button = button;
-        _minSeconds = minSeconds;
+        _minTicks = minTicks;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsTriggered(in InputState input)
     {
-        return input.IsHeld(_button) && _holdTime >= _minSeconds;
+        return input.IsHeld(_button) && _holdTicks >= _minTicks;
     }
 
     public void OnJudgmentStart()
     {
-        _holdTime = 0f;
+        _holdTicks = 0;
     }
 
     public void OnJudgmentStop()
     {
-        _holdTime = 0f;
+        _holdTicks = 0;
     }
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
         if (input.IsHeld(_button))
         {
-            _holdTime += deltaTime;
+            _holdTicks += deltaTicks;
         }
         else
         {
-            _holdTime = 0f;
+            _holdTicks = 0;
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -11,15 +12,13 @@ namespace Tomato.SystemPipeline.Tests
         {
             public bool IsEnabled { get; set; } = true;
             public IEntityQuery Query => null;
-            public List<float> RecordedDeltaTimes { get; } = new List<float>();
-            public List<float> RecordedTotalTimes { get; } = new List<float>();
-            public List<int> RecordedFrameCounts { get; } = new List<int>();
+            public List<int> RecordedDeltaTicks { get; } = new List<int>();
+            public List<long> RecordedCurrentTicks { get; } = new List<long>();
 
             public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
-                RecordedDeltaTimes.Add(context.DeltaTime);
-                RecordedTotalTimes.Add(context.TotalTime);
-                RecordedFrameCounts.Add(context.FrameCount);
+                RecordedDeltaTicks.Add(context.DeltaTicks);
+                RecordedCurrentTicks.Add(context.CurrentTick.Value);
             }
         }
 
@@ -37,7 +36,7 @@ namespace Tomato.SystemPipeline.Tests
         }
 
         [Fact]
-        public void Pipeline_TracksTime_Correctly()
+        public void Pipeline_TracksTicks_Correctly()
         {
             // Arrange
             var system = new TestSerialSystem();
@@ -46,17 +45,17 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Act
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.017f);
-            pipeline.Execute(group, 0.015f);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 2);
+            pipeline.Execute(group, 3);
 
             // Assert
-            Assert.Equal(new[] { 0.016f, 0.017f, 0.015f }, system.RecordedDeltaTimes);
-            Assert.Equal(3, system.RecordedFrameCounts[2]);
+            Assert.Equal(new[] { 1, 2, 3 }, system.RecordedDeltaTicks);
+            Assert.Equal(6, system.RecordedCurrentTicks[2]);
         }
 
         [Fact]
-        public void Pipeline_AccumulatesTotalTime()
+        public void Pipeline_AccumulatesCurrentTick()
         {
             // Arrange
             var system = new TestSerialSystem();
@@ -65,18 +64,18 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Act
-            pipeline.Execute(group, 1.0f);
-            pipeline.Execute(group, 2.0f);
-            pipeline.Execute(group, 3.0f);
+            pipeline.Execute(group, 10);
+            pipeline.Execute(group, 20);
+            pipeline.Execute(group, 30);
 
             // Assert
-            Assert.Equal(1.0f, system.RecordedTotalTimes[0], 5);
-            Assert.Equal(3.0f, system.RecordedTotalTimes[1], 5);
-            Assert.Equal(6.0f, system.RecordedTotalTimes[2], 5);
+            Assert.Equal(10L, system.RecordedCurrentTicks[0]);
+            Assert.Equal(30L, system.RecordedCurrentTicks[1]);
+            Assert.Equal(60L, system.RecordedCurrentTicks[2]);
         }
 
         [Fact]
-        public void Pipeline_IncrementsFrameCount()
+        public void Pipeline_IncrementsCurrentTick()
         {
             // Arrange
             var system = new TestSerialSystem();
@@ -85,16 +84,16 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Act
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.016f);
-            pipeline.Execute(group, 0.016f);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 1);
+            pipeline.Execute(group, 1);
 
             // Assert
-            Assert.Equal(new[] { 1, 2, 3 }, system.RecordedFrameCounts);
+            Assert.Equal(new long[] { 1, 2, 3 }, system.RecordedCurrentTicks);
         }
 
         [Fact]
-        public void Pipeline_Reset_ClearsTimeAndFrameCount()
+        public void Pipeline_Reset_ClearsCurrentTick()
         {
             // Arrange
             var system = new TestSerialSystem();
@@ -103,18 +102,16 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Execute a few frames
-            pipeline.Execute(group, 1.0f);
-            pipeline.Execute(group, 1.0f);
+            pipeline.Execute(group, 10);
+            pipeline.Execute(group, 10);
 
             // Act
             pipeline.Reset();
-            pipeline.Execute(group, 0.5f);
+            pipeline.Execute(group, 5);
 
             // Assert
-            Assert.Equal(0.5f, pipeline.TotalTime, 5);
-            Assert.Equal(1, pipeline.FrameCount);
-            Assert.Equal(0.5f, system.RecordedTotalTimes[2], 5);
-            Assert.Equal(1, system.RecordedFrameCounts[2]);
+            Assert.Equal(5L, pipeline.CurrentTick.Value);
+            Assert.Equal(5L, system.RecordedCurrentTicks[2]);
         }
 
         [Fact]
@@ -129,13 +126,13 @@ namespace Tomato.SystemPipeline.Tests
             var pipeline = new Pipeline(registry);
 
             // Act - Simulate Unity's Update/LateUpdate pattern
-            pipeline.Execute(updateGroup, 0.016f);
-            pipeline.Execute(lateUpdateGroup, 0.016f);
+            pipeline.Execute(updateGroup, 1);
+            pipeline.Execute(lateUpdateGroup, 1);
 
             // Assert
-            Assert.Single(updateSystem.RecordedDeltaTimes);
-            Assert.Single(lateUpdateSystem.RecordedDeltaTimes);
-            Assert.Equal(2, pipeline.FrameCount);
+            Assert.Single(updateSystem.RecordedDeltaTicks);
+            Assert.Single(lateUpdateSystem.RecordedDeltaTicks);
+            Assert.Equal(2L, pipeline.CurrentTick.Value);
         }
     }
 }

@@ -1,3 +1,4 @@
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.StatusEffectSystem.Tests

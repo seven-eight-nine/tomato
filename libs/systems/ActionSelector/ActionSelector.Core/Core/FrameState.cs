@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.ActionSelector;
 
@@ -45,40 +46,32 @@ public readonly struct FrameState<TInput, TContext>
     public readonly TContext Context;
 
     /// <summary>
-    /// 前フレームからの経過時間（秒）。
+    /// 前フレームからの経過tick数。
     /// </summary>
-    public readonly float DeltaTime;
+    public readonly int DeltaTicks;
 
     /// <summary>
-    /// ゲーム開始からの総経過時間（秒）。
+    /// 現在のゲームtick。
     /// </summary>
-    public readonly float TotalTime;
-
-    /// <summary>
-    /// 現在のフレーム番号。
-    /// </summary>
-    public readonly int FrameCount;
+    public readonly GameTick CurrentTick;
 
     /// <summary>
     /// フレーム状態を生成する。
     /// </summary>
     /// <param name="input">入力状態</param>
     /// <param name="context">ゲーム固有コンテキスト</param>
-    /// <param name="deltaTime">経過時間（秒）</param>
-    /// <param name="totalTime">総経過時間（秒）</param>
-    /// <param name="frameCount">フレーム番号</param>
+    /// <param name="deltaTicks">経過tick数</param>
+    /// <param name="currentTick">現在のゲームtick</param>
     public FrameState(
         TInput input,
         TContext context,
-        float deltaTime = 1f / 60f,
-        float totalTime = 0f,
-        int frameCount = 0)
+        int deltaTicks = 1,
+        GameTick currentTick = default)
     {
         Input = input;
         Context = context;
-        DeltaTime = deltaTime;
-        TotalTime = totalTime;
-        FrameCount = frameCount;
+        DeltaTicks = deltaTicks;
+        CurrentTick = currentTick;
     }
 }
 
@@ -94,16 +87,16 @@ public readonly struct InputOnlyFrame<TInput>
     public readonly TInput Input;
 
     /// <summary>
-    /// 前フレームからの経過時間（秒）。
+    /// 前フレームからの経過tick数。
     /// </summary>
-    public readonly float DeltaTime;
+    public readonly int DeltaTicks;
 
     /// <summary>
     /// フレーム状態を生成する。
     /// </summary>
-    public InputOnlyFrame(TInput input, float deltaTime = 1f / 60f)
+    public InputOnlyFrame(TInput input, int deltaTicks = 1)
     {
         Input = input;
-        DeltaTime = deltaTime;
+        DeltaTicks = deltaTicks;
     }
 }

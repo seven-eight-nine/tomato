@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -78,7 +79,7 @@ namespace Tomato.SystemPipeline.Tests
 
             var group = new SerialSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -98,7 +99,7 @@ namespace Tomato.SystemPipeline.Tests
 
             var group = new SerialSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -115,7 +116,7 @@ namespace Tomato.SystemPipeline.Tests
             var system1 = new TestSerialSystem(1, processedOrder);
             var group = new SerialSystemGroup(system1) { IsEnabled = false };
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -139,7 +140,7 @@ namespace Tomato.SystemPipeline.Tests
                 registry.AddEntity(new AnyHandle(arena, i, 0));
             }
 
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -160,7 +161,7 @@ namespace Tomato.SystemPipeline.Tests
             // Act
             group.Add(system2);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
             group.Execute(registry, in context);
 
             // Assert
@@ -181,7 +182,7 @@ namespace Tomato.SystemPipeline.Tests
             // Act
             group.Insert(1, system2);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
             group.Execute(registry, in context);
 
             // Assert
@@ -201,7 +202,7 @@ namespace Tomato.SystemPipeline.Tests
             // Act
             bool removed = group.Remove(system1);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
             group.Execute(registry, in context);
 
             // Assert

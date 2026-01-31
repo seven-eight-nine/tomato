@@ -37,7 +37,7 @@ public interface IDamageReceiver : IEquatable<IDamageReceiver>
 
     /// <summary>
     /// ヒット履歴を返す。
-    /// IntervalTime を使う場合は毎フレーム Update を呼ぶこと。
+    /// IntervalTicks を使う場合は毎tick Update を呼ぶこと。
     /// </summary>
     HitHistory GetHitHistory();
 }

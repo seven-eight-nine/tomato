@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using Tomato.Time;
 
 namespace Tomato.FlowTree;
 
 /// <summary>
-/// 指定時間遅延してから子ノードを実行するノード。
+/// 指定tick数遅延してから子ノードを実行するノード。
 /// 再帰呼び出しをサポート（呼び出し深度ごとに状態を管理）。
 /// </summary>
 public sealed class DelayNode : IFlowNode
@@ -12,23 +13,23 @@ public sealed class DelayNode : IFlowNode
     private const int InitialCapacity = 4;
 
     private readonly IFlowNode _child;
-    private readonly float _delay;
-    private readonly List<float> _elapsedStack;
+    private readonly TickDuration _delay;
+    private readonly List<int> _elapsedStack;
     private readonly List<bool> _delayCompleteStack;
 
     /// <summary>
     /// DelayNodeを作成する。
     /// </summary>
-    /// <param name="delay">遅延時間（秒）</param>
+    /// <param name="delay">遅延tick数</param>
     /// <param name="child">子ノード</param>
-    public DelayNode(float delay, IFlowNode child)
+    public DelayNode(TickDuration delay, IFlowNode child)
     {
-        if (delay < 0)
+        if (delay.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(delay), "Delay must be non-negative.");
 
         _child = child ?? throw new ArgumentNullException(nameof(child));
         _delay = delay;
-        _elapsedStack = new List<float>(InitialCapacity) { 0f };
+        _elapsedStack = new List<int>(InitialCapacity) { 0 };
         _delayCompleteStack = new List<bool>(InitialCapacity) { false };
     }
 
@@ -40,9 +41,9 @@ public sealed class DelayNode : IFlowNode
 
         if (!_delayCompleteStack[depth])
         {
-            _elapsedStack[depth] += context.DeltaTime;
+            _elapsedStack[depth] += context.DeltaTicks;
 
-            if (_elapsedStack[depth] < _delay)
+            if (_elapsedStack[depth] < _delay.Value)
                 return NodeStatus.Running;
 
             _delayCompleteStack[depth] = true;
@@ -74,7 +75,7 @@ public sealed class DelayNode : IFlowNode
     {
         while (_elapsedStack.Count <= depth)
         {
-            _elapsedStack.Add(0f);
+            _elapsedStack.Add(0);
             _delayCompleteStack.Add(false);
         }
     }

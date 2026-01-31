@@ -129,7 +129,7 @@ public partial class ActionSelector<TCategory, TInput, TContext>
                 j.Input?.OnJudgmentStart();
                 _activeJudgments[j] = true;
             }
-            j.Input?.OnJudgmentUpdate(in state.Input, state.DeltaTime);
+            j.Input?.OnJudgmentUpdate(in state.Input, state.DeltaTicks);
         }
     }
 
@@ -319,9 +319,8 @@ public sealed class ActionSelector<TCategory>
         var frameState = new FrameState<InputState, GameState>(
             state.Input,
             state,
-            state.DeltaTime,
-            state.TotalTime,
-            state.FrameCount);
+            state.DeltaTicks,
+            state.CurrentTick);
         return _inner.ProcessFrame(judgmentList.AsGeneric(), in frameState, options);
     }
 }

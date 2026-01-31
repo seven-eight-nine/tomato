@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -20,7 +21,7 @@ public class FlowTreeBuilderTests
             )
         );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(2, callCount);
     }
 
@@ -37,7 +38,7 @@ public class FlowTreeBuilderTests
             )
         );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(2, callCount);
     }
 
@@ -54,7 +55,7 @@ public class FlowTreeBuilderTests
                 )
             );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(30, state.Score);
     }
 
@@ -76,7 +77,7 @@ public class FlowTreeBuilderTests
                 )
             );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(100, state.Score);
         Assert.True(actionCalled);
     }
@@ -97,7 +98,7 @@ public class FlowTreeBuilderTests
             )
         );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.True(executed[0]);
         Assert.True(executed[1]);
         Assert.True(executed[2]);
@@ -120,9 +121,9 @@ public class FlowTreeBuilderTests
         );
 
         // 1回目: Failure -> Running
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         // 2回目: Success
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(2, callCount);
     }
 
@@ -131,13 +132,13 @@ public class FlowTreeBuilderTests
     {
         var tree = new FlowTree();
         tree.Build(
-            Timeout(0.5f,
+            Timeout(new TickDuration(5),
                 Action(static () => NodeStatus.Running)
             )
         );
 
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.3f));
-        Assert.Equal(NodeStatus.Failure, tree.Tick(0.3f)); // タイムアウト
+        Assert.Equal(NodeStatus.Running, tree.Tick(3));
+        Assert.Equal(NodeStatus.Failure, tree.Tick(3)); // タイムアウト
     }
 
     [Fact]
@@ -147,15 +148,15 @@ public class FlowTreeBuilderTests
 
         var tree = new FlowTree();
         tree.Build(
-            Delay(0.5f,
+            Delay(new TickDuration(5),
                 Action(() => { callCount++; return NodeStatus.Success; })
             )
         );
 
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.3f)); // 遅延中
+        Assert.Equal(NodeStatus.Running, tree.Tick(3)); // 遅延中
         Assert.Equal(0, callCount);
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.3f)); // 遅延完了
+        Assert.Equal(NodeStatus.Success, tree.Tick(3)); // 遅延完了
         Assert.Equal(1, callCount);
     }
 
@@ -170,7 +171,7 @@ public class FlowTreeBuilderTests
         );
 
         // 子がSuccessを即座に返すので、1回のTickで3回全部実行される
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(3, callCount);
     }
 
@@ -190,9 +191,9 @@ public class FlowTreeBuilderTests
             )
         );
 
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 1回目
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 2回目
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f)); // 3回目でFailure -> Success
+        Assert.Equal(NodeStatus.Running, tree.Tick(1)); // 1回目
+        Assert.Equal(NodeStatus.Running, tree.Tick(1)); // 2回目
+        Assert.Equal(NodeStatus.Success, tree.Tick(1)); // 3回目でFailure -> Success
         Assert.Equal(3, callCount);
     }
 
@@ -204,7 +205,7 @@ public class FlowTreeBuilderTests
             Inverter(Action(static () => NodeStatus.Success))
         );
 
-        Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, tree.Tick(1));
     }
 
     [Fact]
@@ -215,7 +216,7 @@ public class FlowTreeBuilderTests
             Succeeder(Action(static () => NodeStatus.Failure))
         );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
     }
 
     [Fact]
@@ -226,7 +227,7 @@ public class FlowTreeBuilderTests
             Failer(Action(static () => NodeStatus.Success))
         );
 
-        Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, tree.Tick(1));
     }
 
     [Fact]
@@ -246,9 +247,9 @@ public class FlowTreeBuilderTests
             )
         );
 
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 1回目失敗、リトライ
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f)); // 2回目失敗、リトライ
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f)); // 3回目成功
+        Assert.Equal(NodeStatus.Running, tree.Tick(1)); // 1回目失敗、リトライ
+        Assert.Equal(NodeStatus.Running, tree.Tick(1)); // 2回目失敗、リトライ
+        Assert.Equal(NodeStatus.Success, tree.Tick(1)); // 3回目成功
         Assert.Equal(3, callCount);
     }
 
@@ -263,7 +264,7 @@ public class FlowTreeBuilderTests
             );
 
         // 1回のTickで3回実行される
-        tree.Tick(0.016f);
+        tree.Tick(1);
         Assert.Equal(30, state.Score);
     }
 
@@ -287,7 +288,7 @@ public class FlowTreeBuilderTests
                 )
             );
 
-        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(1));
         Assert.True(executed[0]);
         Assert.True(executed[1]);
     }
@@ -296,10 +297,10 @@ public class FlowTreeBuilderTests
     public void Builder_Wait()
     {
         var tree = new FlowTree();
-        tree.Build(Wait(0.5f));
+        tree.Build(Wait(new TickDuration(5)));
 
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.3f));
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.3f)); // 0.6秒経過
+        Assert.Equal(NodeStatus.Running, tree.Tick(3));
+        Assert.Equal(NodeStatus.Success, tree.Tick(3)); // 0.6秒経過
     }
 
     [Fact]
@@ -308,14 +309,14 @@ public class FlowTreeBuilderTests
         var tree = new FlowTree();
         tree.Build(Action(static () => NodeStatus.Success));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
     }
 
     [Fact]
     public void Builder_NoRoot_ThrowsOnTick()
     {
         var tree = new FlowTree();
-        Assert.Throws<System.InvalidOperationException>(() => tree.Tick(0.016f));
+        Assert.Throws<System.InvalidOperationException>(() => tree.Tick(1));
     }
 
     [Fact]
@@ -334,7 +335,7 @@ public class FlowTreeBuilderTests
                 )
             );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(110, state.Score);
     }
 
@@ -357,7 +358,7 @@ public class FlowShorthandTests
             )
         );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal("TestTree", tree.Name);
     }
 
@@ -460,9 +461,9 @@ public class FlowShorthandTests
     [Fact]
     public void Flow_Timeout()
     {
-        var timeout = Timeout(0.5f, Action(static () => NodeStatus.Running));
+        var timeout = Timeout(new TickDuration(5), Action(static () => NodeStatus.Running));
 
-        var ctx = new FlowContext { DeltaTime = 0.6f };
+        var ctx = new FlowContext { DeltaTicks = 6 };
         Assert.Equal(NodeStatus.Failure, timeout.Tick(ref ctx)); // タイムアウト
     }
 
@@ -470,9 +471,9 @@ public class FlowShorthandTests
     public void Flow_Delay()
     {
         int callCount = 0;
-        var delayed = Delay(0.5f, Action(() => { callCount++; return NodeStatus.Success; }));
+        var delayed = Delay(new TickDuration(5), Action(() => { callCount++; return NodeStatus.Success; }));
 
-        var ctx = new FlowContext { DeltaTime = 0.3f };
+        var ctx = new FlowContext { DeltaTicks = 3 };
         Assert.Equal(NodeStatus.Running, delayed.Tick(ref ctx)); // 遅延中
         Assert.Equal(0, callCount);
 
@@ -519,17 +520,17 @@ public class FlowShorthandTests
         Assert.Equal("AI Behavior", aiTree.Name);
 
         // 初期状態: パトロール
-        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(1));
 
         // ターゲット発見: 攻撃
         state.HasTarget = true;
         aiTree.Reset();
-        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(1));
 
         // 体力低下: 逃走
         state.IsLowHealth = true;
         aiTree.Reset();
-        Assert.Equal(NodeStatus.Success, aiTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, aiTree.Tick(1));
     }
 
     private class TestState : IFlowState
@@ -601,7 +602,7 @@ public class ComplexFlowTreeTests
         var tree = new FlowTree("DeepNest");
         tree.Build(state, 
                 Retry(2,
-                    Timeout(10.0f,
+                    Timeout(new TickDuration(100),
                         Sequence(
                             Do<GameLoopState>(s => s.EventLog.Add("Sequence Start")),
                             Selector(
@@ -631,13 +632,13 @@ public class ComplexFlowTreeTests
             );
 
         // 実行
-        var status = tree.Tick(0.016f);
+        var status = tree.Tick(1);
         Assert.Equal(NodeStatus.Running, status);
 
-        status = tree.Tick(0.016f);
+        status = tree.Tick(1);
         Assert.Equal(NodeStatus.Running, status);
 
-        status = tree.Tick(0.016f);
+        status = tree.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
 
         Assert.Equal(3, actionCount);
@@ -676,7 +677,7 @@ public class ComplexFlowTreeTests
                 )
             );
 
-        var status = countdown.Tick(0.016f);
+        var status = countdown.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(new[] { 5, 4, 3, 2, 1, -1 }, log);
     }
@@ -729,7 +730,7 @@ public class ComplexFlowTreeTests
                 )
             );
 
-        var status = pingTree.Tick(0.016f);
+        var status = pingTree.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(new[] { "Ping", "Pong", "Ping", "Pong", "Ping", "Pong" }, log);
     }
@@ -773,7 +774,7 @@ public class ComplexFlowTreeTests
                 )
             );
 
-        var status = mainTree.Tick(0.016f);
+        var status = mainTree.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(300, parentState.Score); // 100 + 100 + 100
         Assert.Contains("Start", parentState.EventLog);
@@ -813,7 +814,7 @@ public class ComplexFlowTreeTests
                 )
             );
 
-        var status = mainTree.Tick(0.016f);
+        var status = mainTree.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
         // 1回目: Easy(+10) -> Score=10
         // 2回目: Easy(+10) -> Score=20
@@ -844,7 +845,7 @@ public class ComplexFlowTreeTests
                 )
             );
 
-        var status = tree.Tick(0.016f);
+        var status = tree.Tick(1);
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(30, state.Score);
 
@@ -864,7 +865,7 @@ public class ComplexFlowTreeTests
         var tree = new FlowTree("NetworkConnect");
         tree.Build(state, 
                 Retry(3,
-                    Timeout(1.0f,
+                    Timeout(new TickDuration(10),
                         Sequence(
                             Do<NetworkState>(s => s.ConnectionAttempts++),
                             // 3回目で接続成功
@@ -883,15 +884,15 @@ public class ComplexFlowTreeTests
             );
 
         // 1回目: 失敗 -> Running (リトライ)
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.1f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(1, state.ConnectionAttempts);
 
         // 2回目: 失敗 -> Running (リトライ)
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.1f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(2, state.ConnectionAttempts);
 
         // 3回目: 成功
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.1f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(3, state.ConnectionAttempts);
         Assert.True(state.IsConnected);
     }
@@ -932,37 +933,37 @@ public class ComplexFlowTreeTests
             );
 
         // 通常フレーム実行
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(1, state.FrameCount);
 
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(2, state.FrameCount);
 
         // ポーズ
         state.IsPaused = true;
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(2, state.FrameCount); // 進まない
 
         // ポーズ解除
         state.IsPaused = false;
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(3, state.FrameCount);
 
         // ゲームオーバー → リトライ
         state.IsGameOver = true;
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(1, state.RetryCount);
         Assert.False(state.IsGameOver);
         Assert.Equal(3, state.FrameCount); // フレームは進まない
 
         // 継続
-        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, gameLoopTree.Tick(1));
         Assert.Equal(4, state.FrameCount);
 
         // ゲームオーバー → 終了
         state.IsGameOver = true;
         state.WantsToContinue = false;
-        Assert.Equal(NodeStatus.Success, gameLoopTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, gameLoopTree.Tick(1));
     }
 
     [Fact]
@@ -1015,7 +1016,7 @@ public class ComplexFlowTreeTests
             );
 
         // バトル実行
-        while (battleTree.Tick(0.016f) == NodeStatus.Running)
+        while (battleTree.Tick(1) == NodeStatus.Running)
         {
             // バトル継続
         }
@@ -1066,22 +1067,22 @@ public class ComplexFlowTreeTests
         );
 
         // フレーム0
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         frameCount++;
         Assert.Single(loadedResources); // Dataのみ
 
         // フレーム1
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         frameCount++;
         Assert.Single(loadedResources); // まだDataのみ
 
         // フレーム2
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         frameCount++;
         Assert.Equal(2, loadedResources.Count); // Data, Textures
 
         // フレーム3
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(3, loadedResources.Count); // 全部
         Assert.Contains("LoadComplete", eventLog);
     }
@@ -1114,15 +1115,15 @@ public class ComplexFlowTreeTests
         );
 
         // フレーム0
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         frameCount++;
 
         // フレーム1
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         frameCount++;
 
         // フレーム2 - FastTaskが勝利
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal("FastTask", winner);
     }
 
@@ -1143,13 +1144,13 @@ public class ComplexFlowTreeTests
         );
 
         // 各Tickで1つの子が試される
-        tree.Tick(0.016f);
+        tree.Tick(1);
         Assert.Equal(1, tried.Count);
 
-        tree.Tick(0.016f);
+        tree.Tick(1);
         Assert.Equal(2, tried.Count);
 
-        tree.Tick(0.016f);
+        tree.Tick(1);
         Assert.Equal(3, tried.Count);
 
         // 3つ全てが試されたはず（シャッフルされた順番で重複なし）
@@ -1158,7 +1159,7 @@ public class ComplexFlowTreeTests
         Assert.Contains(3, tried);
 
         // 4回目のTickでは最初からやり直し（再シャッフル）
-        tree.Tick(0.016f);
+        tree.Tick(1);
         Assert.Equal(4, tried.Count);
     }
 
@@ -1185,7 +1186,7 @@ public class ComplexFlowTreeTests
         // 1000回実行
         for (int i = 0; i < 1000; i++)
         {
-            tree.Tick(0.016f);
+            tree.Tick(1);
             tree.Reset();
         }
 
@@ -1214,7 +1215,7 @@ public class ComplexFlowTreeTests
         // 6回実行
         for (int i = 0; i < 6; i++)
         {
-            tree.Tick(0.016f);
+            tree.Tick(1);
             tree.Reset();
         }
 
@@ -1290,7 +1291,7 @@ public class ComplexFlowTreeTests
         int tickCount = 0;
         do
         {
-            status = mainFlow.Tick(0.016f);
+            status = mainFlow.Tick(1);
             tickCount++;
         } while (status == NodeStatus.Running && tickCount < 100);
 
@@ -1339,7 +1340,7 @@ public class FlowBuilderTypeInferenceTests
             b.Do(s => s.Value += 20)
         ));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(30, state.Value);
     }
 
@@ -1355,7 +1356,7 @@ public class FlowBuilderTypeInferenceTests
             return NodeStatus.Success;
         }));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(42, state.Value);
     }
 
@@ -1370,7 +1371,7 @@ public class FlowBuilderTypeInferenceTests
             b.Do(s => s.Value = 100)
         ));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(100, state.Value);
     }
 
@@ -1386,11 +1387,11 @@ public class FlowBuilderTypeInferenceTests
         ));
 
         // まだ有効化されていない
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
 
         // 有効化
         state.IsEnabled = true;
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(200, state.Value);
     }
 
@@ -1405,7 +1406,7 @@ public class FlowBuilderTypeInferenceTests
             b.Do(s => s.Log.Add("Done"))
         ));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(300, state.Value);
         Assert.Contains("Done", state.Log);
     }
@@ -1422,7 +1423,7 @@ public class FlowBuilderTypeInferenceTests
             b.Do(s => s.Value = 100)
         ));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(100, state.Value);
         Assert.Contains("Enter", state.Log);
         Assert.Contains("Exit:Success", state.Log);
@@ -1457,7 +1458,7 @@ public class FlowBuilderTypeInferenceTests
             b.Do(s => s.Log.Add("End"))
         ));
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(50, state.Value);
         Assert.Equal(new[] { "Start", "Branch B", "Scope:Enter", "Guarded", "Scope:Exit", "End" }, state.Log);
     }
@@ -1470,17 +1471,17 @@ public class FlowBuilderTypeInferenceTests
         var tree = new FlowTree();
         tree.Build(state, b => b.Sequence(
             b.Do(s => s.Log.Add("Typed")),  // 型付き
-            b.Wait(0.1f),                    // ステートレス
+            b.Wait(new TickDuration(2)),                    // ステートレス (2 ticks to complete)
             b.Repeat(2, b.Do(s => s.Value++)),  // 型付き + ステートレスデコレータ
-            b.Timeout(5.0f, b.Do(s => s.Log.Add("Inside Timeout")))
+            b.Timeout(new TickDuration(50), b.Do(s => s.Log.Add("Inside Timeout")))
         ));
 
-        // Wait中
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.05f));
+        // Wait中 (1 tick elapsed, need 2)
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Single(state.Log);
 
         // Wait完了、Repeat + Timeout も同一 Tick で完了
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.1f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(2, state.Value);
         Assert.Contains("Inside Timeout", state.Log);
     }
@@ -1501,7 +1502,7 @@ public class FlowBuilderTypeInferenceTests
                 b.Do(s => s.Log.Add($"Value={s.Value}"))
             ));
 
-        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(1));
         Assert.Equal(999, state.Value);
         Assert.Contains("Value=999", state.Log);
     }

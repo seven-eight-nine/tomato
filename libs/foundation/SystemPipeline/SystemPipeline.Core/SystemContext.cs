@@ -1,28 +1,24 @@
 using System.Threading;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 
 namespace Tomato.SystemPipeline;
 
 /// <summary>
 /// システム実行時のコンテキスト情報。
-/// 各システムの処理メソッドに渡され、フレーム情報やキャンセル制御を提供します。
+/// 各システムの処理メソッドに渡され、tick情報やキャンセル制御を提供します。
 /// </summary>
 public readonly struct SystemContext
 {
     /// <summary>
-    /// 前フレームからの経過時間（秒）。
+    /// 前回からの経過tick数。
     /// </summary>
-    public readonly float DeltaTime;
+    public readonly int DeltaTicks;
 
     /// <summary>
-    /// パイプライン開始からの累積時間（秒）。
+    /// 現在のゲームティック。
     /// </summary>
-    public readonly float TotalTime;
-
-    /// <summary>
-    /// フレームカウント。
-    /// </summary>
-    public readonly int FrameCount;
+    public readonly GameTick CurrentTick;
 
     /// <summary>
     /// キャンセルトークン。
@@ -39,28 +35,25 @@ public readonly struct SystemContext
     /// <summary>
     /// SystemContextを作成します。
     /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
-    /// <param name="totalTime">累積時間（秒）</param>
-    /// <param name="frameCount">フレームカウント</param>
+    /// <param name="deltaTicks">経過tick数</param>
+    /// <param name="currentTick">現在のゲームティック</param>
     /// <param name="cancellationToken">キャンセルトークン</param>
-    public SystemContext(float deltaTime, float totalTime, int frameCount, CancellationToken cancellationToken)
-        : this(deltaTime, totalTime, frameCount, cancellationToken, null)
+    public SystemContext(int deltaTicks, GameTick currentTick, CancellationToken cancellationToken)
+        : this(deltaTicks, currentTick, cancellationToken, null)
     {
     }
 
     /// <summary>
     /// SystemContextを作成します。
     /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
-    /// <param name="totalTime">累積時間（秒）</param>
-    /// <param name="frameCount">フレームカウント</param>
+    /// <param name="deltaTicks">経過tick数</param>
+    /// <param name="currentTick">現在のゲームティック</param>
     /// <param name="cancellationToken">キャンセルトークン</param>
     /// <param name="queryCache">クエリキャッシュ</param>
-    public SystemContext(float deltaTime, float totalTime, int frameCount, CancellationToken cancellationToken, QueryCache queryCache)
+    public SystemContext(int deltaTicks, GameTick currentTick, CancellationToken cancellationToken, QueryCache queryCache)
     {
-        DeltaTime = deltaTime;
-        TotalTime = totalTime;
-        FrameCount = frameCount;
+        DeltaTicks = deltaTicks;
+        CurrentTick = currentTick;
         CancellationToken = cancellationToken;
         QueryCache = queryCache;
     }

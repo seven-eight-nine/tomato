@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.FlowTree;
 
@@ -43,7 +44,7 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     /// <summary>
     /// WaitUntilノードを作成する（間隔評価）。
     /// </summary>
-    public WaitUntilNode<T> WaitUntil(FlowCondition<T> condition, float interval) => new(condition, interval);
+    public WaitUntilNode<T> WaitUntil(FlowCondition<T> condition, TickDuration interval) => new(condition, interval);
 
     // =====================================================
     // Typed Decorator Factories
@@ -175,12 +176,12 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     /// <summary>
     /// Timeoutノードを作成する。
     /// </summary>
-    public TimeoutNode Timeout(float duration, IFlowNode child) => Flow.Timeout(duration, child);
+    public TimeoutNode Timeout(TickDuration timeout, IFlowNode child) => Flow.Timeout(timeout, child);
 
     /// <summary>
     /// Delayノードを作成する。
     /// </summary>
-    public DelayNode Delay(float duration, IFlowNode child) => Flow.Delay(duration, child);
+    public DelayNode Delay(TickDuration delay, IFlowNode child) => Flow.Delay(delay, child);
 
     // =====================================================
     // Stateless Leaf Factories (delegates to Flow)
@@ -204,7 +205,7 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     /// <summary>
     /// Waitノードを作成する。
     /// </summary>
-    public WaitNode Wait(float duration) => Flow.Wait(duration);
+    public WaitNode Wait(TickDuration duration) => Flow.Wait(duration);
 
     /// <summary>
     /// Yieldノードを作成する。
@@ -265,5 +266,5 @@ public sealed class FlowBuilder<T> where T : class, IFlowState
     /// <summary>
     /// WaitUntilノードを作成する（ステートレス、間隔評価）。
     /// </summary>
-    public WaitUntilNode WaitUntil(FlowCondition condition, float interval) => Flow.WaitUntil(condition, interval);
+    public WaitUntilNode WaitUntil(FlowCondition condition, TickDuration interval) => Flow.WaitUntil(condition, interval);
 }

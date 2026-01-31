@@ -47,11 +47,11 @@ public interface IResourceState
     bool HasAmount(string resourceId, float amount);
 
     /// <summary>
-    /// クールダウンの残り時間を取得する（秒）。
+    /// クールダウンの残りtick数を取得する。
     /// </summary>
     /// <param name="cooldownId">クールダウンID</param>
-    /// <returns>残り時間。クールダウンが存在しない or 完了済みの場合は 0</returns>
-    float GetCooldown(string cooldownId);
+    /// <returns>残りtick数。クールダウンが存在しない or 完了済みの場合は 0</returns>
+    int GetCooldown(string cooldownId);
 
     /// <summary>
     /// クールダウンが完了しているか判定する。
@@ -91,7 +91,7 @@ public sealed class SimpleResourceState : IResourceState
     // ===========================================
 
     private readonly Dictionary<string, ResourceValue> _resources = new();
-    private readonly Dictionary<string, float> _cooldowns = new();
+    private readonly Dictionary<string, int> _cooldowns = new();
 
     // ===========================================
     // リソース操作
@@ -127,22 +127,22 @@ public sealed class SimpleResourceState : IResourceState
     /// <summary>
     /// クールダウンを開始する。
     /// </summary>
-    public void StartCooldown(string cooldownId, float duration)
+    public void StartCooldown(string cooldownId, int durationTicks)
     {
-        _cooldowns[cooldownId] = duration;
+        _cooldowns[cooldownId] = durationTicks;
     }
 
     /// <summary>
-    /// クールダウンを更新する（毎フレーム呼ぶ）。
+    /// クールダウンを更新する（毎tick呼ぶ）。
     /// </summary>
-    public void Update(float deltaTime)
+    public void Update(int deltaTicks)
     {
         var keysToRemove = new List<string>();
         var keys = new List<string>(_cooldowns.Keys);
 
         foreach (var key in keys)
         {
-            _cooldowns[key] -= deltaTime;
+            _cooldowns[key] -= deltaTicks;
             if (_cooldowns[key] <= 0)
             {
                 keysToRemove.Add(key);
@@ -186,9 +186,9 @@ public sealed class SimpleResourceState : IResourceState
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public float GetCooldown(string cooldownId)
+    public int GetCooldown(string cooldownId)
     {
-        return _cooldowns.TryGetValue(cooldownId, out var remaining) ? Math.Max(0, remaining) : 0f;
+        return _cooldowns.TryGetValue(cooldownId, out var remaining) ? Math.Max(0, remaining) : 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -210,6 +210,6 @@ public sealed class EmptyResourceState : IResourceState
     public float GetMaxValue(string resourceId) => 0f;
     public float GetRatio(string resourceId) => 0f;
     public bool HasAmount(string resourceId, float amount) => false;
-    public float GetCooldown(string cooldownId) => 0f;
+    public int GetCooldown(string cooldownId) => 0;
     public bool IsCooldownReady(string cooldownId) => true;
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Tomato.Time;
 
 namespace Tomato.StatusEffectSystem
 {

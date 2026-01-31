@@ -1,4 +1,5 @@
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -12,7 +13,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Failure, inverter.Tick(ref ctx));
     }
 
@@ -23,7 +24,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Failure)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Success, inverter.Tick(ref ctx));
     }
 
@@ -34,7 +35,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Running)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Running, inverter.Tick(ref ctx));
     }
 
@@ -45,7 +46,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Failure)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Success, succeeder.Tick(ref ctx));
     }
 
@@ -56,7 +57,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Failure, failer.Tick(ref ctx));
     }
 
@@ -68,7 +69,7 @@ public class DecoratorNodeTests
             new ActionNode(() => { callCount++; return NodeStatus.Success; })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Success, repeat.Tick(ref ctx));
         Assert.Equal(3, callCount);
     }
@@ -85,7 +86,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Failure, repeat.Tick(ref ctx));
         Assert.Equal(2, callCount);
     }
@@ -102,7 +103,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: Running（Successで継続）
         Assert.Equal(NodeStatus.Running, repeat.Tick(ref ctx));
@@ -129,7 +130,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: Running（Failureで継続）
         Assert.Equal(NodeStatus.Running, repeat.Tick(ref ctx));
@@ -156,7 +157,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目失敗 → Running
         Assert.Equal(NodeStatus.Running, retry.Tick(ref ctx));
@@ -179,7 +180,7 @@ public class DecoratorNodeTests
             new ActionNode(() => { callCount++; return NodeStatus.Failure; })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目失敗
         Assert.Equal(NodeStatus.Running, retry.Tick(ref ctx));
@@ -197,11 +198,11 @@ public class DecoratorNodeTests
     [Fact]
     public void TimeoutNode_Timeouts()
     {
-        var timeout = new TimeoutNode(0.5f,
+        var timeout = new TimeoutNode(new TickDuration(5),
             new ActionNode(static () => NodeStatus.Running)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.2f };
+        var ctx = new FlowContext { DeltaTicks = 2 };
 
         // 0.2秒経過
         Assert.Equal(NodeStatus.Running, timeout.Tick(ref ctx));
@@ -216,11 +217,11 @@ public class DecoratorNodeTests
     [Fact]
     public void TimeoutNode_CompletesBeforeTimeout()
     {
-        var timeout = new TimeoutNode(1.0f,
+        var timeout = new TimeoutNode(new TickDuration(10),
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Success, timeout.Tick(ref ctx));
     }
 
@@ -228,11 +229,11 @@ public class DecoratorNodeTests
     public void DelayNode_DelaysExecution()
     {
         int callCount = 0;
-        var delay = new DelayNode(0.5f,
+        var delay = new DelayNode(new TickDuration(5),
             new ActionNode(() => { callCount++; return NodeStatus.Success; })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.2f };
+        var ctx = new FlowContext { DeltaTicks = 2 };
 
         // 0.2秒経過（遅延中）
         Assert.Equal(NodeStatus.Running, delay.Tick(ref ctx));
@@ -258,7 +259,7 @@ public class DecoratorNodeTests
             new ActionNode(() => { callCount++; return NodeStatus.Success; })
         );
 
-        var ctx = new FlowContext { State = state, DeltaTime = 0.1f };
+        var ctx = new FlowContext { State = state, DeltaTicks = 1 };
 
         // 条件がfalse
         Assert.Equal(NodeStatus.Failure, guard.Tick(ref ctx));
@@ -280,7 +281,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Running)
         );
 
-        var ctx = new FlowContext { State = state, DeltaTime = 0.1f };
+        var ctx = new FlowContext { State = state, DeltaTicks = 1 };
 
         // 条件がtrue → Running
         Assert.Equal(NodeStatus.Running, guard.Tick(ref ctx));
@@ -304,7 +305,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: OnEnterが発火
         eventNode.Tick(ref ctx);
@@ -330,7 +331,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: Running、OnEnterが発火
         eventNode.Tick(ref ctx);
@@ -356,7 +357,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         eventNode.Tick(ref ctx);
         Assert.Equal(1, exitCount);
@@ -378,7 +379,7 @@ public class DecoratorNodeTests
             })
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: Running、OnExitは発火しない
         eventNode.Tick(ref ctx);
@@ -400,7 +401,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         eventNode.Tick(ref ctx);
         Assert.Equal(1, enterCount);
@@ -416,7 +417,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Failure)
         );
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Failure, eventNode.Tick(ref ctx));
     }
 
@@ -439,7 +440,7 @@ public class DecoratorNodeTests
             )
         );
 
-        tree.Tick(0.016f);
+        tree.Tick(1);
 
         Assert.Equal(1, enterCount);
         Assert.Equal(1, exitCount);
@@ -463,7 +464,7 @@ public class DecoratorNodeTests
             )
         );
 
-        tree.Tick(0.016f);
+        tree.Tick(1);
 
         Assert.Equal(1, enterCount);
         Assert.Equal(2, actionCount);
@@ -490,17 +491,17 @@ public class DecoratorNodeTests
         );
 
         // 1回目: Running、OnEnter発火
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(1, enterCount);
         Assert.Equal(0, exitCount);
 
         // 2回目: Running、イベント発火なし
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(1, enterCount);
         Assert.Equal(0, exitCount);
 
         // 3回目: Success、OnExit発火
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(1, enterCount);
         Assert.Equal(1, exitCount);
     }
@@ -519,7 +520,7 @@ public class DecoratorNodeTests
             new ActionNode(static () => NodeStatus.Success)
         );
 
-        var ctx = new FlowContext { State = state, DeltaTime = 0.1f };
+        var ctx = new FlowContext { State = state, DeltaTicks = 1 };
 
         eventNode.Tick(ref ctx);
         Assert.Equal(1, state.Counter);
@@ -542,7 +543,7 @@ public class DecoratorNodeTests
                 )
             );
 
-        tree.Tick(0.016f);
+        tree.Tick(1);
 
         Assert.Equal(11, state.Counter);
     }
@@ -560,8 +561,8 @@ public class LeafNodeAdditionalTests
     [Fact]
     public void WaitNode_Waits()
     {
-        var wait = new WaitNode(0.5f);
-        var ctx = new FlowContext { DeltaTime = 0.2f };
+        var wait = new WaitNode(new TickDuration(5));
+        var ctx = new FlowContext { DeltaTicks = 2 };
 
         Assert.Equal(NodeStatus.Running, wait.Tick(ref ctx));
         Assert.Equal(NodeStatus.Running, wait.Tick(ref ctx));
@@ -572,7 +573,7 @@ public class LeafNodeAdditionalTests
     public void YieldNode_YieldsOnce()
     {
         var yield = new YieldNode();
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         Assert.Equal(NodeStatus.Running, yield.Tick(ref ctx));
         Assert.Equal(NodeStatus.Success, yield.Tick(ref ctx));
@@ -581,14 +582,14 @@ public class LeafNodeAdditionalTests
     [Fact]
     public void SuccessNode_AlwaysSuccess()
     {
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Success, SuccessNode.Instance.Tick(ref ctx));
     }
 
     [Fact]
     public void FailureNode_AlwaysFailure()
     {
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
         Assert.Equal(NodeStatus.Failure, FailureNode.Instance.Tick(ref ctx));
     }
 }

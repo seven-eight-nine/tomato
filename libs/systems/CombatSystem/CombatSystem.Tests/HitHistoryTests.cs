@@ -11,7 +11,7 @@ public class HitHistoryTests
         var history = new HitHistory();
         var target = new MockDamageReceiver("Target");
 
-        var result = history.CanHit(1, target, 0f, 0);
+        var result = history.CanHit(1, target, 0,0);
 
         Assert.True(result);
     }
@@ -23,7 +23,7 @@ public class HitHistoryTests
         var target = new MockDamageReceiver("Target");
         history.RecordHit(1, target);
 
-        var result = history.CanHit(1, target, 0f, 2);  // limit=2
+        var result = history.CanHit(1, target, 0,2);  // limit=2
 
         Assert.True(result);
     }
@@ -36,7 +36,7 @@ public class HitHistoryTests
         history.RecordHit(1, target);
         history.RecordHit(1, target);
 
-        var result = history.CanHit(1, target, 0f, 2);  // limit=2
+        var result = history.CanHit(1, target, 0,2);  // limit=2
 
         Assert.False(result);
     }
@@ -52,7 +52,7 @@ public class HitHistoryTests
             history.RecordHit(1, target);
         }
 
-        var result = history.CanHit(1, target, 0f, 0);  // limit=0 (unlimited)
+        var result = history.CanHit(1, target, 0,0);  // limit=0 (unlimited)
 
         Assert.True(result);
     }
@@ -65,8 +65,8 @@ public class HitHistoryTests
         var target2 = new MockDamageReceiver("Target2");
         history.RecordHit(1, target1);
 
-        var result1 = history.CanHit(1, target1, 0f, 1);
-        var result2 = history.CanHit(1, target2, 0f, 1);
+        var result1 = history.CanHit(1, target1, 0,1);
+        var result2 = history.CanHit(1, target2, 0,1);
 
         Assert.False(result1);  // target1は上限到達
         Assert.True(result2);   // target2は未ヒット
@@ -79,8 +79,8 @@ public class HitHistoryTests
         var target = new MockDamageReceiver("Target");
         history.RecordHit(1, target);
 
-        var result1 = history.CanHit(1, target, 0f, 1);
-        var result2 = history.CanHit(2, target, 0f, 1);
+        var result1 = history.CanHit(1, target, 0,1);
+        var result2 = history.CanHit(2, target, 0,1);
 
         Assert.False(result1);  // group1は上限到達
         Assert.True(result2);   // group2は未ヒット
@@ -93,7 +93,7 @@ public class HitHistoryTests
         var target = new MockDamageReceiver("Target");
         history.RecordHit(1, target);
 
-        var result = history.CanHit(1, target, 1.0f, 0);  // interval=1秒
+        var result = history.CanHit(1, target, 10,0);  // interval=10 ticks
 
         Assert.False(result);  // 時間が経過していない
     }
@@ -104,9 +104,9 @@ public class HitHistoryTests
         var history = new HitHistory();
         var target = new MockDamageReceiver("Target");
         history.RecordHit(1, target);
-        history.Update(2.0f);  // 2秒経過
+        history.Tick(20);  // 2秒経過
 
-        var result = history.CanHit(1, target, 1.0f, 0);  // interval=1秒
+        var result = history.CanHit(1, target, 10,0);  // interval=10 ticks
 
         Assert.True(result);
     }
@@ -120,7 +120,7 @@ public class HitHistoryTests
 
         history.Clear();
 
-        var result = history.CanHit(1, target, 0f, 1);
+        var result = history.CanHit(1, target, 0,1);
         Assert.True(result);
     }
 
@@ -134,8 +134,8 @@ public class HitHistoryTests
 
         history.ClearHitGroup(1);
 
-        var result1 = history.CanHit(1, target, 0f, 1);
-        var result2 = history.CanHit(2, target, 0f, 1);
+        var result1 = history.CanHit(1, target, 0,1);
+        var result2 = history.CanHit(2, target, 0,1);
         Assert.True(result1);   // group1はクリアされた
         Assert.False(result2);  // group2は残っている
     }
@@ -149,11 +149,11 @@ public class HitHistoryTests
         history.RecordHit(1, target1);
         history.RecordHit(1, target2);
 
-        history.Update(5.0f);
+        history.Tick(50);
 
         // 両方とも時間が経過している
-        Assert.True(history.CanHit(1, target1, 1.0f, 0));
-        Assert.True(history.CanHit(1, target2, 1.0f, 0));
+        Assert.True(history.CanHit(1, target1, 10,0));
+        Assert.True(history.CanHit(1, target2, 10,0));
     }
 
     [Fact]

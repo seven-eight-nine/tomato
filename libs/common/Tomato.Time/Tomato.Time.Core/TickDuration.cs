@@ -1,6 +1,6 @@
 using System;
 
-namespace Tomato.StatusEffectSystem
+namespace Tomato.Time
 {
     /// <summary>
     /// ティック単位の持続時間
@@ -21,6 +21,14 @@ namespace Tomato.StatusEffectSystem
         {
             if (a.IsInfinite || b.IsInfinite) return Infinite;
             long sum = (long)a.Value + b.Value;
+            if (sum > int.MaxValue) return Infinite;
+            return new TickDuration((int)sum);
+        }
+
+        public static TickDuration operator +(TickDuration a, int ticks)
+        {
+            if (a.IsInfinite) return Infinite;
+            long sum = (long)a.Value + ticks;
             if (sum > int.MaxValue) return Infinite;
             return new TickDuration((int)sum);
         }

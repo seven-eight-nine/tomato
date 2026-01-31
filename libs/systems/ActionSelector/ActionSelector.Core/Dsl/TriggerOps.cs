@@ -29,8 +29,8 @@ public readonly struct ComposableTrigger : IInputTrigger<InputState>
     public bool IsTriggered(in InputState input) => _inner.IsTriggered(in input);
     public void OnJudgmentStart() => _inner.OnJudgmentStart();
     public void OnJudgmentStop() => _inner.OnJudgmentStop();
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
-        => _inner.OnJudgmentUpdate(in input, deltaTime);
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
+        => _inner.OnJudgmentUpdate(in input, deltaTicks);
 
     /// <summary>
     /// AND合成（両方成立）。

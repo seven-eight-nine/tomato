@@ -77,9 +77,9 @@ public class ActionStateMachineTests
         var action = CreateAction("Attack1", TestCategory.Upper, 30);
 
         machine.StartAction(TestCategory.Upper, action);
-        machine.Update(0.016f);
+        machine.Tick(1);
 
-        Assert.Equal(1, action.ElapsedFrames);
+        Assert.Equal(1, action.ElapsedTicks);
     }
 
     [Fact]
@@ -90,13 +90,13 @@ public class ActionStateMachineTests
 
         machine.StartAction(TestCategory.Upper, action);
 
-        machine.Update(0.016f); // Frame 1
+        machine.Tick(1); // Frame 1
         Assert.NotNull(machine.GetCurrentAction(TestCategory.Upper));
 
-        machine.Update(0.016f); // Frame 2
+        machine.Tick(1); // Frame 2
         Assert.NotNull(machine.GetCurrentAction(TestCategory.Upper));
 
-        machine.Update(0.016f); // Frame 3 = TotalFrames -> Complete
+        machine.Tick(1); // Frame 3 = TotalFrames -> Complete
         Assert.Null(machine.GetCurrentAction(TestCategory.Upper));
     }
 
@@ -145,7 +145,7 @@ public class ActionStateMachineTests
 
         for (int i = 0; i < 5; i++)
         {
-            machine.Update(0.016f);
+            machine.Tick(1);
         }
 
         Assert.True(machine.CanCancel(TestCategory.Upper)); // Frame 5
@@ -163,11 +163,11 @@ public class ActionStateMachineTests
         machine.StartAction(TestCategory.Upper, action);
         Assert.True(executor.OnActionStartCalled);
 
-        machine.Update(0.016f);
-        Assert.True(executor.OnActionUpdateCalled);
+        machine.Tick(1);
+        Assert.True(executor.OnActionTickCalled);
 
-        machine.Update(0.016f);
-        machine.Update(0.016f); // Complete
+        machine.Tick(1);
+        machine.Tick(1); // Complete
         Assert.True(executor.OnActionEndCalled);
     }
 
@@ -181,10 +181,10 @@ public class ActionStateMachineTests
         machine.StartAction(TestCategory.Upper, upperAction);
         machine.StartAction(TestCategory.Lower, lowerAction);
 
-        machine.Update(0.016f);
+        machine.Tick(1);
 
-        Assert.Equal(1, upperAction.ElapsedFrames);
-        Assert.Equal(1, lowerAction.ElapsedFrames);
+        Assert.Equal(1, upperAction.ElapsedTicks);
+        Assert.Equal(1, lowerAction.ElapsedTicks);
     }
 
     #region Helper Classes
@@ -207,8 +207,7 @@ public class ActionStateMachineTests
         public string ActionId { get; }
         public string Label => ActionId;
         public TestCategory Category { get; }
-        public float ElapsedTime { get; private set; }
-        public int ElapsedFrames { get; private set; }
+        public int ElapsedTicks { get; private set; }
         public bool IsComplete => false;
         public bool CanCancel => true;
         public IMotionData? MotionData => null;
@@ -224,18 +223,18 @@ public class ActionStateMachineTests
 
         public void OnEnter() => OnEnterCalled = true;
         public void OnExit() => OnExitCalled = true;
-        public void Update(float deltaTime) => ElapsedFrames++;
+        public void Tick(int deltaTicks) => ElapsedTicks++;
         public ReadOnlySpan<Tomato.ActionSelector.IActionJudgment<TestCategory, Tomato.ActionSelector.InputState, Tomato.ActionSelector.GameState>> GetTransitionableJudgments() => default;
     }
 
     private class TestableExecutor : IActionExecutor<TestCategory>
     {
         public bool OnActionStartCalled { get; private set; }
-        public bool OnActionUpdateCalled { get; private set; }
+        public bool OnActionTickCalled { get; private set; }
         public bool OnActionEndCalled { get; private set; }
 
         public void OnActionStart(IExecutableAction<TestCategory> action) => OnActionStartCalled = true;
-        public void OnActionUpdate(IExecutableAction<TestCategory> action, float deltaTime) => OnActionUpdateCalled = true;
+        public void OnActionTick(IExecutableAction<TestCategory> action, int deltaTicks) => OnActionTickCalled = true;
         public void OnActionEnd(IExecutableAction<TestCategory> action) => OnActionEndCalled = true;
     }
 

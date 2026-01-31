@@ -36,7 +36,7 @@ public sealed class MotionState : IState<MotionContext>
     /// </summary>
     public void OnEnter(MotionContext context)
     {
-        context.ResetFrames();
+        context.ResetTicks();
         context.CurrentMotionState = this;
         context.Executor?.OnMotionStart(Definition.MotionId);
     }
@@ -51,16 +51,16 @@ public sealed class MotionState : IState<MotionContext>
     }
 
     /// <summary>
-    /// 状態の更新処理。
+    /// tick処理。
     /// </summary>
-    public void OnUpdate(MotionContext context, float deltaTime)
+    public void OnTick(MotionContext context, int deltaTicks)
     {
-        context.AdvanceFrame();
+        context.AdvanceTicks(deltaTicks);
 
         // Timelineをクエリ
-        Definition.Timeline.Query(context.ElapsedFrames, 1, context.QueryContext);
+        Definition.Timeline.Query(context.ElapsedTicks, deltaTicks, context.QueryContext);
 
-        context.Executor?.OnMotionUpdate(Definition.MotionId, context.ElapsedFrames, deltaTime);
+        context.Executor?.OnMotionTick(Definition.MotionId, context.ElapsedTicks, deltaTicks);
     }
 
     /// <summary>
@@ -68,6 +68,6 @@ public sealed class MotionState : IState<MotionContext>
     /// </summary>
     public bool IsComplete(MotionContext context)
     {
-        return context.ElapsedFrames >= Definition.TotalFrames;
+        return context.ElapsedTicks >= Definition.TotalFrames;
     }
 }

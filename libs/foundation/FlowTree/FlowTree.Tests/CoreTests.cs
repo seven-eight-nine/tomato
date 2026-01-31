@@ -1,4 +1,5 @@
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -80,7 +81,7 @@ public class CoreTests
                 })
             );
 
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(11, state.Counter);
     }
 
@@ -91,11 +92,11 @@ public class CoreTests
         var tree = new FlowTree();
         tree.Build(state, Condition<TestState>(s => s.IsEnabled));
 
-        Assert.Equal(NodeStatus.Failure, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, tree.Tick(1));
 
         state.IsEnabled = true;
         tree.Reset();
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
     }
 
     private class TestState : IFlowState

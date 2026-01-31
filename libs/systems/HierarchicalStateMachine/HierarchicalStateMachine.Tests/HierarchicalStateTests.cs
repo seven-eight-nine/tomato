@@ -18,7 +18,7 @@ public class HierarchicalStateTests
 
         public override void OnEnter(TestContext context) => context.EnterCount++;
         public override void OnExit(TestContext context) => context.ExitCount++;
-        public override void OnUpdate(TestContext context, float deltaTime) => context.UpdateCount++;
+        public override void OnTick(TestContext context, int deltaTicks) => context.UpdateCount++;
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class HierarchicalStateTests
     }
 
     [Fact]
-    public void OnUpdate_WithSubGraph_UpdatesCurrentSubState()
+    public void OnTick_WithSubGraph_UpdatesCurrentSubState()
     {
         var context = new TestContext();
         var subGraph = new StateGraph<TestContext>();
@@ -84,7 +84,7 @@ public class HierarchicalStateTests
 
         var state = new HierarchicalState<TestContext>("Parent", subGraph, "Child1");
         state.OnEnter(context);
-        state.OnUpdate(context, 0.016f);
+        state.OnTick(context, 1);
 
         Assert.Equal(1, context.UpdateCount);
     }

@@ -125,10 +125,10 @@ public class MovementSystem : IParallelSystem
     }
 }
 
-// パイプライン実行
+// パイプライン実行（tickベース）
 var group = new SystemGroup(collisionSystem, messageSystem, decisionSystem);
 var pipeline = new Pipeline(registry);
-pipeline.Execute(group, deltaTime);
+pipeline.Execute(group, deltaTicks);  // 1 tick = アプリ定義の時間単位
 ```
 
 ### EntityManager（EntityHandleSystem内）
@@ -172,8 +172,8 @@ tree.Build(state)
     .End()
     .Complete();
 
-// 実行
-var status = tree.Tick(0.016f);
+// 実行（tickベース）
+var status = tree.Tick(deltaTicks);
 
 // State注入でサブツリーに専用Stateを渡せる
 public class ParentState : IFlowState
@@ -235,8 +235,8 @@ var graph = MotionBasedActionController<ActionCategory>.BuildGraphFromRegistry(
 var controller = new MotionBasedActionController<ActionCategory>(graph, registry);
 controller.Initialize("Idle", ActionCategory.Upper);
 
-// フレーム更新
-controller.Update(deltaTime);
+// tick更新
+controller.Tick(deltaTicks);
 
 // キャンセル遷移を試みる
 if (controller.IsInCancelWindow())

@@ -39,11 +39,11 @@ public class MotionStateMachineTests
         var machine = new MotionStateMachine(graph);
         machine.Initialize("Motion1");
 
-        machine.Update(0.016f);
-        Assert.Equal(1, machine.ElapsedFrames);
+        machine.Tick(1);
+        Assert.Equal(1, machine.ElapsedTicks);
 
-        machine.Update(0.016f);
-        Assert.Equal(2, machine.ElapsedFrames);
+        machine.Tick(1);
+        Assert.Equal(2, machine.ElapsedTicks);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class MotionStateMachineTests
         // Move to frame 60 (TotalFrames)
         for (int i = 0; i < 60; i++)
         {
-            machine.Update(0.016f);
+            machine.Tick(1);
         }
 
         Assert.True(machine.IsCurrentMotionComplete());
@@ -155,7 +155,7 @@ public class MotionStateMachineTests
         return new StateGraph<MotionContext>()
             .AddState(motion1)
             .AddState(motion2)
-            .AddTransition(new Transition<MotionContext>("Motion1", "Motion2", 1f, MotionTransitionCondition.AfterFrame(30)));
+            .AddTransition(new Transition<MotionContext>("Motion1", "Motion2", 1f, MotionTransitionCondition.AfterTick(30)));
     }
 
     private static MotionState CreateMotionState(string motionId, int totalFrames)
@@ -172,7 +172,7 @@ public class MotionStateMachineTests
     private class TestMotionExecutor : IMotionExecutor
     {
         public bool OnMotionStartCalled { get; private set; }
-        public bool OnMotionUpdateCalled { get; private set; }
+        public bool OnMotionTickCalled { get; private set; }
         public bool OnMotionEndCalled { get; private set; }
         public string? LastMotionId { get; private set; }
 
@@ -182,9 +182,9 @@ public class MotionStateMachineTests
             LastMotionId = motionId;
         }
 
-        public void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime)
+        public void OnMotionTick(string motionId, int elapsedTicks, int deltaTicks)
         {
-            OnMotionUpdateCalled = true;
+            OnMotionTickCalled = true;
             LastMotionId = motionId;
         }
 
@@ -197,7 +197,7 @@ public class MotionStateMachineTests
         public void Reset()
         {
             OnMotionStartCalled = false;
-            OnMotionUpdateCalled = false;
+            OnMotionTickCalled = false;
             OnMotionEndCalled = false;
             LastMotionId = null;
         }

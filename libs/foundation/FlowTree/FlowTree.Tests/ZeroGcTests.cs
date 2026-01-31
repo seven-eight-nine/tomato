@@ -1,5 +1,6 @@
 using System;
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -38,7 +39,7 @@ public class ZeroGcTests
                         Action(static () => NodeStatus.Success)
                     ),
                     SubTree(subTree),
-                    Wait(0.1f)
+                    Wait(new TickDuration(1))
                 )
             );
 
@@ -46,7 +47,7 @@ public class ZeroGcTests
         for (int i = 0; i < 100; i++)
         {
             tree.Reset();
-            tree.Tick(0.05f);
+            tree.Tick(1);
         }
 
         // GCアロケーション計測
@@ -59,7 +60,7 @@ public class ZeroGcTests
             // Tick数回でツリーが完了するまで
             for (int t = 0; t < 10; t++)
             {
-                var status = tree.Tick(0.016f);
+                var status = tree.Tick(1);
                 if (status != NodeStatus.Running)
                     break;
             }
@@ -222,7 +223,7 @@ public class ZeroGcTests
         for (int i = 0; i < 100; i++)
         {
             tree.Reset();
-            tree.Tick(0.016f);
+            tree.Tick(1);
         }
 
         // GCアロケーション計測
@@ -231,7 +232,7 @@ public class ZeroGcTests
         for (int i = 0; i < 10000; i++)
         {
             tree.Reset();
-            tree.Tick(0.016f);
+            tree.Tick(1);
         }
 
         long allocatedAfter = GetAllocatedBytes();

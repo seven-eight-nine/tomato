@@ -1,24 +1,25 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using Tomato.EntityHandleSystem;
 
 namespace Tomato.SystemPipeline.Query;
 
 /// <summary>
-/// クエリ結果をフレーム内でキャッシュするクラス。
-/// 同じフレーム内で同じクエリが実行された場合、キャッシュから結果を返します。
+/// クエリ結果をtick内でキャッシュするクラス。
+/// 同じtick内で同じクエリが実行された場合、キャッシュから結果を返します。
 /// スレッドセーフです。
 /// </summary>
 public sealed class QueryCache
 {
     private readonly ConcurrentDictionary<IEntityQuery, IReadOnlyList<AnyHandle>> _cache;
-    private volatile int _lastFrameCount;
-    private readonly object _frameLock = new();
+    private long _lastTick;
+    private readonly object _tickLock = new();
 
     public QueryCache()
     {
         _cache = new ConcurrentDictionary<IEntityQuery, IReadOnlyList<AnyHandle>>();
-        _lastFrameCount = -1;
+        _lastTick = -1;
     }
 
     /// <summary>
@@ -26,23 +27,23 @@ public sealed class QueryCache
     /// </summary>
     /// <param name="query">実行するクエリ</param>
     /// <param name="registry">エンティティレジストリ</param>
-    /// <param name="frameCount">現在のフレーム番号</param>
+    /// <param name="currentTick">現在のtick</param>
     /// <returns>クエリ結果のエンティティリスト</returns>
     public IReadOnlyList<AnyHandle> GetOrExecute(
         IEntityQuery query,
         IEntityRegistry registry,
-        int frameCount)
+        long currentTick)
     {
-        // フレームが変わったらキャッシュをクリア
-        if (frameCount != _lastFrameCount)
+        // tickが変わったらキャッシュをクリア
+        if (currentTick != Interlocked.Read(ref _lastTick))
         {
-            lock (_frameLock)
+            lock (_tickLock)
             {
                 // ダブルチェック
-                if (frameCount != _lastFrameCount)
+                if (currentTick != Interlocked.Read(ref _lastTick))
                 {
                     _cache.Clear();
-                    _lastFrameCount = frameCount;
+                    Interlocked.Exchange(ref _lastTick, currentTick);
                 }
             }
         }
@@ -69,10 +70,10 @@ public sealed class QueryCache
     /// </summary>
     public void Clear()
     {
-        lock (_frameLock)
+        lock (_tickLock)
         {
             _cache.Clear();
-            _lastFrameCount = -1;
+            Interlocked.Exchange(ref _lastTick, -1);
         }
     }
 }

@@ -1,4 +1,5 @@
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -58,7 +59,7 @@ public class RecursionTests
                 )
             );
 
-        var status = treeA.Tick(0.016f);
+        var status = treeA.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal("ABC", state.Order);
@@ -101,7 +102,7 @@ public class RecursionTests
         }
 
         trees[0].WithCallStack(new FlowCallStack(32));
-        var status = trees[0].Tick(0.016f);
+        var status = trees[0].Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(depth, state.Counter);
@@ -148,7 +149,7 @@ public class RecursionTests
                 )
             );
 
-        var status = factorialTree.Tick(0.016f);
+        var status = factorialTree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(120, state.Result); // 5! = 120
@@ -187,7 +188,7 @@ public class RecursionTests
                 )
             );
 
-        var status = countdownTree.Tick(0.016f);
+        var status = countdownTree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal("321Done", state.Log);
@@ -242,7 +243,7 @@ public class RecursionTests
                 )
             );
 
-        var status = treeA.Tick(0.016f);
+        var status = treeA.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal("ABABAB", state.Log);
@@ -276,7 +277,7 @@ public class RecursionTests
             .WithCallStack(new FlowCallStack(maxDepth))
             .WithMaxCallDepth(maxDepth);
 
-        var status = trees[0].Tick(0.016f);
+        var status = trees[0].Tick(1);
 
         // 深度制限によりFailure
         Assert.Equal(NodeStatus.Failure, status);
@@ -304,7 +305,7 @@ public class RecursionTests
             .WithCallStack(new FlowCallStack(maxDepth))
             .WithMaxCallDepth(maxDepth);
 
-        var status = trees[0].Tick(0.016f);
+        var status = trees[0].Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
     }
@@ -339,7 +340,7 @@ public class RecursionTests
         int iterations = 0;
         do
         {
-            status = iterativeTree.Tick(0.016f);
+            status = iterativeTree.Tick(1);
             iterations++;
         } while (status == NodeStatus.Running && iterations < 100);
 
@@ -370,7 +371,7 @@ public class RecursionTests
         int iterations = 0;
         do
         {
-            status = retryTree.Tick(0.016f);
+            status = retryTree.Tick(1);
             iterations++;
         } while (status == NodeStatus.Running && iterations < 100);
 
@@ -411,12 +412,12 @@ public class RecursionTests
             .Build(state, SubTree(subTree));
 
         // 1回目のTick: phase=1, YieldでRunning
-        var status1 = mainTree.Tick(0.016f);
+        var status1 = mainTree.Tick(1);
         Assert.Equal(NodeStatus.Running, status1);
         Assert.Equal(1, state.Phase);
 
         // 2回目のTick: YieldNode完了後、phase=2, Success
-        var status2 = mainTree.Tick(0.016f);
+        var status2 = mainTree.Tick(1);
         Assert.Equal(NodeStatus.Success, status2);
         Assert.Equal(2, state.Phase);
     }
@@ -485,12 +486,12 @@ public class RecursionTests
             );
 
         // 1回目: A(1) → B(2) → C(3) → Yield → Running
-        var status1 = treeA.Tick(0.016f);
+        var status1 = treeA.Tick(1);
         Assert.Equal(NodeStatus.Running, status1);
         Assert.Equal(3, state.Stage);
 
         // 2回目: C(4) → B(5) → A(6) → Success
-        var status2 = treeA.Tick(0.016f);
+        var status2 = treeA.Tick(1);
         Assert.Equal(NodeStatus.Success, status2);
         Assert.Equal(6, state.Stage);
     }

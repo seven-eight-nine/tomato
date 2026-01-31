@@ -1,5 +1,6 @@
 using System.Threading;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 
 namespace Tomato.SystemPipeline;
 
@@ -38,8 +39,8 @@ namespace Tomato.SystemPipeline;
 ///         _pipeline = new Pipeline(registry);
 ///     }
 ///
-///     void Update() => _pipeline.Execute(_updateGroup, Time.deltaTime);
-///     void LateUpdate() => _pipeline.Execute(_lateUpdateGroup, Time.deltaTime);
+///     void Update() => _pipeline.Execute(_updateGroup, deltaTicks: 1);
+///     void LateUpdate() => _pipeline.Execute(_lateUpdateGroup, deltaTicks: 1);
 /// }
 /// </code>
 /// </example>
@@ -48,19 +49,13 @@ public sealed class Pipeline
 {
     private readonly IEntityRegistry _registry;
     private readonly QueryCache _queryCache;
-    private float _totalTime;
-    private int _frameCount;
+    private GameTick _currentTick;
     private CancellationTokenSource _cancellationTokenSource;
 
     /// <summary>
-    /// 累積時間（秒）を取得します。
+    /// 現在のゲームティックを取得します。
     /// </summary>
-    public float TotalTime => _totalTime;
-
-    /// <summary>
-    /// フレームカウントを取得します。
-    /// </summary>
-    public int FrameCount => _frameCount;
+    public GameTick CurrentTick => _currentTick;
 
     /// <summary>
     /// Pipelineを作成します。
@@ -71,22 +66,21 @@ public sealed class Pipeline
         _registry = registry;
         _queryCache = new QueryCache();
         _cancellationTokenSource = new CancellationTokenSource();
+        _currentTick = GameTick.Zero;
     }
 
     /// <summary>
     /// ISystemGroupを実行します。
     /// </summary>
     /// <param name="group">実行するグループ</param>
-    /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
-    public void Execute(ISystemGroup group, float deltaTime)
+    /// <param name="deltaTicks">経過tick数（デフォルト: 1）</param>
+    public void Execute(ISystemGroup group, int deltaTicks = 1)
     {
-        _totalTime += deltaTime;
-        _frameCount++;
+        _currentTick = _currentTick + deltaTicks;
 
         var context = new SystemContext(
-            deltaTime,
-            _totalTime,
-            _frameCount,
+            deltaTicks,
+            _currentTick,
             _cancellationTokenSource.Token,
             _queryCache);
 
@@ -94,12 +88,11 @@ public sealed class Pipeline
     }
 
     /// <summary>
-    /// 時間とフレームカウントをリセットします。
+    /// tickとキャッシュをリセットします。
     /// </summary>
     public void Reset()
     {
-        _totalTime = 0;
-        _frameCount = 0;
+        _currentTick = GameTick.Zero;
         _queryCache.Clear();
         _cancellationTokenSource.Cancel();
         _cancellationTokenSource.Dispose();

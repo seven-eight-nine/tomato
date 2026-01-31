@@ -1,4 +1,5 @@
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -308,11 +309,11 @@ public class LeafNodeTests
         tree.Build(WaitUntil(() => loaded));
 
         // まだロードされていない
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
 
         // ロード完了
         loaded = true;
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
     }
 
     [Fact]
@@ -324,11 +325,11 @@ public class LeafNodeTests
         tree.Build(state, WaitUntil<TestState>(s => s.IsEnabled));
 
         // まだ有効化されていない
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
 
         // 有効化
         state.IsEnabled = true;
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
     }
 
     [Fact]
@@ -341,9 +342,9 @@ public class LeafNodeTests
         {
             checkCount++;
             return conditionMet;
-        }, interval: 0.5f);
+        }, interval: new TickDuration(5));
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目: チェックされる
         Assert.Equal(NodeStatus.Running, node.Tick(ref ctx));
@@ -373,9 +374,9 @@ public class LeafNodeTests
         {
             checkCount++;
             return false;
-        }, interval: 1.0f);
+        }, interval: new TickDuration(10));
 
-        var ctx = new FlowContext { DeltaTime = 0.1f };
+        var ctx = new FlowContext { DeltaTicks = 1 };
 
         // 1回目
         node.Tick(ref ctx);
@@ -447,7 +448,7 @@ public class LeafNodeTests
             )
         );
 
-        var status = tree.Tick(0.016f);
+        var status = tree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(1, exitCount);  // onExitが発火された
@@ -479,7 +480,7 @@ public class LeafNodeTests
             )
         );
 
-        var status = mainTree.Tick(0.016f);
+        var status = mainTree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(1, exitCount);  // サブツリー内のonExitが発火された
@@ -491,17 +492,17 @@ public class LeafNodeTests
         // ReturnSuccess
         var tree1 = new FlowTree();
         tree1.Build(ReturnSuccess());
-        Assert.Equal(NodeStatus.Success, tree1.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree1.Tick(1));
 
         // ReturnFailure
         var tree2 = new FlowTree();
         tree2.Build(ReturnFailure());
-        Assert.Equal(NodeStatus.Failure, tree2.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, tree2.Tick(1));
 
         // Return with status
         var tree3 = new FlowTree();
         tree3.Build(Return(NodeStatus.Failure));
-        Assert.Equal(NodeStatus.Failure, tree3.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, tree3.Tick(1));
     }
 
     [Fact]
@@ -515,7 +516,7 @@ public class LeafNodeTests
             b.ReturnSuccess()
         ));
 
-        var status = tree.Tick(0.016f);
+        var status = tree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(42, state.Value);
@@ -546,12 +547,12 @@ public class LeafNodeTests
         );
 
         // 1回目: Running状態に入る（WaitUntilとActionが両方Running）
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(1, enterCount);
         Assert.Equal(0, exitCount);
 
         // 2回目: まだRunning
-        Assert.Equal(NodeStatus.Running, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, tree.Tick(1));
         Assert.Equal(1, enterCount);  // 再度enterは呼ばれない
         Assert.Equal(0, exitCount);
 
@@ -559,7 +560,7 @@ public class LeafNodeTests
         shouldReturn = true;
 
         // 3回目: WaitUntilが成功→ReturnSuccessで終了、ScopeのonExitが発火
-        Assert.Equal(NodeStatus.Success, tree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree.Tick(1));
         Assert.Equal(1, enterCount);
         Assert.Equal(1, exitCount);  // onExitが発火された
     }

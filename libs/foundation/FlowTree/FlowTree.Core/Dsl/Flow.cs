@@ -1,3 +1,5 @@
+using Tomato.Time;
+
 namespace Tomato.FlowTree;
 
 /// <summary>
@@ -45,8 +47,8 @@ public static class Flow
     /// <summary>
     /// Waitノードを作成する。
     /// </summary>
-    /// <param name="duration">待機時間（秒）</param>
-    public static WaitNode Wait(float duration)
+    /// <param name="duration">待機tick数</param>
+    public static WaitNode Wait(TickDuration duration)
         => new(duration);
 
     /// <summary>
@@ -212,17 +214,17 @@ public static class Flow
     /// <summary>
     /// Timeoutノードを作成する。
     /// </summary>
-    /// <param name="timeout">タイムアウト時間（秒）</param>
+    /// <param name="timeout">タイムアウトtick数</param>
     /// <param name="child">子ノード</param>
-    public static TimeoutNode Timeout(float timeout, IFlowNode child)
+    public static TimeoutNode Timeout(TickDuration timeout, IFlowNode child)
         => new(timeout, child);
 
     /// <summary>
     /// Delayノードを作成する。
     /// </summary>
-    /// <param name="delay">遅延時間（秒）</param>
+    /// <param name="delay">遅延tick数</param>
     /// <param name="child">子ノード</param>
-    public static DelayNode Delay(float delay, IFlowNode child)
+    public static DelayNode Delay(TickDuration delay, IFlowNode child)
         => new(delay, child);
 
     /// <summary>
@@ -269,8 +271,8 @@ public static class Flow
     /// 条件が満たされるまで待機する。
     /// </summary>
     /// <param name="condition">待機条件（trueで待機終了）</param>
-    /// <param name="interval">チェック間隔（秒）</param>
-    public static WaitUntilNode WaitUntil(FlowCondition condition, float interval)
+    /// <param name="interval">チェック間隔（tick数）</param>
+    public static WaitUntilNode WaitUntil(FlowCondition condition, TickDuration interval)
         => new(condition, interval);
 
     /// <summary>
@@ -288,8 +290,8 @@ public static class Flow
     /// </summary>
     /// <typeparam name="T">状態の型</typeparam>
     /// <param name="condition">待機条件（trueで待機終了）</param>
-    /// <param name="interval">チェック間隔（秒）</param>
-    public static WaitUntilNode<T> WaitUntil<T>(FlowCondition<T> condition, float interval) where T : class, IFlowState
+    /// <param name="interval">チェック間隔（tick数）</param>
+    public static WaitUntilNode<T> WaitUntil<T>(FlowCondition<T> condition, TickDuration interval) where T : class, IFlowState
         => new(condition, interval);
 
     /// <summary>

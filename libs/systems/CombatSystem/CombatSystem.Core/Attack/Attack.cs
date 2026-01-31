@@ -12,7 +12,7 @@ public partial struct Attack
     internal AttackInfo? Info;
     internal int ResolvedHitGroup;
     internal int HitCount;
-    internal float ElapsedTime;
+    internal int ElapsedTicks;
 
     /// <summary>攻撃情報を取得。</summary>
     [HandleableMethod]
@@ -27,17 +27,17 @@ public partial struct Attack
     [HandleableMethod]
     public void RecordHit() => HitCount++;
 
-    /// <summary>経過時間を更新。</summary>
+    /// <summary>経過tickを更新。</summary>
     [HandleableMethod]
-    public void UpdateTime(float deltaTime) => ElapsedTime += deltaTime;
+    public void UpdateTicks(int deltaTicks) => ElapsedTicks += deltaTicks;
 
     /// <summary>現在のヒット数。</summary>
     [HandleableMethod]
     public int GetHitCount() => HitCount;
 
-    /// <summary>経過時間。</summary>
+    /// <summary>経過tick。</summary>
     [HandleableMethod]
-    public float GetElapsedTime() => ElapsedTime;
+    public int GetElapsedTicks() => ElapsedTicks;
 
     /// <summary>解決済みHitGroup。</summary>
     [HandleableMethod]

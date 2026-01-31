@@ -54,15 +54,15 @@ public class HierarchicalState<TContext> : StateBase<TContext>, IHierarchicalSta
         base.OnExit(context);
     }
 
-    public override void OnUpdate(TContext context, float deltaTime)
+    public override void OnTick(TContext context, int deltaTicks)
     {
-        base.OnUpdate(context, deltaTime);
+        base.OnTick(context, deltaTicks);
 
-        // サブグラフの現在状態を更新
+        // サブグラフの現在状態をtick
         if (CurrentSubStateId.HasValue && SubGraph != null)
         {
             var currentSubState = SubGraph.GetState(CurrentSubStateId.Value);
-            currentSubState?.OnUpdate(context, deltaTime);
+            currentSubState?.OnTick(context, deltaTicks);
         }
     }
 

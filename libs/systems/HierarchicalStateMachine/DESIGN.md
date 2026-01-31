@@ -53,7 +53,7 @@ public class PatrolState : StateBase<AIContext>
         // パトロール開始処理
     }
 
-    public override void OnUpdate(AIContext ctx, float deltaTime)
+    public override void OnTick(AIContext ctx, int deltaTicks)
     {
         // パトロール中の更新処理
     }
@@ -91,10 +91,10 @@ var context = new AIContext();
 sm.Initialize("Patrol", context);
 
 // ゲームループ
-void Update(float deltaTime)
+void Tick(int deltaTicks)
 {
     // 状態を更新
-    sm.Update(context, deltaTime);
+    sm.Tick(context, deltaTicks);
 
     // 条件が変わったらパスを再計画
     if (context.HasTarget && sm.CurrentStateId == "Patrol")
@@ -116,7 +116,7 @@ void Update(float deltaTime)
 
 | 用語 | 英語 | 定義 |
 |------|------|------|
-| **状態** | State | エージェントの振る舞いを定義するノード。OnEnter/OnExit/OnUpdateを持つ。 |
+| **状態** | State | エージェントの振る舞いを定義するノード。OnEnter/OnExit/OnTickを持つ。 |
 | **遷移** | Transition | 状態間の接続。コストと条件を持つ。 |
 | **状態グラフ** | StateGraph | 状態と遷移のネットワーク。有向グラフ構造。 |
 | **パス** | Path | 開始状態からゴール状態への遷移の列。 |
@@ -224,7 +224,7 @@ public interface IState<TContext>
     void OnExit(TContext context);
 
     /// <summary>状態の更新処理。</summary>
-    void OnUpdate(TContext context, float deltaTime);
+    void OnTick(TContext context, int deltaTicks);
 }
 ```
 
@@ -243,7 +243,7 @@ public abstract class StateBase<TContext> : IState<TContext>
     // デフォルトは空実装
     public virtual void OnEnter(TContext context) { }
     public virtual void OnExit(TContext context) { }
-    public virtual void OnUpdate(TContext context, float deltaTime) { }
+    public virtual void OnTick(TContext context, int deltaTicks) { }
 }
 ```
 
@@ -266,7 +266,7 @@ public class PatrolState : StateBase<AIContext>
         ctx.Agent.SetDestination(_waypoints[0]);
     }
 
-    public override void OnUpdate(AIContext ctx, float deltaTime)
+    public override void OnTick(AIContext ctx, int deltaTicks)
     {
         if (ctx.Agent.HasReachedDestination)
         {
@@ -652,11 +652,11 @@ CombatState.OnEnter(context)
     └─ YES → WindUp.OnEnter(context)
               CurrentSubStateId = "WindUp"
 
-CombatState.OnUpdate(context, deltaTime)
+CombatState.OnTick(context, deltaTicks)
 │
 ├─ 親状態の更新処理
 │
-└─ CurrentSubState?.OnUpdate(context, deltaTime)
+└─ CurrentSubState?.OnTick(context, deltaTicks)
 
 CombatState.OnExit(context)
 │
@@ -886,10 +886,10 @@ sm.ForceTransitionTo("Dead", context);
 ### 更新
 
 ```csharp
-void Update(float deltaTime)
+void Tick(int deltaTicks)
 {
-    sm.Update(context, deltaTime);
-    // → CurrentState.OnUpdate(context, deltaTime)
+    sm.Tick(context, deltaTicks);
+    // → CurrentState.OnTick(context, deltaTicks)
 }
 ```
 
@@ -1054,9 +1054,9 @@ public class EnemyAI
         _sm.Initialize("Patrol", _context);
     }
 
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        _sm.Update(_context, deltaTime);
+        _sm.Tick(_context, deltaTicks);
 
         // 状態に応じた行動計画
         if (ShouldReplan())

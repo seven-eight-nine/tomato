@@ -1,62 +1,63 @@
 using System.Collections.Generic;
 using System.Linq;
+using Tomato.Time;
 
 namespace Tomato.CombatSystem;
 
 /// <summary>
 /// ヒット履歴を管理し、多段ヒットを制御する。
 ///
-/// (HitGroup, Target) のペアごとにヒット回数と最終ヒット時刻を記録する。
+/// (HitGroup, Target) のペアごとにヒット回数と最終ヒットtickを記録する。
 /// CombatManager.AttackTo が CanHit で判定し、成功時に RecordHit で記録する。
 ///
 /// <example>
-/// 多段ヒット攻撃の例（0.2秒間隔で最大5回ヒット）:
+/// 多段ヒット攻撃の例（12tick間隔で最大5回ヒット）:
 /// <code>
 /// // AttackInfo側
-/// info.IntervalTime = 0.2f;
+/// info.IntervalTicks = 12;
 /// info.HittableCount = 5;
 ///
-/// // 毎フレーム
-/// receiver.GetHitHistory().Update(deltaTime);
+/// // 毎tick
+/// receiver.GetHitHistory().Tick(deltaTicks);
 /// </code>
 /// </example>
 ///
 /// <example>
 /// 1回だけヒットする攻撃:
 /// <code>
-/// info.HittableCount = 1;  // IntervalTime不要
+/// info.HittableCount = 1;  // IntervalTicks不要
 /// </code>
 /// </example>
 /// </summary>
 public class HitHistory
 {
     private readonly Dictionary<HitHistoryKey, HitHistoryEntry> _history = new();
-    private readonly float _autoCleanupInterval;
-    private float _currentTime;
+    private readonly int _autoCleanupInterval;
+    private int _currentTick;
 
     /// <param name="autoCleanupInterval">
-    /// この秒数より古い履歴を Update 時に自動削除する。デフォルト10秒。
+    /// このtick数より古い履歴を Update 時に自動削除する。デフォルト600tick。
     /// </param>
-    public HitHistory(float autoCleanupInterval = 10f)
+    public HitHistory(int autoCleanupInterval = 600)
     {
         _autoCleanupInterval = autoCleanupInterval;
     }
 
     /// <summary>
-    /// 内部時刻。Update で加算される。
-    /// IntervalTime の経過判定に使う。
+    /// 内部tick。Tick で加算される。
+    /// IntervalTicks の経過判定に使う。
     /// </summary>
-    public float CurrentTime => _currentTime;
+    public int CurrentTick => _currentTick;
 
     /// <summary>
-    /// 内部時刻を進め、古い履歴を削除する。
+    /// 内部tickを進め、古い履歴を削除する。
     ///
-    /// IntervalTime を使う攻撃がある場合は毎フレーム呼ぶ。
-    /// 呼ばないと内部時刻が進まず、IntervalTime 経過後の再ヒットが発生しない。
+    /// IntervalTicks を使う攻撃がある場合は毎tick呼ぶ。
+    /// 呼ばないと内部tickが進まず、IntervalTicks 経過後の再ヒットが発生しない。
     /// </summary>
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks)
     {
-        _currentTime += deltaTime;
+        _currentTick += deltaTicks;
         CleanupExpired();
     }
 
@@ -66,14 +67,14 @@ public class HitHistory
     /// 判定ロジック:
     /// 1. 履歴がない → true
     /// 2. hittableCount > 0 で、既に hittableCount 回ヒット済み → false
-    /// 3. intervalTime > 0 で、前回ヒットから intervalTime 秒経っていない → false
+    /// 3. intervalTicks > 0 で、前回ヒットから intervalTicks tick経っていない → false
     /// 4. それ以外 → true
     /// </summary>
     /// <param name="hitGroup">攻撃のHitGroup。同じ値を持つ攻撃は履歴を共有する。</param>
     /// <param name="target">攻撃対象</param>
-    /// <param name="intervalTime">再ヒット間隔（秒）。0以下だとチェックしない。</param>
+    /// <param name="intervalTicks">再ヒット間隔（tick）。0以下だとチェックしない。</param>
     /// <param name="hittableCount">最大ヒット数。0だと無制限。</param>
-    public bool CanHit(int hitGroup, IDamageReceiver target, float intervalTime, int hittableCount)
+    public bool CanHit(int hitGroup, IDamageReceiver target, int intervalTicks, int hittableCount)
     {
         var key = new HitHistoryKey(hitGroup, target);
 
@@ -83,7 +84,7 @@ public class HitHistory
         if (hittableCount > 0 && entry.HitCount >= hittableCount)
             return false;
 
-        if (intervalTime > 0 && (_currentTime - entry.LastHitTime) < intervalTime)
+        if (intervalTicks > 0 && (_currentTick - entry.LastHitTick) < intervalTicks)
             return false;
 
         return true;
@@ -100,7 +101,7 @@ public class HitHistory
         if (_history.TryGetValue(key, out var entry))
         {
             entry.HitCount++;
-            entry.LastHitTime = _currentTime;
+            entry.LastHitTick = _currentTick;
             _history[key] = entry;
         }
         else
@@ -108,7 +109,7 @@ public class HitHistory
             _history[key] = new HitHistoryEntry
             {
                 HitCount = 1,
-                LastHitTime = _currentTime
+                LastHitTick = _currentTick
             };
         }
     }
@@ -143,7 +144,7 @@ public class HitHistory
     private void CleanupExpired()
     {
         var keysToRemove = _history
-            .Where(kv => (_currentTime - kv.Value.LastHitTime) > _autoCleanupInterval)
+            .Where(kv => (_currentTick - kv.Value.LastHitTick) > _autoCleanupInterval)
             .Select(kv => kv.Key)
             .ToList();
 

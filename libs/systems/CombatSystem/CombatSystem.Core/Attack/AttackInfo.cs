@@ -32,22 +32,22 @@ public abstract class AttackInfo
     public int HitGroup { get; set; }
 
     /// <summary>
-    /// 再ヒット間隔（秒）。
+    /// 再ヒット間隔（tick）。
     ///
-    /// 前回ヒットからこの秒数が経過するまで、同一ターゲットに再ヒットしない。
+    /// 前回ヒットからこのtick数が経過するまで、同一ターゲットに再ヒットしない。
     /// 0以下だとチェックしない（HittableCount のみで制御）。
     ///
-    /// 使う場合は HitHistory.Update を毎フレーム呼ぶこと。
+    /// 使う場合は HitHistory.Update を毎tick呼ぶこと。
     ///
     /// <example>
-    /// 0.2秒間隔で最大5回ヒットする攻撃:
+    /// 12tick間隔で最大5回ヒットする攻撃:
     /// <code>
-    /// info.IntervalTime = 0.2f;
+    /// info.IntervalTicks = 12;
     /// info.HittableCount = 5;
     /// </code>
     /// </example>
     /// </summary>
-    public float IntervalTime { get; set; }
+    public int IntervalTicks { get; set; }
 
     /// <summary>
     /// 同一ターゲットへの最大ヒット数。

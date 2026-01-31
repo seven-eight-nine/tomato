@@ -32,7 +32,7 @@ public interface ICondition<TContext>
 /// <remarks>
 /// ライフサイクル:
 /// 1. OnJudgmentStart() - ジャッジメントがアクティブになった時（1回）
-/// 2. OnJudgmentUpdate() - 毎フレーム（アクティブな間）
+/// 2. OnJudgmentUpdate() - 毎tick（アクティブな間）
 /// 3. OnJudgmentStop() - ジャッジメントが非アクティブになった時（1回）
 /// </remarks>
 public interface IInputTrigger<TInput>
@@ -53,9 +53,9 @@ public interface IInputTrigger<TInput>
     void OnJudgmentStop();
 
     /// <summary>
-    /// 毎フレーム呼ばれる。
+    /// 毎tick呼ばれる。
     /// </summary>
-    void OnJudgmentUpdate(in TInput input, float deltaTime);
+    void OnJudgmentUpdate(in TInput input, int deltaTicks);
 }
 
 /// <summary>
@@ -204,7 +204,7 @@ public sealed class AlwaysTrigger<TInput> : IInputTrigger<TInput>
 
     public void OnJudgmentStart() { }
     public void OnJudgmentStop() { }
-    public void OnJudgmentUpdate(in TInput input, float deltaTime) { }
+    public void OnJudgmentUpdate(in TInput input, int deltaTicks) { }
 }
 
 /// <summary>
@@ -220,7 +220,7 @@ public sealed class NeverTrigger<TInput> : IInputTrigger<TInput>
 
     public void OnJudgmentStart() { }
     public void OnJudgmentStop() { }
-    public void OnJudgmentUpdate(in TInput input, float deltaTime) { }
+    public void OnJudgmentUpdate(in TInput input, int deltaTicks) { }
 }
 
 /// <summary>
@@ -345,10 +345,10 @@ public sealed class AllTrigger<TInput> : IInputTrigger<TInput>
             _triggers[i].OnJudgmentStop();
     }
 
-    public void OnJudgmentUpdate(in TInput input, float deltaTime)
+    public void OnJudgmentUpdate(in TInput input, int deltaTicks)
     {
         for (int i = 0; i < _triggers.Length; i++)
-            _triggers[i].OnJudgmentUpdate(in input, deltaTime);
+            _triggers[i].OnJudgmentUpdate(in input, deltaTicks);
     }
 }
 
@@ -387,10 +387,10 @@ public sealed class AnyTrigger<TInput> : IInputTrigger<TInput>
             _triggers[i].OnJudgmentStop();
     }
 
-    public void OnJudgmentUpdate(in TInput input, float deltaTime)
+    public void OnJudgmentUpdate(in TInput input, int deltaTicks)
     {
         for (int i = 0; i < _triggers.Length; i++)
-            _triggers[i].OnJudgmentUpdate(in input, deltaTime);
+            _triggers[i].OnJudgmentUpdate(in input, deltaTicks);
     }
 }
 

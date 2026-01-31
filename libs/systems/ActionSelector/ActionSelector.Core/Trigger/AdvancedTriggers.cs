@@ -7,13 +7,13 @@ namespace Tomato.ActionSelector;
 /// 段階的チャージトリガー。
 ///
 /// ボタンを押し続けてチャージし、離した瞬間に発動する。
-/// 複数のチャージレベルを持ち、チャージ時間に応じてレベルが上がる。
+/// 複数のチャージレベルを持ち、チャージtick数に応じてレベルが上がる。
 /// </summary>
 /// <remarks>
 /// 使用例:
 /// <code>
-/// // 0.5秒でLv1、1.0秒でLv2、2.0秒でLv3
-/// var trigger = Triggers.Charge(ButtonType.Attack, 0.5f, 1.0f, 2.0f);
+/// // 30tickでLv1、60tickでLv2、120tickでLv3
+/// var trigger = Triggers.Charge(ButtonType.Attack, 30, 60, 120);
 /// </code>
 ///
 /// パフォーマンス:
@@ -27,9 +27,9 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
     // ===========================================
 
     private readonly ButtonType _button;
-    private readonly float[] _thresholds;
+    private readonly int[] _thresholds;
 
-    private float _chargeTime;
+    private int _chargeTicks;
     private int _chargeLevel;
     private bool _released;
 
@@ -41,8 +41,8 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
     /// チャージトリガーを生成する。
     /// </summary>
     /// <param name="button">チャージするボタン</param>
-    /// <param name="thresholds">各チャージレベルの閾値（秒）。昇順で指定。</param>
-    public ChargeTrigger(ButtonType button, float[] thresholds)
+    /// <param name="thresholds">各チャージレベルの閾値（tick）。昇順で指定。</param>
+    public ChargeTrigger(ButtonType button, int[] thresholds)
     {
         _button = button;
         _thresholds = thresholds ?? throw new ArgumentNullException(nameof(thresholds));
@@ -63,9 +63,9 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
     public int MaxChargeLevel => _thresholds.Length;
 
     /// <summary>
-    /// 現在のチャージ時間（秒）。
+    /// 現在のチャージtick数。
     /// </summary>
-    public float ChargeTime => _chargeTime;
+    public int ChargeTicks => _chargeTicks;
 
     // ===========================================
     // IInputTrigger 実装
@@ -80,29 +80,29 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
 
     public void OnJudgmentStart()
     {
-        _chargeTime = 0f;
+        _chargeTicks = 0;
         _chargeLevel = 0;
         _released = false;
     }
 
     public void OnJudgmentStop()
     {
-        _chargeTime = 0f;
+        _chargeTicks = 0;
         _chargeLevel = 0;
         _released = false;
     }
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
         if (input.IsHeld(_button))
         {
             // チャージ中
-            _chargeTime += deltaTime;
+            _chargeTicks += deltaTicks;
             _released = false;
 
             // レベルアップ判定
             while (_chargeLevel < _thresholds.Length &&
-                   _chargeTime >= _thresholds[_chargeLevel])
+                   _chargeTicks >= _thresholds[_chargeLevel])
             {
                 _chargeLevel++;
             }
@@ -117,7 +117,7 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
             // リリース後の次フレームでリセット
             if (_released)
             {
-                _chargeTime = 0f;
+                _chargeTicks = 0;
                 _chargeLevel = 0;
                 _released = false;
             }
@@ -128,17 +128,17 @@ public sealed class ChargeTrigger : IInputTrigger<InputState>
 /// <summary>
 /// 連打トリガー。
 ///
-/// 指定時間内に指定回数ボタンを押すとトリガー。
+/// 指定tick数内に指定回数ボタンを押すとトリガー。
 /// </summary>
 /// <remarks>
 /// 使用例:
 /// <code>
-/// // 1秒以内に3回押す
-/// var trigger = Triggers.Mash(ButtonType.Attack, 3, 1.0f);
+/// // 60tick以内に3回押す
+/// var trigger = Triggers.Mash(ButtonType.Attack, 3, 60);
 /// </code>
 ///
 /// パフォーマンス:
-/// - リングバッファで押下時刻を管理
+/// - リングバッファで押下tick時刻を管理
 /// - 古い記録は自動的に上書き
 /// </remarks>
 public sealed class MashTrigger : IInputTrigger<InputState>
@@ -149,12 +149,12 @@ public sealed class MashTrigger : IInputTrigger<InputState>
 
     private readonly ButtonType _button;
     private readonly int _requiredCount;
-    private readonly float _window;
+    private readonly int _window;
 
-    // リングバッファで押下時刻を記録
-    private readonly float[] _pressTimestamps;
+    // リングバッファで押下tick時刻を記録
+    private readonly int[] _pressTimestamps;
     private int _writeIndex;
-    private float _currentTime;
+    private int _currentTick;
 
     // ===========================================
     // コンストラクタ
@@ -165,8 +165,8 @@ public sealed class MashTrigger : IInputTrigger<InputState>
     /// </summary>
     /// <param name="button">連打するボタン</param>
     /// <param name="requiredCount">必要な押下回数</param>
-    /// <param name="window">判定時間（秒）</param>
-    public MashTrigger(ButtonType button, int requiredCount, float window)
+    /// <param name="window">判定tick数</param>
+    public MashTrigger(ButtonType button, int requiredCount, int window)
     {
         if (requiredCount < 1)
             throw new ArgumentOutOfRangeException(nameof(requiredCount), "requiredCount must be >= 1");
@@ -176,7 +176,7 @@ public sealed class MashTrigger : IInputTrigger<InputState>
         _button = button;
         _requiredCount = requiredCount;
         _window = window;
-        _pressTimestamps = new float[requiredCount];
+        _pressTimestamps = new int[requiredCount];
     }
 
     // ===========================================
@@ -188,7 +188,7 @@ public sealed class MashTrigger : IInputTrigger<InputState>
     {
         // 有効な押下回数をカウント
         int validCount = 0;
-        float threshold = _currentTime - _window;
+        int threshold = _currentTick - _window;
 
         for (int i = 0; i < _pressTimestamps.Length; i++)
         {
@@ -203,24 +203,24 @@ public sealed class MashTrigger : IInputTrigger<InputState>
     {
         Array.Clear(_pressTimestamps, 0, _pressTimestamps.Length);
         _writeIndex = 0;
-        _currentTime = 0f;
+        _currentTick = 0;
     }
 
     public void OnJudgmentStop()
     {
         Array.Clear(_pressTimestamps, 0, _pressTimestamps.Length);
         _writeIndex = 0;
-        _currentTime = 0f;
+        _currentTick = 0;
     }
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
-        _currentTime += deltaTime;
+        _currentTick += deltaTicks;
 
         if (input.IsPressed(_button))
         {
-            // 押下時刻を記録（リングバッファ）
-            _pressTimestamps[_writeIndex] = _currentTime;
+            // 押下tick時刻を記録（リングバッファ）
+            _pressTimestamps[_writeIndex] = _currentTick;
             _writeIndex = (_writeIndex + 1) % _pressTimestamps.Length;
         }
     }
@@ -278,7 +278,7 @@ public sealed class SimultaneousTrigger : IInputTrigger<InputState>
 
     public void OnJudgmentStart() { }
     public void OnJudgmentStop() { }
-    public void OnJudgmentUpdate(in InputState input, float deltaTime) { }
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks) { }
 }
 
 /// <summary>
@@ -300,11 +300,11 @@ public readonly struct CommandInput
     public readonly ButtonType? Button;
 
     /// <summary>
-    /// このステップの最大受付時間（秒）。
+    /// このステップの最大受付tick数。
     /// </summary>
-    public readonly float MaxDuration;
+    public readonly int MaxDuration;
 
-    private CommandInput(Direction? direction, ButtonType? button, float maxDuration)
+    private CommandInput(Direction? direction, ButtonType? button, int maxDuration)
     {
         Direction = direction;
         Button = button;
@@ -314,19 +314,19 @@ public readonly struct CommandInput
     /// <summary>
     /// 方向のみのステップ。
     /// </summary>
-    public static CommandInput Dir(Direction direction, float maxDuration = 0.2f)
+    public static CommandInput Dir(Direction direction, int maxDuration = 12)
         => new(direction, null, maxDuration);
 
     /// <summary>
     /// ボタンのみのステップ。
     /// </summary>
-    public static CommandInput Btn(ButtonType button, float maxDuration = 0.1f)
+    public static CommandInput Btn(ButtonType button, int maxDuration = 6)
         => new(null, button, maxDuration);
 
     /// <summary>
     /// 方向+ボタンのステップ。
     /// </summary>
-    public static CommandInput DirBtn(Direction direction, ButtonType button, float maxDuration = 0.15f)
+    public static CommandInput DirBtn(Direction direction, ButtonType button, int maxDuration = 9)
         => new(direction, button, maxDuration);
 }
 
@@ -356,11 +356,11 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
     // ===========================================
 
     private readonly CommandInput[] _sequence;
-    private readonly float _totalWindow;
+    private readonly int _totalWindow;
 
     private int _currentStep;
-    private float _elapsedTime;
-    private float _stepTime;
+    private int _elapsedTicks;
+    private int _stepTicks;
     private bool _completed;
 
     // ===========================================
@@ -371,8 +371,8 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
     /// コマンド入力トリガーを生成する。
     /// </summary>
     /// <param name="sequence">コマンドシーケンス</param>
-    /// <param name="totalWindow">全体の入力受付時間（秒）</param>
-    public CommandTrigger(CommandInput[] sequence, float totalWindow = 0.5f)
+    /// <param name="totalWindow">全体の入力受付tick数</param>
+    public CommandTrigger(CommandInput[] sequence, int totalWindow = 30)
     {
         _sequence = sequence ?? throw new ArgumentNullException(nameof(sequence));
         if (sequence.Length == 0)
@@ -404,15 +404,15 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
     public void OnJudgmentStart() => Reset();
     public void OnJudgmentStop() => Reset();
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
         if (_completed) return;
 
-        _elapsedTime += deltaTime;
-        _stepTime += deltaTime;
+        _elapsedTicks += deltaTicks;
+        _stepTicks += deltaTicks;
 
         // 全体タイムアウト
-        if (_elapsedTime > _totalWindow)
+        if (_elapsedTicks > _totalWindow)
         {
             Reset();
             return;
@@ -420,7 +420,7 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
 
         // 現在のステップのタイムアウト
         if (_currentStep < _sequence.Length &&
-            _stepTime > _sequence[_currentStep].MaxDuration)
+            _stepTicks > _sequence[_currentStep].MaxDuration)
         {
             Reset();
             return;
@@ -442,7 +442,7 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
             if (directionMatch && buttonMatch)
             {
                 _currentStep++;
-                _stepTime = 0f;
+                _stepTicks = 0;
 
                 if (_currentStep >= _sequence.Length)
                 {
@@ -456,8 +456,8 @@ public sealed class CommandTrigger : IInputTrigger<InputState>
     private void Reset()
     {
         _currentStep = 0;
-        _elapsedTime = 0f;
-        _stepTime = 0f;
+        _elapsedTicks = 0;
+        _stepTicks = 0;
         _completed = false;
     }
 }

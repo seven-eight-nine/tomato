@@ -24,5 +24,6 @@
     <ProjectReference Include="..\SystemPipeline.Generator\SystemPipeline.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
     <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Generator\EntityHandleSystem.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+    <ProjectReference Include="..\..\..\common\Tomato.Time\Tomato.Time.Core\Tomato.Time.Core.csproj" />
   </ItemGroup>
 </Project>

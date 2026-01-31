@@ -131,8 +131,8 @@ void Update()
 using static Tomato.ActionSelector.Trig;
 
 Press(Attack)              // ボタン押下
-Hold(Guard, 0.5f)          // 0.5秒以上ホールド
-Charge(Attack, 1f, 2f)     // 段階チャージ
+Hold(Guard, 30)            // 30 tick以上ホールド
+Charge(Attack, 30, 60)     // 段階チャージ（30tickでLv1、60tickでLv2）
 Simultaneous(L1, R1)       // 同時押し
 Always                     // 常に成立（デフォルトアクション用）
 ```

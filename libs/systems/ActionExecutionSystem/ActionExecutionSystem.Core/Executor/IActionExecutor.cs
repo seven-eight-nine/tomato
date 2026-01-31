@@ -10,8 +10,8 @@ public interface IActionExecutor<TCategory> where TCategory : struct, Enum
     /// <summary>アクション開始時。</summary>
     void OnActionStart(IExecutableAction<TCategory> action);
 
-    /// <summary>アクション更新時。</summary>
-    void OnActionUpdate(IExecutableAction<TCategory> action, float deltaTime);
+    /// <summary>アクションtick時。</summary>
+    void OnActionTick(IExecutableAction<TCategory> action, int deltaTicks);
 
     /// <summary>アクション終了時。</summary>
     void OnActionEnd(IExecutableAction<TCategory> action);

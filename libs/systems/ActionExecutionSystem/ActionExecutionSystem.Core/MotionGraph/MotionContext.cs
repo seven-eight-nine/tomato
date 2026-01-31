@@ -14,9 +14,9 @@ public sealed class MotionContext
     public MotionState? CurrentMotionState { get; set; }
 
     /// <summary>
-    /// 現在のモーションの経過フレーム数。
+    /// 現在のモーションの経過tick数。
     /// </summary>
-    public int ElapsedFrames { get; set; }
+    public int ElapsedTicks { get; set; }
 
     /// <summary>
     /// TimelineSystemのクエリ用コンテキスト。
@@ -34,18 +34,18 @@ public sealed class MotionContext
     }
 
     /// <summary>
-    /// フレームをリセットする。
+    /// tickをリセットする。
     /// </summary>
-    public void ResetFrames()
+    public void ResetTicks()
     {
-        ElapsedFrames = 0;
+        ElapsedTicks = 0;
     }
 
     /// <summary>
-    /// フレームを進める。
+    /// tickを進める。
     /// </summary>
-    public void AdvanceFrame()
+    public void AdvanceTicks(int deltaTicks)
     {
-        ElapsedFrames++;
+        ElapsedTicks += deltaTicks;
     }
 }

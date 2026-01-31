@@ -1,30 +1,31 @@
 using System;
 using System.Collections.Generic;
+using Tomato.Time;
 
 namespace Tomato.FlowTree;
 
 /// <summary>
-/// 指定時間待機するノード。
+/// 指定tick数待機するノード。
 /// 再帰呼び出しをサポート（呼び出し深度ごとに状態を管理）。
 /// </summary>
 public sealed class WaitNode : IFlowNode
 {
     private const int InitialCapacity = 4;
 
-    private readonly float _duration;
-    private readonly List<float> _elapsedStack;
+    private readonly TickDuration _duration;
+    private readonly List<int> _elapsedStack;
 
     /// <summary>
     /// WaitNodeを作成する。
     /// </summary>
-    /// <param name="duration">待機時間（秒）</param>
-    public WaitNode(float duration)
+    /// <param name="duration">待機tick数</param>
+    public WaitNode(TickDuration duration)
     {
-        if (duration < 0)
+        if (duration.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(duration), "Duration must be non-negative.");
 
         _duration = duration;
-        _elapsedStack = new List<float>(InitialCapacity) { 0f };
+        _elapsedStack = new List<int>(InitialCapacity) { 0 };
     }
 
     /// <inheritdoc/>
@@ -33,9 +34,9 @@ public sealed class WaitNode : IFlowNode
         int depth = context.CurrentCallDepth;
         EnsureDepth(depth);
 
-        _elapsedStack[depth] += context.DeltaTime;
+        _elapsedStack[depth] += context.DeltaTicks;
 
-        if (_elapsedStack[depth] >= _duration)
+        if (_elapsedStack[depth] >= _duration.Value)
         {
             _elapsedStack[depth] = 0;
             return NodeStatus.Success;
@@ -57,7 +58,7 @@ public sealed class WaitNode : IFlowNode
     {
         while (_elapsedStack.Count <= depth)
         {
-            _elapsedStack.Add(0f);
+            _elapsedStack.Add(0);
         }
     }
 }

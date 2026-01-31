@@ -72,10 +72,10 @@ tree.Build(state,
 );
 ```
 
-### 3. 実行
+### 3. 実行（tickベース）
 
 ```csharp
-var status = tree.Tick(0.016f);
+var status = tree.Tick(deltaTicks);  // 経過tick数を渡す
 // 出力:
 // Step 1
 // Step 2
@@ -253,7 +253,7 @@ var tree = new FlowTree();
 tree.Build(
     Race(
         SubTree(attackTree),
-        Timeout(5.0f, SubTree(patrolTree))
+        Timeout(new TickDuration(300), SubTree(patrolTree))  // 300 tick後にタイムアウト
     )
 );
 ```
@@ -311,7 +311,7 @@ tree.Build(
         result => Console.WriteLine($"終了: {result}"),
         Sequence(
             Action(static () => DoSomething()),
-            Wait(1.0f)
+            Wait(new TickDuration(60))  // 60 tick待機
         )
     )
 );
@@ -326,15 +326,15 @@ tree.Build(state, b => b.Scope(
 
 ### Wait（待機）
 
-時間または条件で待機。
+tick数または条件で待機。
 
 ```csharp
-// 時間待機
+// tick待機
 var tree = new FlowTree();
 tree.Build(
     Sequence(
         Action(static () => ShowMessage()),
-        Wait(2.0f),  // 2秒待機
+        Wait(new TickDuration(120)),  // 120 tick待機
         Action(static () => HideMessage())
     )
 );

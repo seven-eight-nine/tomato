@@ -4,7 +4,7 @@ namespace Tomato.ActionExecutionSystem.MotionGraph;
 
 /// <summary>
 /// モーション専用のステートマシン。
-/// HierarchicalStateMachineをラップし、フレームベースの状態管理を提供。
+/// HierarchicalStateMachineをラップし、tickベースの状態管理を提供。
 /// </summary>
 public sealed class MotionStateMachine
 {
@@ -22,9 +22,9 @@ public sealed class MotionStateMachine
     public MotionState? CurrentMotionState => _context.CurrentMotionState;
 
     /// <summary>
-    /// 経過フレーム数。
+    /// 経過tick数。
     /// </summary>
-    public int ElapsedFrames => _context.ElapsedFrames;
+    public int ElapsedTicks => _context.ElapsedTicks;
 
     /// <summary>
     /// 状態グラフ。
@@ -60,12 +60,12 @@ public sealed class MotionStateMachine
     }
 
     /// <summary>
-    /// フレーム更新。
+    /// tick進行。
     /// </summary>
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks = 1)
     {
         var currentState = _hsm.CurrentState;
-        currentState?.OnUpdate(_context, deltaTime);
+        currentState?.OnTick(_context, deltaTicks);
     }
 
     /// <summary>

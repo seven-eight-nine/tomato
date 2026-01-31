@@ -30,7 +30,7 @@ public class CombatManager
             onSpawn: (ref Attack attack) =>
             {
                 attack.HitCount = 0;
-                attack.ElapsedTime = 0f;
+                attack.ElapsedTicks = 0;
             },
             onDespawn: (ref Attack attack) =>
             {
@@ -121,7 +121,7 @@ public class CombatManager
             if (!hitHistory.CanHit(
                 attack.ResolvedHitGroup,
                 target.Owner,
-                info.IntervalTime,
+                info.IntervalTicks,
                 info.HittableCount))
             {
                 return AttackResult.HitLimitReached;

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -92,7 +93,7 @@ namespace Tomato.SystemPipeline.Tests
             var system3 = new CountingSystem();
             var group = new ParallelSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -112,7 +113,7 @@ namespace Tomato.SystemPipeline.Tests
             var system3 = new CountingSystem();
             var group = new ParallelSystemGroup(system1, system2, system3);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -130,7 +131,7 @@ namespace Tomato.SystemPipeline.Tests
             var system1 = new CountingSystem();
             var group = new ParallelSystemGroup(system1) { IsEnabled = false };
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -146,7 +147,7 @@ namespace Tomato.SystemPipeline.Tests
             var systems = Enumerable.Range(0, 10).Select(_ => new ThreadTrackingSystem()).ToArray();
             var group = new ParallelSystemGroup(systems);
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             group.Execute(registry, in context);
@@ -216,7 +217,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var group = new ParallelSystemGroup();
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act & Assert - Should not throw
             group.Execute(registry, in context);
@@ -272,7 +273,7 @@ namespace Tomato.SystemPipeline.Tests
             mainGroup.Add(physicsSystem);
 
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 1, default);
+            var context = new SystemContext(1, new GameTick(1), default);
 
             // Act
             mainGroup.Execute(registry, in context);
@@ -303,7 +304,7 @@ namespace Tomato.SystemPipeline.Tests
             parallelGroup.Add(serialGroup2);
 
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 1, default);
+            var context = new SystemContext(1, new GameTick(1), default);
 
             // Act
             parallelGroup.Execute(registry, in context);
@@ -342,7 +343,7 @@ namespace Tomato.SystemPipeline.Tests
             outerSerial.Add(system4);
 
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 1, default);
+            var context = new SystemContext(1, new GameTick(1), default);
 
             // Act
             outerSerial.Execute(registry, in context);
@@ -371,7 +372,7 @@ namespace Tomato.SystemPipeline.Tests
             outerSerial.Add(system3);
 
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 1, default);
+            var context = new SystemContext(1, new GameTick(1), default);
 
             // Act
             outerSerial.Execute(registry, in context);
@@ -400,7 +401,7 @@ namespace Tomato.SystemPipeline.Tests
             mainGroup.Add(system3);
 
             // Act
-            pipeline.Execute(mainGroup, 0.016f);
+            pipeline.Execute(mainGroup, 1);
 
             // Assert
             Assert.Equal(3, executionOrder.Count);

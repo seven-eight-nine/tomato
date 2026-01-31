@@ -11,9 +11,9 @@ public interface IMotionExecutor
     void OnMotionStart(string motionId);
 
     /// <summary>
-    /// モーション更新時に呼ばれる。
+    /// モーションtick時に呼ばれる。
     /// </summary>
-    void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime);
+    void OnMotionTick(string motionId, int elapsedTicks, int deltaTicks);
 
     /// <summary>
     /// モーション終了時に呼ばれる。

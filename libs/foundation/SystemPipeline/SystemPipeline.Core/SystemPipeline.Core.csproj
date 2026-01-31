@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SystemPipeline.Attributes\SystemPipeline.Attributes.csproj" />
     <ProjectReference Include="..\..\EntityHandleSystem\EntityHandleSystem.Attributes\EntityHandleSystem.Attributes.csproj" />
+    <ProjectReference Include="..\..\..\common\Tomato.Time\Tomato.Time.Core\Tomato.Time.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.ActionSelector;
 
@@ -19,19 +20,14 @@ public readonly struct GameState
     public readonly IResourceState Resources;
 
     /// <summary>
-    /// 前フレームからの経過時間（秒）。
+    /// 前フレームからの経過tick数。
     /// </summary>
-    public readonly float DeltaTime;
+    public readonly int DeltaTicks;
 
     /// <summary>
-    /// ゲーム開始からの総経過時間（秒）。
+    /// 現在のゲームtick。
     /// </summary>
-    public readonly float TotalTime;
-
-    /// <summary>
-    /// 現在のフレーム番号。
-    /// </summary>
-    public readonly int FrameCount;
+    public readonly GameTick CurrentTick;
 
     /// <summary>
     /// ユーザー定義のフラグ（ビットマスク）。
@@ -41,16 +37,14 @@ public readonly struct GameState
     public GameState(
         InputState input,
         IResourceState? resources = null,
-        float deltaTime = 1f / 60f,
-        float totalTime = 0f,
-        int frameCount = 0,
+        int deltaTicks = 1,
+        GameTick currentTick = default,
         uint flags = 0)
     {
         Input = input;
         Resources = resources ?? EmptyResourceState.Instance;
-        DeltaTime = deltaTime;
-        TotalTime = totalTime;
-        FrameCount = frameCount;
+        DeltaTicks = deltaTicks;
+        CurrentTick = currentTick;
         Flags = flags;
     }
 

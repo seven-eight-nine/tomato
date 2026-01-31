@@ -31,7 +31,7 @@ public class HierarchicalStateMachineTests
             context.LastExitedState = Id.Value;
         }
 
-        public override void OnUpdate(TestContext context, float deltaTime)
+        public override void OnTick(TestContext context, int deltaTicks)
         {
             context.UpdateCount++;
         }
@@ -225,7 +225,7 @@ public class HierarchicalStateMachineTests
         var context = new TestContext();
 
         sm.Initialize("A", context);
-        sm.Update(context, 0.016f);
+        sm.Tick(context, 1);
 
         Assert.Equal(1, context.UpdateCount);
     }

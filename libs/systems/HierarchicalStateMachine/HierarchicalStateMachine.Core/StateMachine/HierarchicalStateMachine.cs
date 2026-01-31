@@ -219,15 +219,15 @@ public class HierarchicalStateMachine<TContext>
     }
 
     /// <summary>
-    /// 現在の状態を更新。
+    /// 現在の状態をtick。
     /// </summary>
-    public void Update(TContext context, float deltaTime)
+    public void Tick(TContext context, int deltaTicks = 1)
     {
         if (!_currentStateId.HasValue)
             return;
 
         var state = _graph.GetState(_currentStateId.Value);
-        state?.OnUpdate(context, deltaTime);
+        state?.OnTick(context, deltaTicks);
     }
 
     /// <summary>

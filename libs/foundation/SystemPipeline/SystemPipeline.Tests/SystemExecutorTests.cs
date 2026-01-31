@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Tomato.EntityHandleSystem;
 using Tomato.SystemPipeline.Query;
+using Tomato.Time;
 using Xunit;
 
 namespace Tomato.SystemPipeline.Tests
@@ -106,7 +107,7 @@ namespace Tomato.SystemPipeline.Tests
             {
                 registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -123,7 +124,7 @@ namespace Tomato.SystemPipeline.Tests
             var system = new CountingSerialSystem { IsEnabled = false };
             var registry = new TestEntityRegistry();
             registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -142,7 +143,7 @@ namespace Tomato.SystemPipeline.Tests
             {
                 registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -157,7 +158,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new CountingParallelSystem();
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act & Assert (should not throw)
             SystemExecutor.Execute(system, registry, in context);
@@ -173,7 +174,7 @@ namespace Tomato.SystemPipeline.Tests
             registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 1, 0));
             registry.AddEntity(new AnyHandle(new MockArena(), 2, 0));
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
@@ -188,7 +189,7 @@ namespace Tomato.SystemPipeline.Tests
             // Arrange
             var system = new UnknownSystem();
             var registry = new TestEntityRegistry();
-            var context = new SystemContext(0.016f, 0, 0, default);
+            var context = new SystemContext(1, new GameTick(0), default);
 
             // Act & Assert
             var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -213,7 +214,7 @@ namespace Tomato.SystemPipeline.Tests
             {
                 registry.AddEntity(new AnyHandle(new MockArena(), i, 0));
             }
-            var context = new SystemContext(0.016f, 0, 0, cts.Token);
+            var context = new SystemContext(1, new GameTick(0), cts.Token);
 
             // Act - cancel after starting
             cts.Cancel();
@@ -255,30 +256,27 @@ namespace Tomato.SystemPipeline.Tests
             var system = new ContextCapturingSystem();
             var registry = new TestEntityRegistry();
             registry.AddEntity(new AnyHandle(new MockArena(), 0, 0));
-            var context = new SystemContext(0.033f, 1.5f, 42, default);
+            var context = new SystemContext(2, new GameTick(42), default);
 
             // Act
             SystemExecutor.Execute(system, registry, in context);
 
             // Assert
-            Assert.Equal(0.033f, system.CapturedDeltaTime);
-            Assert.Equal(1.5f, system.CapturedTotalTime);
-            Assert.Equal(42, system.CapturedFrameCount);
+            Assert.Equal(2, system.CapturedDeltaTicks);
+            Assert.Equal(42, system.CapturedCurrentTick);
         }
 
         private class ContextCapturingSystem : ISerialSystem
         {
             public bool IsEnabled { get; set; } = true;
             public IEntityQuery Query => null;
-            public float CapturedDeltaTime { get; private set; }
-            public float CapturedTotalTime { get; private set; }
-            public int CapturedFrameCount { get; private set; }
+            public int CapturedDeltaTicks { get; private set; }
+            public long CapturedCurrentTick { get; private set; }
 
             public void ProcessSerial(IEntityRegistry registry, IReadOnlyList<AnyHandle> entities, in SystemContext context)
             {
-                CapturedDeltaTime = context.DeltaTime;
-                CapturedTotalTime = context.TotalTime;
-                CapturedFrameCount = context.FrameCount;
+                CapturedDeltaTicks = context.DeltaTicks;
+                CapturedCurrentTick = context.CurrentTick.Value;
             }
         }
     }

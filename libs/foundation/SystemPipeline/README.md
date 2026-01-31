@@ -143,15 +143,15 @@ var mainLoop = new SerialSystemGroup(
 var registry = new GameEntityRegistry();
 var pipeline = new Pipeline(registry);
 
-// ゲームループで実行
-void Update()
+// ゲームループで実行（tickベース）
+void Tick(int deltaTicks)
 {
-    pipeline.Execute(updateGroup, Time.deltaTime);
+    pipeline.Execute(updateGroup, deltaTicks);
 }
 
-void LateUpdate()
+void LateTick(int deltaTicks)
 {
-    pipeline.Execute(lateUpdateGroup, Time.deltaTime);
+    pipeline.Execute(lateUpdateGroup, deltaTicks);
 }
 ```
 
@@ -258,20 +258,18 @@ var filtered = compositeQuery.Filter(registry, entities);
 
 ## SystemContext
 
-各システムに渡される実行コンテキスト:
+各システムに渡される実行コンテキスト（tickベース）:
 
 ```csharp
 public readonly struct SystemContext
 {
-    public readonly float DeltaTime;          // 前フレームからの経過時間
-    public readonly float TotalTime;          // 累積時間
-    public readonly int FrameCount;           // フレームカウント
+    public readonly int DeltaTicks;           // 前フレームからの経過tick数
+    public readonly GameTick CurrentTick;     // 現在のtick（累積）
     public readonly CancellationToken CancellationToken;  // キャンセル制御
-    public readonly QueryCache QueryCache;    // クエリ結果キャッシュ
 }
 ```
 
-**QueryCache**: 同一フレーム内でクエリ結果をキャッシュし、パフォーマンスを最適化します。
+tick単位はアプリケーション側で定義します（例: 1ms, 1/60秒など）。一度に複数tick進む場合もあります（例: `Execute(group, 16)`）。
 
 ## CommandQueueの使用
 
@@ -389,9 +387,17 @@ public class GameBootstrap : MonoBehaviour
         _pipeline = new Pipeline(registry);
     }
 
-    void Update() => _pipeline.Execute(_updateGroup, Time.deltaTime);
-    void FixedUpdate() => _pipeline.Execute(_fixedUpdateGroup, Time.fixedDeltaTime);
-    void LateUpdate() => _pipeline.Execute(_lateUpdateGroup, Time.deltaTime);
+    // tickベースで実行（deltaTicks = 経過tick数）
+    void Tick(int deltaTicks)
+    {
+        _pipeline.Execute(_updateGroup, deltaTicks);
+        _pipeline.Execute(_fixedUpdateGroup, deltaTicks);
+    }
+
+    void LateTick(int deltaTicks)
+    {
+        _pipeline.Execute(_lateUpdateGroup, deltaTicks);
+    }
 }
 ```
 

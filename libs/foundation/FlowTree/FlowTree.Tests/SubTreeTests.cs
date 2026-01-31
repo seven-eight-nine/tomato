@@ -1,4 +1,5 @@
 using Xunit;
+using Tomato.Time;
 using static Tomato.FlowTree.Flow;
 
 namespace Tomato.FlowTree.Tests;
@@ -16,7 +17,7 @@ public class SubTreeTests
             .WithCallStack(new FlowCallStack(32))
             .Build(SubTree(childTree));
 
-        Assert.Equal(NodeStatus.Success, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, mainTree.Tick(1));
     }
 
     [Fact]
@@ -30,7 +31,7 @@ public class SubTreeTests
             .Build(SubTree(childTree));
 
         // 構築されていないツリーはFailure
-        Assert.Equal(NodeStatus.Failure, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, mainTree.Tick(1));
     }
 
     [Fact]
@@ -53,11 +54,11 @@ public class SubTreeTests
             .Build(SubTree(childTree));
 
         // 1回目: Running
-        Assert.Equal(NodeStatus.Running, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, mainTree.Tick(1));
         Assert.Equal(2, callCount);
 
         // 2回目: まだRunning（Sequenceの2番目がRunningを返し続ける）
-        Assert.Equal(NodeStatus.Running, mainTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Running, mainTree.Tick(1));
         Assert.Equal(3, callCount);
     }
 
@@ -90,7 +91,7 @@ public class SubTreeTests
                 )
             );
 
-        Assert.Equal(NodeStatus.Success, tree1.Tick(0.016f));
+        Assert.Equal(NodeStatus.Success, tree1.Tick(1));
 
         Assert.True(executed[0]);
         Assert.True(executed[1]);
@@ -113,7 +114,7 @@ public class SubTreeTests
             );
 
         // スタックオーバーフローでFailure
-        Assert.Equal(NodeStatus.Failure, recursiveTree.Tick(0.016f));
+        Assert.Equal(NodeStatus.Failure, recursiveTree.Tick(1));
     }
 
     [Fact]
@@ -144,7 +145,7 @@ public class SubTreeTests
                 )
             );
 
-        var status = countdown.Tick(0.016f);
+        var status = countdown.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(0, state.Counter);
@@ -197,7 +198,7 @@ public class SubTreeTests
                 )
             );
 
-        var status = ping.Tick(0.016f);
+        var status = ping.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal("POPOPO", state.Log);
@@ -231,7 +232,7 @@ public class SubTreeTests
                 SubTree<ParentState, ChildState>(childTree, p => new ChildState())
             );
 
-        var status = mainTree.Tick(0.016f);
+        var status = mainTree.Tick(1);
 
         Assert.Equal(NodeStatus.Success, status);
         Assert.Equal(52, parentState.ParentValue); // 10 + 42
@@ -259,7 +260,7 @@ public class SubTreeTests
                 SubTree<ParentState, ChildState>(childTree, p => new ChildState())
             );
 
-        mainTree.Tick(0.016f);
+        mainTree.Tick(1);
 
         Assert.NotNull(capturedParent);
         Assert.Same(parentState, capturedParent);
@@ -289,7 +290,7 @@ public class SubTreeTests
                 )
             );
 
-        mainTree.Tick(0.016f);
+        mainTree.Tick(1);
 
         Assert.Equal(10, parentState.ParentValue); // 5 * 2
     }

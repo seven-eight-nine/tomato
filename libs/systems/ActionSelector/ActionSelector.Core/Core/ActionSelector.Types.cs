@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.ActionSelector;
 
@@ -70,22 +71,19 @@ public partial class ActionSelector<TCategory, TInput, TContext>
     {
         public readonly TInput Input;
         public readonly TContext Context;
-        public readonly float DeltaTime;
-        public readonly float TotalTime;
-        public readonly int FrameCount;
+        public readonly int DeltaTicks;
+        public readonly GameTick CurrentTick;
 
         public Frame(
             TInput input,
             TContext context,
-            float deltaTime = 1f / 60f,
-            float totalTime = 0f,
-            int frameCount = 0)
+            int deltaTicks = 1,
+            GameTick currentTick = default)
         {
             Input = input;
             Context = context;
-            DeltaTime = deltaTime;
-            TotalTime = totalTime;
-            FrameCount = frameCount;
+            DeltaTicks = deltaTicks;
+            CurrentTick = currentTick;
         }
 
         /// <summary>
@@ -95,9 +93,8 @@ public partial class ActionSelector<TCategory, TInput, TContext>
             => new FrameState<TInput, TContext>(
                 frame.Input,
                 frame.Context,
-                frame.DeltaTime,
-                frame.TotalTime,
-                frame.FrameCount);
+                frame.DeltaTicks,
+                frame.CurrentTick);
     }
 
     // ===========================================

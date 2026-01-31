@@ -220,19 +220,19 @@ public interface IInputTrigger<TInput>
     bool IsTriggered(in TInput input);
     void OnJudgmentStart();   // 状態初期化
     void OnJudgmentStop();    // 状態クリア
-    void OnJudgmentUpdate(in TInput input, float deltaTime);  // 毎フレーム更新
+    void OnJudgmentUpdate(in TInput input, int deltaTicks);  // 毎tick更新
 }
 
-// 例: チャージトリガー（内部でチャージ時間を蓄積）
+// 例: チャージトリガー（内部でチャージtick数を蓄積）
 public class ChargeTrigger : IInputTrigger<InputState>
 {
-    private float _chargeTime;  // ← 内部状態
+    private int _chargeTicks;   // ← 内部状態
     private int _chargeLevel;   // ← 内部状態
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
         if (input.IsHeld(_button))
-            _chargeTime += deltaTime;  // 蓄積
+            _chargeTicks += deltaTicks;  // 蓄積
     }
 
     public bool IsTriggered(in InputState input)
@@ -623,8 +623,8 @@ public interface IInputTrigger<TInput>
     /// <summary>ジャッジメントが非アクティブになった時（内部状態のクリア）。</summary>
     void OnJudgmentStop();
 
-    /// <summary>毎フレーム呼ばれる（状態の更新）。</summary>
-    void OnJudgmentUpdate(in TInput input, float deltaTime);
+    /// <summary>毎tick呼ばれる（状態の更新）。</summary>
+    void OnJudgmentUpdate(in TInput input, int deltaTicks);
 }
 ```
 
@@ -637,11 +637,11 @@ using static Tomato.ActionSelector.Trig;
 Press(Attack)              // ボタンを押した瞬間
 Release(Attack)            // ボタンを離した瞬間
 Hold(Attack)               // ボタンを押している間
-Hold(Attack, 0.5f)         // 0.5秒以上押し続けた
+Hold(Attack, 30)           // 30 tick以上押し続けた
 
 // === 高度な入力 ===
-Charge(Attack, 1f, 2f, 3f) // 段階的チャージ（1秒/2秒/3秒で各レベル）
-Mash(Attack, 5, 1f)        // 1秒以内に5回押下
+Charge(Attack, 60, 120, 180) // 段階的チャージ（60/120/180 tickで各レベル）
+Mash(Attack, 5, 60)          // 60 tick以内に5回押下
 Simultaneous(L1, R1)       // L1+R1同時押し
 
 // === コマンド入力 ===
@@ -665,7 +665,7 @@ Never                      // 常に不成立（無効化用）
 │ OnJudgmentStart() ← 内部状態を初期化                          │
 │   ↓                                                          │
 │ ┌─── 毎フレーム ───────────────────────────────────────────┐ │
-│ │ OnJudgmentUpdate(input, deltaTime) ← 状態を更新          │ │
+│ │ OnJudgmentUpdate(input, deltaTicks) ← 状態を更新         │ │
 │ │ IsTriggered(input) ← 成立判定                            │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │   ↓                                                          │
@@ -681,15 +681,15 @@ Never                      // 常に不成立（無効化用）
 public class ChargeTrigger : IInputTrigger<InputState>
 {
     private readonly ButtonType _button;
-    private readonly float[] _thresholds;  // チャージ段階の閾値
+    private readonly int[] _thresholds;  // チャージ段階の閾値（tick）
 
-    private float _chargeTime;
+    private int _chargeTicks;
     private int _chargeLevel;
     private bool _released;
 
     public int ChargeLevel => _chargeLevel;
 
-    public ChargeTrigger(ButtonType button, params float[] thresholds)
+    public ChargeTrigger(ButtonType button, params int[] thresholds)
     {
         _button = button;
         _thresholds = thresholds;
@@ -703,29 +703,29 @@ public class ChargeTrigger : IInputTrigger<InputState>
 
     public void OnJudgmentStart()
     {
-        _chargeTime = 0;
+        _chargeTicks = 0;
         _chargeLevel = 0;
         _released = false;
     }
 
     public void OnJudgmentStop()
     {
-        _chargeTime = 0;
+        _chargeTicks = 0;
         _chargeLevel = 0;
         _released = false;
     }
 
-    public void OnJudgmentUpdate(in InputState input, float deltaTime)
+    public void OnJudgmentUpdate(in InputState input, int deltaTicks)
     {
         if (input.IsHeld(_button))
         {
             // チャージ中
-            _chargeTime += deltaTime;
+            _chargeTicks += deltaTicks;
             _released = false;
 
             // レベルアップ判定
             while (_chargeLevel < _thresholds.Length &&
-                   _chargeTime >= _thresholds[_chargeLevel])
+                   _chargeTicks >= _thresholds[_chargeLevel])
             {
                 _chargeLevel++;
             }
@@ -740,7 +740,7 @@ public class ChargeTrigger : IInputTrigger<InputState>
             // 離した次のフレームでリセット
             if (_released)
             {
-                _chargeTime = 0;
+                _chargeTicks = 0;
                 _chargeLevel = 0;
                 _released = false;
             }
@@ -1661,7 +1661,7 @@ Console.WriteLine(debugger.FormatPriorityTable(result));
 - ForcedInputOnlyモードではライフサイクルがスキップされる
 
 **2. OnJudgmentUpdateで蓄積しているか確認**
-- deltaTimeが正しく渡されているか
+- deltaTicksが正しく渡されているか
 - 蓄積ロジックにバグがないか
 
 ### パフォーマンスが悪い

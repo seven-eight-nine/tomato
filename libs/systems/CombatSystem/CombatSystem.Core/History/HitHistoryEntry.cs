@@ -8,6 +8,6 @@ public struct HitHistoryEntry
     /// <summary>ヒット回数。HittableCount との比較に使う。</summary>
     public int HitCount;
 
-    /// <summary>最終ヒット時刻（HitHistory.CurrentTime 基準）。IntervalTime との比較に使う。</summary>
-    public float LastHitTime;
+    /// <summary>最終ヒットtick（HitHistory.CurrentTick 基準）。IntervalTicks との比較に使う。</summary>
+    public int LastHitTick;
 }

@@ -26,11 +26,11 @@ public class MotionStateTests
         var definition = CreateTestDefinition("Motion1", 60);
         var state = new MotionState(definition);
         var context = new MotionContext();
-        context.ElapsedFrames = 10;
+        context.ElapsedTicks = 10;
 
         state.OnEnter(context);
 
-        Assert.Equal(0, context.ElapsedFrames);
+        Assert.Equal(0, context.ElapsedTicks);
     }
 
     [Fact]
@@ -68,9 +68,9 @@ public class MotionStateTests
         var context = new MotionContext();
 
         state.OnEnter(context);
-        state.OnUpdate(context, 0.016f);
+        state.OnTick(context, 1);
 
-        Assert.Equal(1, context.ElapsedFrames);
+        Assert.Equal(1, context.ElapsedTicks);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class MotionStateTests
         var context = new MotionContext();
 
         state.OnEnter(context);
-        state.OnUpdate(context, 0.016f);
+        state.OnTick(context, 1);
 
         // QueryContextが更新されている（ResultFrame = currentFrame + deltaFrames = 1 + 1 = 2）
         Assert.Equal(2, context.QueryContext.ResultFrame);
@@ -97,9 +97,9 @@ public class MotionStateTests
         context.Executor = executor;
 
         state.OnEnter(context);
-        state.OnUpdate(context, 0.016f);
+        state.OnTick(context, 1);
 
-        Assert.True(executor.OnMotionUpdateCalled);
+        Assert.True(executor.OnMotionTickCalled);
         Assert.Equal(1, executor.LastElapsedFrames);
     }
 
@@ -141,7 +141,7 @@ public class MotionStateTests
         state.OnEnter(context);
         for (int i = 0; i < 30; i++)
         {
-            state.OnUpdate(context, 0.016f);
+            state.OnTick(context, 1);
         }
 
         Assert.False(state.IsComplete(context));
@@ -157,7 +157,7 @@ public class MotionStateTests
         state.OnEnter(context);
         for (int i = 0; i < 60; i++)
         {
-            state.OnUpdate(context, 0.016f);
+            state.OnTick(context, 1);
         }
 
         Assert.True(state.IsComplete(context));
@@ -178,7 +178,7 @@ public class MotionStateTests
     private class TestMotionExecutor : IMotionExecutor
     {
         public bool OnMotionStartCalled { get; private set; }
-        public bool OnMotionUpdateCalled { get; private set; }
+        public bool OnMotionTickCalled { get; private set; }
         public bool OnMotionEndCalled { get; private set; }
         public string? LastMotionId { get; private set; }
         public int LastElapsedFrames { get; private set; }
@@ -189,11 +189,11 @@ public class MotionStateTests
             LastMotionId = motionId;
         }
 
-        public void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime)
+        public void OnMotionTick(string motionId, int elapsedTicks, int deltaTicks)
         {
-            OnMotionUpdateCalled = true;
+            OnMotionTickCalled = true;
             LastMotionId = motionId;
-            LastElapsedFrames = elapsedFrames;
+            LastElapsedFrames = elapsedTicks;
         }
 
         public void OnMotionEnd(string motionId)

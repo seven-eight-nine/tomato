@@ -72,7 +72,7 @@ public sealed class ExecutionSystem<TCategory> : ISerialSystem
             }
 
             // 2. 実行中アクションを更新
-            entityContext.ActionStateMachine.Update(context.DeltaTime);
+            entityContext.ActionStateMachine.Update(context.DeltaTicks);
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using Tomato.Time;
 
 namespace Tomato.FlowTree;
 
@@ -12,7 +13,7 @@ public sealed class FlowTree
     private object? _state;
     private FlowCallStack? _callStack;
     private int _maxCallDepth = 32;
-    private float _totalTime;
+    private GameTick _currentTick;
 
     /// <summary>
     /// ルートノード。
@@ -101,24 +102,24 @@ public sealed class FlowTree
     }
 
     /// <summary>
-    /// ツリーを評価する（deltaTimeのみ指定）。
+    /// ツリーを評価する（deltaTicks指定）。
     /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間（秒）</param>
+    /// <param name="deltaTicks">経過tick数（デフォルト: 1）</param>
     /// <returns>ルートノードの状態</returns>
-    public NodeStatus Tick(float deltaTime)
+    public NodeStatus Tick(int deltaTicks = 1)
     {
         if (_root == null)
             throw new InvalidOperationException("Tree not built. Call Build() first.");
 
-        _totalTime += deltaTime;
+        _currentTick = _currentTick + deltaTicks;
 
         var context = new FlowContext
         {
             State = _state,
             CallStack = _callStack,
             MaxCallDepth = _maxCallDepth,
-            DeltaTime = deltaTime,
-            TotalTime = _totalTime
+            DeltaTicks = deltaTicks,
+            CurrentTick = _currentTick
         };
 
         var status = _root.Tick(ref context);
@@ -164,7 +165,7 @@ public sealed class FlowTree
     /// <param name="fireExitEvents">trueの場合、Running中のEventNodeでOnExitを発火する</param>
     public void Reset(bool fireExitEvents = true)
     {
-        _totalTime = 0f;
+        _currentTick = GameTick.Zero;
         _root?.Reset(fireExitEvents);
     }
 }

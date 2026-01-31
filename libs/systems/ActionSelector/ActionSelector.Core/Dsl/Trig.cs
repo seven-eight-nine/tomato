@@ -9,7 +9,7 @@ namespace Tomato.ActionSelector;
 /// using static Tomato.ActionSelector.Buttons;
 ///
 /// var trigger = Press(Attack);
-/// var holdTrigger = Hold(Guard, 0.5f);
+/// var holdTrigger = Hold(Guard, 30);  // 30 ticks
 /// var cmdTrigger = Cmd(Dirs.Down, Dirs.DownRight, Dirs.Right.Plus(Punch));
 ///
 /// // 演算子を使う場合（Composable版）
@@ -42,10 +42,10 @@ public static class Trig
         => Triggers.Hold(button);
 
     /// <summary>
-    /// ボタンを指定時間以上保持したらトリガー。
+    /// ボタンを指定tick数以上保持したらトリガー。
     /// </summary>
-    public static IInputTrigger<InputState> Hold(ButtonType button, float minSeconds)
-        => Triggers.Hold(button, minSeconds);
+    public static IInputTrigger<InputState> Hold(ButtonType button, int minTicks)
+        => Triggers.Hold(button, minTicks);
 
     // ===========================================
     // 高度なトリガー
@@ -54,13 +54,13 @@ public static class Trig
     /// <summary>
     /// チャージして離した時にトリガー。
     /// </summary>
-    public static ChargeTrigger Charge(ButtonType button, params float[] thresholds)
+    public static ChargeTrigger Charge(ButtonType button, params int[] thresholds)
         => Triggers.Charge(button, thresholds);
 
     /// <summary>
     /// 連打トリガー。
     /// </summary>
-    public static IInputTrigger<InputState> Mash(ButtonType button, int count, float window)
+    public static IInputTrigger<InputState> Mash(ButtonType button, int count, int window)
         => Triggers.Mash(button, count, window);
 
     /// <summary>
@@ -82,7 +82,7 @@ public static class Trig
     /// <summary>
     /// コマンド入力（↓↘→+Pなど）でトリガー（タイムウィンドウ指定）。
     /// </summary>
-    public static IInputTrigger<InputState> Command(CommandInput[] sequence, float totalWindow)
+    public static IInputTrigger<InputState> Command(CommandInput[] sequence, int totalWindow)
         => Triggers.Command(sequence, totalWindow);
 
     /// <summary>
@@ -98,7 +98,7 @@ public static class Trig
     /// <summary>
     /// 簡易コマンドビルダー（タイムウィンドウ指定）。
     /// </summary>
-    public static IInputTrigger<InputState> Cmd(float totalWindow, params CmdStep[] steps)
+    public static IInputTrigger<InputState> Cmd(int totalWindow, params CmdStep[] steps)
         => Triggers.Command(ConvertSteps(steps), totalWindow);
 
     private static CommandInput[] ConvertSteps(CmdStep[] steps)
@@ -243,10 +243,10 @@ public static class T
         => new ComposableTrigger(Triggers.Hold(button));
 
     /// <summary>
-    /// ボタンを指定時間以上保持したらトリガー。
+    /// ボタンを指定tick数以上保持したらトリガー。
     /// </summary>
-    public static ComposableTrigger Hold(ButtonType button, float minSeconds)
-        => new ComposableTrigger(Triggers.Hold(button, minSeconds));
+    public static ComposableTrigger Hold(ButtonType button, int minTicks)
+        => new ComposableTrigger(Triggers.Hold(button, minTicks));
 
     // ===========================================
     // 高度なトリガー
@@ -255,13 +255,13 @@ public static class T
     /// <summary>
     /// チャージして離した時にトリガー。
     /// </summary>
-    public static ComposableTrigger Charge(ButtonType button, params float[] thresholds)
+    public static ComposableTrigger Charge(ButtonType button, params int[] thresholds)
         => new ComposableTrigger(Triggers.Charge(button, thresholds));
 
     /// <summary>
     /// 連打トリガー。
     /// </summary>
-    public static ComposableTrigger Mash(ButtonType button, int count, float window)
+    public static ComposableTrigger Mash(ButtonType button, int count, int window)
         => new ComposableTrigger(Triggers.Mash(button, count, window));
 
     /// <summary>
@@ -283,7 +283,7 @@ public static class T
     /// <summary>
     /// コマンド入力（↓↘→+Pなど）でトリガー（タイムウィンドウ指定）。
     /// </summary>
-    public static ComposableTrigger Command(CommandInput[] sequence, float totalWindow)
+    public static ComposableTrigger Command(CommandInput[] sequence, int totalWindow)
         => new ComposableTrigger(Triggers.Command(sequence, totalWindow));
 
     /// <summary>
@@ -299,7 +299,7 @@ public static class T
     /// <summary>
     /// 簡易コマンドビルダー（タイムウィンドウ指定）。
     /// </summary>
-    public static ComposableTrigger Cmd(float totalWindow, params CmdStep[] steps)
+    public static ComposableTrigger Cmd(int totalWindow, params CmdStep[] steps)
         => new ComposableTrigger(Trig.Cmd(totalWindow, steps));
 
     // ===========================================

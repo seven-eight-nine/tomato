@@ -67,9 +67,9 @@ public sealed class ActionStateMachine<TCategory> where TCategory : struct, Enum
     }
 
     /// <summary>
-    /// 全アクションを更新する。
+    /// 全アクションをtickする。
     /// </summary>
-    public void Update(float deltaTime)
+    public void Tick(int deltaTicks = 1)
     {
         // 完了したアクションを収集（Dictionaryを反復中に変更できないため）
         var completedCategories = new List<TCategory>();
@@ -80,11 +80,11 @@ public sealed class ActionStateMachine<TCategory> where TCategory : struct, Enum
             var action = kvp.Value;
             if (action == null) continue;
 
-            action.Update(deltaTime);
+            action.Tick(deltaTicks);
 
             if (_executors.TryGetValue(category, out var executor))
             {
-                executor.OnActionUpdate(action, deltaTime);
+                executor.OnActionTick(action, deltaTicks);
             }
 
             // アクション完了チェック

@@ -38,29 +38,27 @@ public class ExecutableActionTests
     }
 
     [Fact]
-    public void OnEnter_ShouldResetElapsedTime()
+    public void OnEnter_ShouldResetElapsedTicks()
     {
         var definition = CreateBasicDefinition();
         var action = new StandardExecutableAction<TestCategory>(definition);
 
         action.OnEnter();
 
-        Assert.Equal(0f, action.ElapsedTime);
-        Assert.Equal(0, action.ElapsedFrames);
+        Assert.Equal(0, action.ElapsedTicks);
     }
 
     [Fact]
-    public void Update_ShouldIncrementElapsedTimeAndFrames()
+    public void Update_ShouldIncrementElapsedTicks()
     {
         var definition = CreateBasicDefinition();
         var action = new StandardExecutableAction<TestCategory>(definition);
 
         action.OnEnter();
-        action.Update(0.016f); // ~60fps
-        action.Update(0.016f);
+        action.Tick(1);
+        action.Tick(1);
 
-        Assert.Equal(2, action.ElapsedFrames);
-        Assert.InRange(action.ElapsedTime, 0.030f, 0.034f);
+        Assert.Equal(2, action.ElapsedTicks);
     }
 
     [Fact]
@@ -77,13 +75,13 @@ public class ExecutableActionTests
         action.OnEnter();
         Assert.False(action.IsComplete);
 
-        action.Update(0.016f); // Frame 1
+        action.Tick(1); // Frame 1
         Assert.False(action.IsComplete);
 
-        action.Update(0.016f); // Frame 2
+        action.Tick(1); // Frame 2
         Assert.False(action.IsComplete);
 
-        action.Update(0.016f); // Frame 3 = TotalFrames
+        action.Tick(1); // Frame 3 = TotalFrames
         Assert.True(action.IsComplete);
     }
 
@@ -103,15 +101,15 @@ public class ExecutableActionTests
         // Frame 0-9: CancelWindow外
         for (int i = 0; i < 10; i++)
         {
-            Assert.False(action.CanCancel, $"Frame {action.ElapsedFrames} should not be cancellable");
-            action.Update(0.016f);
+            Assert.False(action.CanCancel, $"Frame {action.ElapsedTicks} should not be cancellable");
+            action.Tick(1);
         }
 
         // Frame 10-20: CancelWindow内
         for (int i = 10; i <= 20; i++)
         {
-            Assert.True(action.CanCancel, $"Frame {action.ElapsedFrames} should be cancellable");
-            action.Update(0.016f);
+            Assert.True(action.CanCancel, $"Frame {action.ElapsedTicks} should be cancellable");
+            action.Tick(1);
         }
 
         // Frame 21+: CancelWindow外
@@ -158,7 +156,7 @@ public class ExecutableActionTests
         // Move to frame 5 (CancelWindow start)
         for (int i = 0; i < 5; i++)
         {
-            action.Update(0.016f);
+            action.Tick(1);
         }
 
         Assert.True(action.CanCancel);

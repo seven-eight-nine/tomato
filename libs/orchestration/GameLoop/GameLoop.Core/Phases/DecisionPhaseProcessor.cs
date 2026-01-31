@@ -64,9 +64,8 @@ public sealed class DecisionSystem<TCategory> : IParallelSystem
         var gameState = new GameState(
             inputState,
             resources: null,
-            context.DeltaTime,
-            context.TotalTime,
-            context.FrameCount);
+            context.DeltaTicks,
+            context.CurrentTick);
 
         // ジャッジメント群を取得
         var judgments = GetJudgmentsForEntity(entityContext);
@@ -85,9 +84,8 @@ public sealed class DecisionSystem<TCategory> : IParallelSystem
         var frameState = new FrameState<InputState, GameState>(
             inputState,
             gameState,
-            context.DeltaTime,
-            context.TotalTime,
-            context.FrameCount);
+            context.DeltaTicks,
+            context.CurrentTick);
 
         // アクション選択
         var result = _selectionEngine.ProcessFrame(judgmentList, in frameState);

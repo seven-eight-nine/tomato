@@ -1,3 +1,5 @@
+using Tomato.Time;
+
 namespace Tomato.StatusEffectSystem
 {
     /// <summary>効果付与イベント</summary>

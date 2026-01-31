@@ -22,7 +22,7 @@ public interface IState<TContext>
     void OnExit(TContext context);
 
     /// <summary>
-    /// 状態の更新処理。
+    /// 状態のtick処理。
     /// </summary>
-    void OnUpdate(TContext context, float deltaTime);
+    void OnTick(TContext context, int deltaTicks);
 }

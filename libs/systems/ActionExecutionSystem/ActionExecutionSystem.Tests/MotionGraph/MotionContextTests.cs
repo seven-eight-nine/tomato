@@ -9,7 +9,7 @@ namespace Tomato.ActionExecutionSystem.Tests.MotionGraph;
 /// TODOリスト:
 /// - [x] MotionContextを作成できる
 /// - [x] QueryContextが初期化されている
-/// - [x] ResetFramesでフレームがリセットされる
+/// - [x] ResetTicksでフレームがリセットされる
 /// - [x] AdvanceFrameでフレームが増加する
 /// - [x] Executorを設定できる
 /// </summary>
@@ -21,7 +21,7 @@ public class MotionContextTests
         var context = new MotionContext();
 
         Assert.NotNull(context);
-        Assert.Equal(0, context.ElapsedFrames);
+        Assert.Equal(0, context.ElapsedTicks);
         Assert.Null(context.CurrentMotionState);
         Assert.Null(context.Executor);
     }
@@ -35,14 +35,14 @@ public class MotionContextTests
     }
 
     [Fact]
-    public void ResetFrames_ShouldResetToZero()
+    public void ResetTicks_ShouldResetToZero()
     {
         var context = new MotionContext();
-        context.ElapsedFrames = 10;
+        context.ElapsedTicks = 10;
 
-        context.ResetFrames();
+        context.ResetTicks();
 
-        Assert.Equal(0, context.ElapsedFrames);
+        Assert.Equal(0, context.ElapsedTicks);
     }
 
     [Fact]
@@ -50,11 +50,11 @@ public class MotionContextTests
     {
         var context = new MotionContext();
 
-        context.AdvanceFrame();
-        Assert.Equal(1, context.ElapsedFrames);
+        context.AdvanceTicks(1);
+        Assert.Equal(1, context.ElapsedTicks);
 
-        context.AdvanceFrame();
-        Assert.Equal(2, context.ElapsedFrames);
+        context.AdvanceTicks(1);
+        Assert.Equal(2, context.ElapsedTicks);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class MotionContextTests
     private class TestMotionExecutor : IMotionExecutor
     {
         public void OnMotionStart(string motionId) { }
-        public void OnMotionUpdate(string motionId, int elapsedFrames, float deltaTime) { }
+        public void OnMotionTick(string motionId, int elapsedTicks, int deltaTicks) { }
         public void OnMotionEnd(string motionId) { }
     }
 }

@@ -63,7 +63,7 @@ public static class SystemExecutor
         // クエリキャッシュがあればキャッシュ経由で取得
         if (context.QueryCache != null)
         {
-            return context.QueryCache.GetOrExecute(query, registry, context.FrameCount);
+            return context.QueryCache.GetOrExecute(query, registry, context.CurrentTick.Value);
         }
 
         // キャッシュがなければ直接フィルタリング

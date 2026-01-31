@@ -15,5 +15,5 @@ public abstract class StateBase<TContext> : IState<TContext>
 
     public virtual void OnEnter(TContext context) { }
     public virtual void OnExit(TContext context) { }
-    public virtual void OnUpdate(TContext context, float deltaTime) { }
+    public virtual void OnTick(TContext context, int deltaTicks) { }
 }
